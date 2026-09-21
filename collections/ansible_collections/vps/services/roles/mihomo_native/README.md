@@ -25,12 +25,17 @@ proxy-groups、rules 与节点内容仍由 Sub-Store 负责，Role 不解析或�
 
 ## 生命周期
 
-角色按 `check -> deploy -> verify -> rollback` 接入 services/phase3：
+角色由父仓 targeted adapter 按九个语义阶段接入 services/phase3：
+`preflight -> check -> deploy -> verify -> idempotence -> rollback -> rollback_verify -> redeploy -> recovery_verify`。
+其中 `idempotence` 重复 `check` 并要求 `changed=0`；`redeploy` 重用 deploy 实现，
+`recovery_verify` 使用独立的 recovery 验证入口。
 
 ```bash
+make preflight-services.mihomo_native
 make check-services.mihomo_native
 make deploy-services.mihomo_native
 make verify-services.mihomo_native
+# idempotence: repeat check and require changed=0
 make rollback-services.mihomo_native
 make rollback_verify-services.mihomo_native
 make redeploy-services.mihomo_native
