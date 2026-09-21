@@ -23,8 +23,8 @@ cliproxyapi_native_restart_schedule: "*-*-* {{ cliproxyapi_native_restart_hour }
 # Runtime memory limit and outbound HTTP proxy
 cliproxyapi_native_gomemlimit: "220MiB"
 cliproxyapi_native_http_proxy: ""
-cliproxyapi_native_proxy_url: "http://127.0.0.1:12346"
-cliproxyapi_native_download_proxy: "http://127.0.0.1:12346"
+cliproxyapi_native_proxy_url: "http://127.0.0.1:7890"
+cliproxyapi_native_download_proxy: "http://127.0.0.1:7890"
 
 # Secrets and keys reused from existing vault variables
 cliproxyapi_native_allow_remote: true
@@ -56,7 +56,7 @@ cliproxyapi_native_auths_dir: "{{ cliproxyapi_auths_dir | default(inventory_dir 
 cliproxyapi_native_direct_providers: "{{ cliproxyapi_direct_providers | default([]) }}"
 cliproxyapi_native_direct_claude: "{{ cliproxyapi_direct_claude | default(false) }}"
 
-# Advanced routing and runtime tuning (aligned with production qqg1299)
+# Advanced routing and runtime tuning for low-memory edge nodes
 cliproxyapi_native_commercial_mode: true
 cliproxyapi_native_logs_max_total_size_mb: 5
 cliproxyapi_native_max_retry_interval: 10

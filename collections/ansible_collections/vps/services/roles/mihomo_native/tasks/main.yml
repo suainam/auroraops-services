@@ -1,0 +1,76 @@
+---
+# Role: vps.services.mihomo_native
+# Full profile authority remains in the configured Sub-Store; this Role owns native runtime lifecycle.
+
+- name: Deploy Mihomo Native client
+  when: mihomo_native_enabled | bool
+  tags: [deploy, services, mihomo_native, phase3]
+  block:
+    - name: Preflight and assertions
+      ansible.builtin.import_tasks: preflight.yml
+      tags: [deploy, services, mihomo_native, mihomo_native_preflight, phase3]
+
+    - name: Install Mihomo binary
+      ansible.builtin.import_tasks: install.yml
+      when: not ansible_check_mode
+      tags: [deploy, services, mihomo_native, mihomo_native_install, phase3]
+
+    - name: Configure Mihomo profile refresh and systemd services
+      ansible.builtin.import_tasks: configure.yml
+      when: not ansible_check_mode
+      tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+    - name: Verify Mihomo native client
+      ansible.builtin.import_tasks: verify.yml
+      when: not ansible_check_mode
+      tags: [verify, services, mihomo_native, mihomo_native_verify, phase3, deploy]
+
+- name: Clean up Mihomo Native client when role is disabled
+  when: not (mihomo_native_enabled | bool)
+  tags: [deploy, services, mihomo_native, phase3]
+  block:
+    - name: Check Mihomo native service presence
+      become: true
+      ansible.builtin.systemd:
+        name: "{{ mihomo_native_service_name }}.service"
+      register: mihomo_native_disabled_status
+      failed_when: >-
+        (mihomo_native_disabled_status.failed | default(false)) and
+        ('Could not find the requested service' not in
+        (mihomo_native_disabled_status.msg | default('')))
+      tags: [deploy, services, mihomo_native, phase3]
+
+    - name: Stop and disable Mihomo native service when disabled
+      become: true
+      ansible.builtin.systemd:
+        name: "{{ mihomo_native_service_name }}.service"
+        state: stopped
+        enabled: false
+      when:
+        - not ansible_check_mode
+        - mihomo_native_disabled_status.status is defined
+        - (mihomo_native_disabled_status.status | default({})).LoadState | default('') == 'loaded'
+      tags: [deploy, services, mihomo_native, phase3]
+
+    - name: Check Mihomo profile refresh timer presence
+      become: true
+      ansible.builtin.systemd:
+        name: "{{ mihomo_native_refresh_timer_name }}"
+      register: mihomo_native_disabled_timer_status
+      failed_when: >-
+        (mihomo_native_disabled_timer_status.failed | default(false)) and
+        ('Could not find the requested service' not in
+        (mihomo_native_disabled_timer_status.msg | default('')))
+      tags: [deploy, services, mihomo_native, phase3]
+
+    - name: Stop and disable Mihomo profile refresh timer when disabled
+      become: true
+      ansible.builtin.systemd:
+        name: "{{ mihomo_native_refresh_timer_name }}"
+        state: stopped
+        enabled: false
+      when:
+        - not ansible_check_mode
+        - mihomo_native_disabled_timer_status.status is defined
+        - (mihomo_native_disabled_timer_status.status | default({})).LoadState | default('') == 'loaded'
+      tags: [deploy, services, mihomo_native, phase3]

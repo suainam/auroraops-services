@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic complete Sub-Store Mihomo profile refresh
+
+[Timer]
+OnBootSec={{ mihomo_native_profile_refresh_on_boot_seconds }}s
+OnUnitActiveSec={{ mihomo_native_profile_refresh_interval_seconds }}s
+Persistent=true
+Unit={{ mihomo_native_refresh_service_name }}.service
+
+[Install]
+WantedBy=timers.target

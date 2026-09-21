@@ -1,0 +1,71 @@
+---
+# Defaults for vps.services.mihomo_native
+# Role ID: vps.services.mihomo_native
+# Phase: 3 (services)
+
+mihomo_native_enabled: "{{ auroraops_roles['services']['mihomo_native'] | default(false) }}"
+
+# MetaCubeX publishes a raw gzip-compressed native binary. Keep the release
+# in repository authority; do not consume latest.
+mihomo_native_version: "v1.19.31"
+mihomo_native_arch: >-
+  {{ 'arm64' if (ansible_facts | default({})).get('architecture', ansible_architecture | default('')) in ['aarch64', 'arm64'] else
+     (ansible_facts | default({})).get('architecture', ansible_architecture | default('')) }}
+mihomo_native_binary_filename: "mihomo-linux-{{ mihomo_native_arch }}-{{ mihomo_native_version }}.gz"
+mihomo_native_binary_url: >-
+  https://github.com/MetaCubeX/mihomo/releases/download/{{ mihomo_native_version }}/{{ mihomo_native_binary_filename }}
+mihomo_native_checksums:
+  arm64: "sha256:9e0f11afbf38426b8bd88fdc594678f8161c57eccb4e1b77acb12b493904f1d4"
+mihomo_native_checksum: "{{ mihomo_native_checksums[mihomo_native_arch] | default('') }}"
+mihomo_native_expected_sha256: >-
+  {{ mihomo_native_checksum.split(':')[-1] if ':' in mihomo_native_checksum else mihomo_native_checksum }}
+
+# Controller staging avoids bootstrap dependence on the target's current proxy.
+mihomo_native_controller_staging_dir: "{{ lookup('env', 'TMPDIR') | default('/tmp', true) }}/auroraops-mihomo-assets"
+mihomo_native_use_controller_staging: true
+
+# Paths and service names.
+mihomo_native_install_dir: "/opt/mihomo"
+mihomo_native_dir_mode: "0750"
+mihomo_native_binary_path: "{{ mihomo_native_install_dir }}/mihomo"
+mihomo_native_binary_marker_path: "{{ mihomo_native_install_dir }}/.binary-sha256"
+mihomo_native_archive_path: "/tmp/mihomo-native-{{ mihomo_native_version }}-{{ mihomo_native_arch }}.gz"
+mihomo_native_profile_path: "{{ mihomo_native_install_dir }}/config.yaml"
+mihomo_native_service_name: "mihomo-native"
+mihomo_native_refresh_service_name: "mihomo-native-refresh"
+mihomo_native_refresh_timer_name: "mihomo-native-refresh.timer"
+mihomo_native_refresh_script_path: "/usr/local/libexec/mihomo-native-refresh"
+mihomo_native_refresh_env_dir: "/etc/mihomo-native"
+mihomo_native_refresh_env_path: "{{ mihomo_native_refresh_env_dir }}/refresh.env"
+mihomo_native_user: "root"
+mihomo_native_group: "root"
+
+# The complete Sub-Store profile owns providers, groups, rules, and DNS.
+# This Role only fetches and validates that snapshot; it never rewrites YAML.
+mihomo_native_profile_url: "https://{{ singbox_domain }}/{{ sub_store_mihomo_suffix }}"
+mihomo_native_profile_download_proxy: ""
+mihomo_native_profile_fetch_timeout_seconds: 120
+mihomo_native_profile_refresh_interval_seconds: 3600
+mihomo_native_profile_refresh_on_boot_seconds: 300
+# The first profile must exist before Mihomo can listen on 7890. Fetch it on
+# the controller for a fresh install, then use the target proxy for refreshes.
+mihomo_native_profile_use_controller_staging: true
+mihomo_native_profile_controller_staging_dir: "{{ lookup('env', 'TMPDIR') | default('/tmp', true) }}/auroraops-mihomo-profiles"
+mihomo_native_profile_controller_staging_path: >-
+  {{ mihomo_native_profile_controller_staging_dir }}/{{ inventory_hostname }}-profile.yaml
+mihomo_native_profile_bootstrap_path: "{{ mihomo_native_profile_path }}.bootstrap"
+mihomo_native_profile_controller_download_environment: {}
+
+# Mihomo's mixed listener is intentionally loopback-only in the source profile.
+mihomo_native_mixed_host: "127.0.0.1"
+mihomo_native_mixed_port: 7890
+
+# Used only when the target needs an external bootstrap route for the profile.
+mihomo_native_download_proxy: "{{ proxy_https | default(proxy_http | default('')) }}"
+mihomo_native_download_environment: >-
+  {{ {
+    'http_proxy': mihomo_native_download_proxy,
+    'https_proxy': mihomo_native_download_proxy,
+    'HTTP_PROXY': mihomo_native_download_proxy,
+    'HTTPS_PROXY': mihomo_native_download_proxy
+  } if mihomo_native_download_proxy | length > 0 else {} }}

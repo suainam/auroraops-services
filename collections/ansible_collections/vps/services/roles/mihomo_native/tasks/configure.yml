@@ -1,0 +1,218 @@
+---
+- name: Ensure Mihomo provider state directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ mihomo_native_user }}"
+    group: "{{ mihomo_native_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ mihomo_native_install_dir }}", mode: "{{ mihomo_native_dir_mode }}"}
+    - {path: "{{ mihomo_native_install_dir }}/proxy_providers", mode: "0750"}
+    - {path: "{{ mihomo_native_refresh_env_dir }}", mode: "0700"}
+    - {path: "/usr/local/libexec", mode: "0755"}
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Deploy Mihomo refresh environment without exposing profile URL
+  become: true
+  no_log: true
+  diff: false
+  ansible.builtin.template:
+    src: mihomo-native-refresh.env.j2
+    dest: "{{ mihomo_native_refresh_env_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Deploy Mihomo profile refresh script
+  become: true
+  ansible.builtin.template:
+    src: mihomo-native-refresh.sh.j2
+    dest: "{{ mihomo_native_refresh_script_path }}"
+    owner: root
+    group: root
+    mode: "0750"
+  notify: Reload systemd daemon for mihomo-native
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Deploy Mihomo native systemd service unit
+  become: true
+  ansible.builtin.template:
+    src: mihomo-native.service.j2
+    dest: "/etc/systemd/system/{{ mihomo_native_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd daemon for mihomo-native
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Deploy Mihomo profile refresh service unit
+  become: true
+  ansible.builtin.template:
+    src: mihomo-native-refresh.service.j2
+    dest: "/etc/systemd/system/{{ mihomo_native_refresh_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd daemon for mihomo-native
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Deploy Mihomo profile refresh timer unit
+  become: true
+  ansible.builtin.template:
+    src: mihomo-native-refresh.timer.j2
+    dest: "/etc/systemd/system/{{ mihomo_native_refresh_timer_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd daemon for mihomo-native
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Flush systemd handlers before initial Mihomo profile load
+  ansible.builtin.meta: flush_handlers
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Inspect existing Mihomo profile before initial load
+  become: true
+  ansible.builtin.stat:
+    path: "{{ mihomo_native_profile_path }}"
+  register: mihomo_native_profile_before_load
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Check Mihomo service before initial profile load
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ mihomo_native_service_name }}.service"
+  register: mihomo_native_initial_service_status
+  failed_when: >-
+    (mihomo_native_initial_service_status.failed | default(false)) and
+    ('Could not find the requested service' not in
+    (mihomo_native_initial_service_status.msg | default('')))
+  when: not mihomo_native_profile_before_load.stat.exists
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Stop Mihomo before replacing or validating its profile
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ mihomo_native_service_name }}.service"
+    state: stopped
+  when:
+    - not mihomo_native_profile_before_load.stat.exists
+    - (mihomo_native_initial_service_status.status | default({})).LoadState | default('') == 'loaded'
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Ensure controller staging directory exists for initial Mihomo profile
+  ansible.builtin.file:
+    path: "{{ mihomo_native_profile_controller_staging_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  run_once: true
+  become: false
+  when:
+    - not mihomo_native_profile_before_load.stat.exists
+    - mihomo_native_profile_use_controller_staging | bool
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Bootstrap initial Mihomo profile through controller staging
+  when:
+    - not mihomo_native_profile_before_load.stat.exists
+    - mihomo_native_profile_use_controller_staging | bool
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+  block:
+    - name: Download complete Sub-Store Mihomo profile on controller
+      ansible.builtin.get_url:
+        url: "{{ mihomo_native_profile_url }}"
+        dest: "{{ mihomo_native_profile_controller_staging_path }}"
+        mode: "0600"
+      delegate_to: localhost
+      run_once: true
+      become: false
+      no_log: true
+      environment: "{{ mihomo_native_profile_controller_download_environment }}"
+
+    - name: Copy staged Mihomo profile to target bootstrap path
+      become: true
+      no_log: true
+      ansible.builtin.copy:
+        src: "{{ mihomo_native_profile_controller_staging_path }}"
+        dest: "{{ mihomo_native_profile_bootstrap_path }}"
+        owner: "{{ mihomo_native_user }}"
+        group: "{{ mihomo_native_group }}"
+        mode: "0600"
+
+    - name: Validate staged Mihomo profile with native parser
+      become: true
+      no_log: true
+      ansible.builtin.command:
+        argv:
+          - "{{ mihomo_native_binary_path }}"
+          - -d
+          - "{{ mihomo_native_install_dir }}"
+          - -f
+          - "{{ mihomo_native_profile_bootstrap_path }}"
+          - -t
+      changed_when: false
+
+    - name: Promote validated Mihomo profile atomically
+      become: true
+      no_log: true
+      ansible.builtin.command:
+        argv:
+          - mv
+          - "{{ mihomo_native_profile_bootstrap_path }}"
+          - "{{ mihomo_native_profile_path }}"
+      changed_when: true
+  always:
+    - name: Remove controller Mihomo profile staging file
+      ansible.builtin.file:
+        path: "{{ mihomo_native_profile_controller_staging_path }}"
+        state: absent
+      delegate_to: localhost
+      run_once: true
+      become: false
+      no_log: true
+
+    - name: Remove incomplete target Mihomo profile bootstrap file
+      become: true
+      ansible.builtin.file:
+        path: "{{ mihomo_native_profile_bootstrap_path }}"
+        state: absent
+      no_log: true
+
+- name: Fetch and validate initial complete Sub-Store Mihomo profile on target
+  become: true
+  no_log: true
+  ansible.builtin.systemd:
+    name: "{{ mihomo_native_refresh_service_name }}.service"
+    state: started
+    daemon_reload: true
+  when:
+    - not mihomo_native_profile_before_load.stat.exists
+    - not mihomo_native_profile_use_controller_staging | bool
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Enable and start Mihomo native service
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ mihomo_native_service_name }}.service"
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Enable and start Mihomo profile refresh timer
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ mihomo_native_refresh_timer_name }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]
+
+- name: Flush Mihomo systemd handlers before deploy verification
+  ansible.builtin.meta: flush_handlers
+  tags: [deploy, services, mihomo_native, mihomo_native_config, phase3]

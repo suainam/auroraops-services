@@ -10,8 +10,8 @@
 
 ---
 
-## 2. 包含角色列表 (共 27 个)
-- **网络与穿透** (6): `cloudflared`, `easytier`, `zerotier`, `hysteria2_native`, `ip2free_gateway`, `cliproxyapi_native`
+## 2. 包含角色列表 (共 28 个)
+- **网络与穿透** (7): `cloudflared`, `easytier`, `zerotier`, `hysteria2_native`, `mihomo_native`, `ip2free_gateway`, `cliproxyapi_native`
 - **运行时与中间件** (7): `docker`, `docker_apps`, `nginx`, `certbot`, `nodejs`, `postgresql`, `redis`
 - **业务应用组件** (8): `application_service`, `application_timer`, `container_deployer`, `dailycheckin`, `grok_register`, `openviking`, `pi_terminal`, `qmd`
 - **环境检查** (2): `ansibletest`, `prereq_checks`

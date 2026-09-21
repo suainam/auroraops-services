@@ -23,22 +23,6 @@
     - phase2
     - services
     - easytier
-  - name: 部署 services.cliproxyapi_native
-    include_role:
-      name: vps.services.cliproxyapi_native
-      tasks_from: main
-      apply:
-        tags:
-        - deploy
-        - phase3
-        - services
-        - cliproxyapi_native
-    when: auroraops_roles['services']['cliproxyapi_native'] | default(true) | bool
-    tags:
-    - deploy
-    - phase3
-    - services
-    - cliproxyapi_native
   - name: 部署 services.cloudflared
     include_role:
       name: vps.services.cloudflared
@@ -105,6 +89,22 @@
     - phase3
     - services
     - hysteria2_native
+  - name: 部署 services.mihomo_native
+    include_role:
+      name: vps.services.mihomo_native
+      tasks_from: main
+      apply:
+        tags:
+        - deploy
+        - phase3
+        - services
+        - mihomo_native
+    when: auroraops_roles['services']['mihomo_native'] | default(true) | bool
+    tags:
+    - deploy
+    - phase3
+    - services
+    - mihomo_native
   - name: 部署 services.nodejs
     include_role:
       name: vps.services.nodejs
@@ -214,6 +214,22 @@
     - nginx_cfip
     - nginx_logrotate
     - nginx_config
+  - name: 部署 services.cliproxyapi_native
+    include_role:
+      name: vps.services.cliproxyapi_native
+      tasks_from: main
+      apply:
+        tags:
+        - deploy
+        - phase5
+        - services
+        - cliproxyapi_native
+    when: auroraops_roles['services']['cliproxyapi_native'] | default(true) | bool
+    tags:
+    - deploy
+    - phase5
+    - services
+    - cliproxyapi_native
   - name: 部署 services.container_deployer
     include_role:
       name: vps.services.container_deployer

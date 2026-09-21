@@ -1,0 +1,81 @@
+---
+- name: Check Mihomo profile refresh timer before rollback
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ mihomo_native_refresh_timer_name }}"
+  register: mihomo_native_rollback_timer_status
+  failed_when: >-
+    (mihomo_native_rollback_timer_status.failed | default(false)) and
+    ('Could not find the requested service' not in
+    (mihomo_native_rollback_timer_status.msg | default('')))
+  tags: [rollback, services, mihomo_native, mihomo_native_rollback, phase3]
+
+- name: Stop and disable Mihomo profile refresh timer
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ mihomo_native_refresh_timer_name }}"
+    state: stopped
+    enabled: false
+  when:
+    - mihomo_native_rollback_timer_status.status is defined
+    - (mihomo_native_rollback_timer_status.status | default({})).LoadState | default('') == 'loaded'
+  tags: [rollback, services, mihomo_native, mihomo_native_rollback, phase3]
+
+- name: Check Mihomo native service before rollback
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ mihomo_native_service_name }}.service"
+  register: mihomo_native_rollback_service_status
+  failed_when: >-
+    (mihomo_native_rollback_service_status.failed | default(false)) and
+    ('Could not find the requested service' not in
+    (mihomo_native_rollback_service_status.msg | default('')))
+  tags: [rollback, services, mihomo_native, mihomo_native_rollback, phase3]
+
+- name: Stop and disable Mihomo native service
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ mihomo_native_service_name }}.service"
+    state: stopped
+    enabled: false
+  when:
+    - mihomo_native_rollback_service_status.status is defined
+    - (mihomo_native_rollback_service_status.status | default({})).LoadState | default('') == 'loaded'
+  tags: [rollback, services, mihomo_native, mihomo_native_rollback, phase3]
+
+- name: Remove Mihomo native systemd units
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/etc/systemd/system/{{ mihomo_native_service_name }}.service"
+    - "/etc/systemd/system/{{ mihomo_native_refresh_service_name }}.service"
+    - "/etc/systemd/system/{{ mihomo_native_refresh_timer_name }}"
+  notify: Reload systemd daemon for mihomo-native
+  tags: [rollback, services, mihomo_native, mihomo_native_rollback, phase3]
+
+- name: Remove Mihomo native refresh environment and script
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ mihomo_native_refresh_env_dir }}"
+    - "{{ mihomo_native_refresh_script_path }}"
+  tags: [rollback, services, mihomo_native, mihomo_native_rollback, phase3]
+
+- name: Remove Mihomo binary while preserving LKG profile state
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ mihomo_native_binary_path }}"
+    - "{{ mihomo_native_binary_marker_path }}"
+    - "{{ mihomo_native_archive_path }}"
+  tags: [rollback, services, mihomo_native, mihomo_native_rollback, phase3]
+
+- name: Flush systemd daemon reload after Mihomo rollback
+  ansible.builtin.meta: flush_handlers
+  tags: [rollback, services, mihomo_native, mihomo_native_rollback, phase3]

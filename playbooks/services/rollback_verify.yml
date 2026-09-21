@@ -1,0 +1,28 @@
+# Lifecycle rollback verification for the proxy client pair.
+- name: 验证回滚终态 services
+  hosts: all
+  gather_facts: true
+  tags:
+    - rollback_verify
+    - services
+  tasks:
+    - name: 验证回滚终态 services.mihomo_native
+      ansible.builtin.import_role:
+        name: vps.services.mihomo_native
+        tasks_from: rollback_verify
+      when: auroraops_roles['services']['mihomo_native'] | default(false) | bool
+      tags:
+        - rollback_verify
+        - phase3
+        - services
+        - mihomo_native
+    - name: 验证回滚终态 services.cliproxyapi_native
+      ansible.builtin.import_role:
+        name: vps.services.cliproxyapi_native
+        tasks_from: rollback_verify
+      when: auroraops_roles['services']['cliproxyapi_native'] | default(false) | bool
+      tags:
+        - rollback_verify
+        - phase5
+        - services
+        - cliproxyapi_native
