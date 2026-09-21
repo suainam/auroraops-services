@@ -1,0 +1,34 @@
+---
+# OpenViking MCP server tasks
+
+- name: Install MCP dependencies in OpenViking venv
+  ansible.builtin.command:
+    argv:
+      - uv
+      - pip
+      - install
+      - mcp
+      - requests
+      - --python
+      - "{{ openviking_venv_path }}/bin/python"
+  register: openviking_mcp_install_result
+  changed_when: >-
+    'Installed' in openviking_mcp_install_result.stdout
+    or 'Updated' in openviking_mcp_install_result.stdout
+  tags: [deploy, applications, openviking, openviking_mcp, phase5]
+
+- name: Deploy OpenViking MCP server script
+  ansible.builtin.copy:
+    src: openviking_mcp.py
+    dest: /usr/local/bin/openviking_mcp.py
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [deploy, applications, openviking, openviking_mcp, phase5]
+
+- name: Ensure temporary directory exists
+  ansible.builtin.file:
+    path: /tmp
+    state: directory
+    mode: "1777"
+  tags: [deploy, applications, openviking, openviking_mcp, phase5]

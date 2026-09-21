@@ -1,0 +1,19 @@
+---
+# handlers file for vps.applications.application_service
+
+- name: "[Application Service] Reload systemd and apply service change: {{ application_service_name }}"
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ application_service_name }}.service"
+    daemon_reload: true
+    state: >-
+      {{ 'restarted'
+         if (application_service_restart_on_change | bool)
+         and application_service_state == 'started'
+         else omit }}
+  when: not ansible_check_mode
+  tags:
+    - phase3
+    - applications
+    - application_service
+    - handler

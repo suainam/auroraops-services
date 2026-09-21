@@ -1,0 +1,62 @@
+---
+- name: Stop and disable CLIProxyAPI restart timer
+  become: true
+  ansible.builtin.systemd:
+    name: cliproxyapi-restart.timer
+    state: stopped
+    enabled: false
+    daemon_reload: true
+  failed_when: false
+  tags: [rollback, services, cliproxyapi_native, cliproxyapi_native_rollback, phase5]
+
+- name: Stop CLIProxyAPI restart companion service
+  become: true
+  ansible.builtin.systemd:
+    name: cliproxyapi-restart.service
+    state: stopped
+    daemon_reload: true
+  failed_when: false
+  tags: [rollback, services, cliproxyapi_native, cliproxyapi_native_rollback, phase5]
+
+- name: Stop and disable CLIProxyAPI native service
+  become: true
+  ansible.builtin.systemd:
+    name: cliproxyapi-native.service
+    state: stopped
+    enabled: false
+    daemon_reload: true
+  failed_when: false
+  tags: [rollback, services, cliproxyapi_native, cliproxyapi_native_rollback, phase5]
+
+- name: Remove CLIProxyAPI systemd unit files
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/cliproxyapi-restart.timer
+    - /etc/systemd/system/cliproxyapi-restart.service
+    - /etc/systemd/system/cliproxyapi-native.service
+  tags: [rollback, services, cliproxyapi_native, cliproxyapi_native_rollback, phase5]
+
+- name: Reload systemd daemon after removing unit files
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  tags: [rollback, services, cliproxyapi_native, cliproxyapi_native_rollback, phase5]
+
+- name: Remove CLIProxyAPI binary and runtime configuration
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ cliproxyapi_native_install_dir }}/cli-proxy-api"
+    - "{{ cliproxyapi_native_install_dir }}/config.yaml"
+    - "{{ cliproxyapi_native_install_dir }}/version.txt"
+  tags: [rollback, services, cliproxyapi_native, cliproxyapi_native_rollback, phase5]
+
+- name: Preserve CLIProxyAPI persistent credentials and OAuth data
+  ansible.builtin.debug:
+    msg: "Preserved persistent auth tokens and credentials in {{ cliproxyapi_native_data_dir }}"
+  tags: [rollback, services, cliproxyapi_native, cliproxyapi_native_rollback, phase5]

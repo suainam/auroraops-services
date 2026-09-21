@@ -1,0 +1,14 @@
+---
+- name: Read Cloudflare Worker domains with the configured JWT
+  ansible.builtin.uri:
+    url: "{{ grok_register_cloudflare_api_base | regex_replace('/+$', '') ~ grok_register_cloudflare_path_domains }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ grok_register_cloudflare_api_key }}"
+    status_code: 200
+    return_content: false
+    validate_certs: true
+  changed_when: false
+  check_mode: false
+  no_log: true
+  tags: [deploy, verify, services, grok_register, grok_register_mailbox_preflight, phase5]

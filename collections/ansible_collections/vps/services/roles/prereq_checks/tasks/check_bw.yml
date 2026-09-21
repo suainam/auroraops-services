@@ -1,0 +1,86 @@
+---
+# =============================================================================
+# Bitwarden CLI Prerequisite Check
+# =============================================================================
+# 检查 bw CLI 是否已安装、已登录、session 是否可用
+
+- name: "[prereq:bw] Check if bw CLI is installed"
+  ansible.builtin.command: bw --version
+  register: prereq_checks__prereq_bw_version
+  check_mode: false
+  failed_when: false
+  changed_when: false
+
+- name: "[prereq:bw] Set bw installed fact"
+  ansible.builtin.set_fact:
+    prereq_checks_prereq_bw_installed: "{{ prereq_checks__prereq_bw_version.rc == 0 }}"
+    prereq_checks_prereq_bw_version: "{{ prereq_checks__prereq_bw_version.stdout | default('not installed') }}"
+
+- name: "[prereq:bw] Check session file exists"
+  ansible.builtin.stat:
+    path: "{{ prereq_checks_bw_session_file }}"
+  register: prereq_checks__prereq_bw_session_stat
+  when: prereq_checks_prereq_bw_installed
+
+- name: "[prereq:bw] Load session and check status"
+  ansible.builtin.shell: |
+    source {{ prereq_checks_bw_session_file }} 2>/dev/null && bw status --raw 2>/dev/null || echo '{"status":"error"}'
+  args:
+    executable: /bin/bash
+  register: prereq_checks__prereq_bw_status
+  check_mode: false
+  failed_when: false
+  changed_when: false
+  when:
+    - prereq_checks_prereq_bw_installed
+    - prereq_checks__prereq_bw_session_stat.stat.exists | default(false)
+
+- name: "[prereq:bw] Parse status"
+  ansible.builtin.set_fact:
+    prereq_checks_prereq_bw_status: "{{ (prereq_checks__prereq_bw_status.stdout | default('{}') | from_json).status | default('unknown') }}"
+    prereq_checks_prereq_bw_server: "{{ (prereq_checks__prereq_bw_status.stdout | default('{}') | from_json).serverUrl | default('not configured') }}"
+  when: prereq_checks_prereq_bw_installed
+
+- name: "[prereq:bw] Set overall check result"
+  ansible.builtin.set_fact:
+    prereq_checks_prereq_bw_ready: "{{ prereq_checks_prereq_bw_installed and (prereq_checks_prereq_bw_status | default('unknown')) == 'unlocked' }}"
+
+- name: "[prereq:bw] Display status"
+  ansible.builtin.debug:
+    msg: |
+      Bitwarden CLI Status:
+        Installed: {{ prereq_checks_prereq_bw_installed }}
+        Version: {{ prereq_checks_prereq_bw_version }}
+        Status: {{ prereq_checks_prereq_bw_status | default('unknown') }}
+        Server: {{ prereq_checks_prereq_bw_server | default('not configured') }}
+        Ready: {{ prereq_checks_prereq_bw_ready }}
+
+- name: "[prereq:bw] Fail if not ready and required"
+  ansible.builtin.fail:
+    msg: |
+      ============================================================
+      ERROR: Bitwarden CLI is not ready!
+      ============================================================
+
+      Current status:
+        Installed: {{ prereq_checks_prereq_bw_installed }}
+        Status: {{ prereq_checks_prereq_bw_status | default('unknown') }}
+
+      To fix this, run:
+        make deploy-services.nodejs.nodejs_bw
+
+      Or if you don't want to use Vaultwarden, disable this check
+      by setting the appropriate variable to false.
+      ============================================================
+  when:
+    - prereq_checks_bw_required | bool
+    - not prereq_checks_prereq_bw_ready
+
+- name: "[prereq:bw] Warn if not ready but not required"
+  ansible.builtin.debug:
+    msg: |
+      WARNING: Bitwarden CLI is not ready, but check is not required.
+      Some features may not work. Run: make deploy-services.nodejs.nodejs_bw
+  when:
+    - not (prereq_checks_bw_required | bool)
+    - not prereq_checks_prereq_bw_ready

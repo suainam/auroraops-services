@@ -1,0 +1,25 @@
+---
+- name: Resolve cloudflared role state
+  ansible.builtin.set_fact:
+    cloudflared_role_enabled: >-
+      {{ cloudflared_enabled | bool and
+         auroraops_roles['services']['cloudflared'] | default(false) | bool }}
+  tags: [deploy, services, cloudflared, phase4]
+
+- name: Report disabled cloudflared role
+  ansible.builtin.debug:
+    msg: "Role cloudflared is disabled, skipping"
+  when: not cloudflared_role_enabled
+  tags: [deploy, services, cloudflared, phase4]
+
+- name: Run cloudflared preflight
+  ansible.builtin.import_tasks: preflight.yml
+  when: cloudflared_role_enabled
+  tags: [deploy, services, cloudflared, cloudflared_install, phase4]
+
+- name: Apply cloudflared state
+  ansible.builtin.import_tasks: apply.yml
+  when:
+    - cloudflared_role_enabled
+    - not ansible_check_mode
+  tags: [deploy, services, cloudflared, cloudflared_config, phase4]

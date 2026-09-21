@@ -1,0 +1,28 @@
+Generate or update the architecture codemap for the specified AuroraOps component.
+
+## Codemap Tasks
+
+1. **Structure Analysis** - Map role directory layout
+2. **Task Flow** - Document main.yml → includes chain
+3. **Variable Flow** - Map defaults → vars → group_vars → host_vars
+4. **Dependencies** - Identify inter-role dependencies
+5. **ASCII Diagram** - Create visual architecture representation
+
+## Codemap Output
+
+Save to `docs/codemaps/<role>.md` with:
+- Entry points and task chain
+- Variable source and override flow
+- Template → variable mapping
+- Handler triggers
+- Tag hierarchy
+- Related roles and dependencies
+
+## Standards
+
+- Keep under 500 lines per codemap
+- Use ASCII diagrams for clarity
+- Include freshness timestamp
+- Cross-reference index
+
+Target:

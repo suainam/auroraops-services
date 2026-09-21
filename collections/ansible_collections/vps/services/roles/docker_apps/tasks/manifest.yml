@@ -1,0 +1,63 @@
+---
+# Manifest - 使用 container_deployer Meta 角色部署
+
+- name: Check if PostgreSQL is installed
+  ansible.builtin.stat:
+    path: /etc/postgresql
+  register: docker_apps_manifest_postgresql_installed
+  tags: [deploy, services, docker_apps, manifest, init_db, phase5]
+
+- name: Check if Postgres database exists
+  become: true
+  become_user: postgres
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -tAc
+      - "SELECT 1 FROM pg_database WHERE datname='{{ docker_apps_manifest_pg_db }}'"
+  register: docker_apps_manifest_db_exists
+  changed_when: false
+  failed_when: docker_apps_manifest_db_exists.rc != 0
+  when: docker_apps_manifest_postgresql_installed.stat.exists | default(false)
+  tags: [deploy, services, docker_apps, manifest, init_db, phase5]
+
+- name: Create Postgres database
+  become: true
+  become_user: postgres
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -v
+      - ON_ERROR_STOP=1
+      - -c
+      - >-
+        CREATE DATABASE {{ docker_apps_manifest_pg_db }}
+        OWNER {{ docker_apps_manifest_pg_user }};
+  changed_when: true
+  when:
+    - docker_apps_manifest_postgresql_installed.stat.exists | default(false)
+    - docker_apps_manifest_db_exists.stdout | trim != '1'
+  tags: [deploy, services, docker_apps, manifest, init_db, phase5]
+
+- name: Deploy manifest
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+  vars:
+    cdp_name: "manifest"
+    cdp_image: "{{ manifest_image }}"
+    cdp_compose_enabled: true
+    cdp_compose_template: "manifest_docker-compose.yml.j2"
+    cdp_compose_vars:
+      manifest_image: "{{ manifest_image }}"
+      app_port_manifest: "{{ docker_apps_app_port_manifest }}"
+      manifest_port: "{{ docker_apps_manifest_port }}"
+      manifest_pg_host: "{{ docker_apps_manifest_pg_host }}"
+      manifest_pg_port: "{{ docker_apps_manifest_pg_port }}"
+      manifest_pg_db: "{{ docker_apps_manifest_pg_db }}"
+      manifest_pg_user: "{{ docker_apps_manifest_pg_user }}"
+      manifest_pg_pass: "{{ docker_apps_manifest_pg_pass }}"
+      manifest_auth_secret: "{{ docker_apps_manifest_auth_secret }}"
+      manifest_auth_url: "{{ docker_apps_manifest_auth_url }}"
+    cdp_compose_build: never
+    cdp_compose_pull: missing
+  tags: [deploy, services, docker_apps, manifest, phase5]

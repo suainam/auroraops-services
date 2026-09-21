@@ -1,0 +1,22 @@
+services:
+  shellcrash:
+    image: {{ shellcrash_image }}
+    container_name: shellcrash
+    restart: always
+    privileged: true
+    mem_limit: 256M
+    mem_reservation: 128M
+    cpus: "0.5"
+    networks:
+      macnet:
+        ipv4_address: {{ shellcrash_container_ip | default('192.168.31.200') }}
+    volumes:
+      - ./crashdata:/crash/data
+    environment:
+      - TZ=Asia/Shanghai
+    stdin_open: true
+    tty: true
+
+networks:
+  macnet:
+    external: true

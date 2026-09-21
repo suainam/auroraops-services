@@ -1,0 +1,74 @@
+---
+- name: "验证 PostgreSQL 服务是否处于活动状态"
+  ansible.builtin.command: "systemctl is-active postgresql"
+  register: "postgresql_active_status"
+  changed_when: "false"
+  failed_when: "false"
+
+- name: "检查 PostgreSQL 服务是否处于活动状态"
+  ansible.builtin.assert:
+    that:
+      - "'active' in postgresql_active_status.stdout"
+    msg: "PostgreSQL 服务未处于活动状态"
+
+- name: "验证 PostgreSQL 服务是否已启用"
+  ansible.builtin.command: "systemctl is-enabled postgresql"
+  register: "postgresql_enabled_status"
+  changed_when: "false"
+  failed_when: "false"
+
+- name: "检查 PostgreSQL 服务是否已启用"
+  ansible.builtin.assert:
+    that:
+      - "'enabled' in postgresql_enabled_status.stdout"
+    msg: "PostgreSQL 服务未启用"
+
+- name: "验证 PostgreSQL 端口是否在监听"
+  ansible.builtin.wait_for:
+    port: "{{ postgresql_port }}"
+    host: "127.0.0.1"
+    timeout: "5"
+    state: "started"
+  delegate_to: "localhost"
+
+- name: "验证 admin 用户是否存在"
+  community.postgresql.postgresql_user:
+    name: "{{ postgresql_app_db_user }}"
+    state: "present"
+  become: "yes"
+  become_user: "postgres"
+
+- name: "验证 app_db 数据库是否存在"
+  community.postgresql.postgresql_db:
+    name: "{{ postgresql_app_db_name }}"
+    state: "present"
+  become: "yes"
+  become_user: "postgres"
+
+- name: "验证 PostgreSQL 日志轮转配置是否存在"
+  ansible.builtin.stat:
+    path: "/etc/logrotate.d/postgresql"
+  register: "logrotate_config_stat"
+
+- name: "检查 logrotate 配置文件的存在性"
+  ansible.builtin.assert:
+    that:
+      - "logrotate_config_stat.stat.exists"
+    msg: "PostgreSQL 的 logrotate 配置文件 /etc/logrotate.d/postgresql 不存在"
+
+- name: "验证 admin 用户密码认证是否生效 (尝试使用错误密码连接，期望失败)"
+  ansible.builtin.command: "psql -U {{ postgresql_app_db_user }} -d {{ postgresql_app_db_name }} -c \"SELECT 1;\""
+  environment:
+    PGPASSWORD: "wrong_password"
+  become: "yes"
+  become_user: "{{ postgresql_app_db_user }}"
+  register: "admin_login_test"
+  failed_when: "admin_login_test.rc == 0"
+  changed_when: "false"
+  ignore_errors: "yes"
+
+- name: "断言 admin 用户密码认证失败 (预期行为)"
+  ansible.builtin.assert:
+    that:
+      - "'FATAL:  password authentication failed for user \"admin\"' in admin_login_test.stderr"
+    msg: "admin 用户密码认证未按预期失败，可能存在安全问题！"

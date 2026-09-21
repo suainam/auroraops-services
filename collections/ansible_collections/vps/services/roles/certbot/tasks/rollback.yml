@@ -1,0 +1,60 @@
+---
+- name: 移除 Certbot 证书和相关文件 (警告：此操作会删除所有证书) (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: /etc/letsencrypt/live/{{ item }}
+    state: absent
+  loop: "{{ certbot_certs | map(attribute='domains') | flatten }}"
+  tags:
+    - rollback
+    - services
+    - certbot
+    - certbot_remove_certs
+    - phase4
+- name: 移除 Certbot 证书归档目录 (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: /etc/letsencrypt/archive/{{ item }}
+    state: absent
+  loop: "{{ certbot_certs | map(attribute='domains') | flatten }}"
+  tags:
+    - rollback
+    - services
+    - certbot
+    - certbot_remove_certs
+    - phase4
+- name: 移除 Certbot DNS 凭证文件 (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: "{{ certbot_dns_credentials_file }}"
+    state: absent
+  when: certbot_create_method == 'dns' and certbot_dns_plugin is defined
+  tags:
+    - rollback
+    - services
+    - certbot
+    - certbot_remove_credentials_file
+    - phase4
+- name: 卸载 Certbot DNS Cloudflare 插件 (示例回滚操作)
+  become: true
+  ansible.builtin.package:
+    name: python3-certbot-dns-cloudflare
+    state: absent
+  when: certbot_create_method == 'dns' and certbot_dns_plugin == 'cloudflare'
+  tags:
+    - rollback
+    - services
+    - certbot
+    - certbot_uninstall_plugin
+    - phase4
+- name: 移除 Certbot logrotate 配置文件 (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: "{{ certbot_logrotate_config_path }}"
+    state: absent
+  tags:
+    - rollback
+    - services
+    - certbot
+    - certbot_remove_logrotate_config
+    - phase4

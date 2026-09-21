@@ -1,0 +1,330 @@
+---
+- name: Ensure Ansible local facts directory exists
+  become: true
+  ansible.builtin.file:
+    path: /etc/ansible/facts.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Persist cloudflared deployment baseline
+  become: true
+  ansible.builtin.copy:
+    dest: "{{ cloudflared_fact_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+    force: false
+    content: >-
+      {{ {'auroraops_managed': true,
+          'version': 1,
+          'preexisting': cloudflared_preexisting | bool,
+          'tunnel_id': cloudflared_tunnel_id,
+          'service_name': cloudflared_service_name,
+          'watchdog_service_name': cloudflared_watchdog_service_name,
+          'watchdog_timer_name': cloudflared_watchdog_timer_name} | to_nice_json }}
+  when: not ansible_check_mode
+
+- name: Download pinned official cloudflared package
+  become: true
+  ansible.builtin.get_url:
+    url: "{{ cloudflared_package_url }}"
+    dest: "{{ cloudflared_package_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    checksum: "{{ cloudflared_package_checksum[ansible_architecture] }}"
+  environment: "{{ cloudflared_download_environment }}"
+
+- name: Install pinned cloudflared package (Debian)
+  become: true
+  ansible.builtin.apt:
+    deb: "{{ cloudflared_package_path }}"
+    state: present
+  when: ansible_os_family == 'Debian'
+
+- name: Install pinned cloudflared binary (Alpine)
+  become: true
+  ansible.builtin.copy:
+    src: "{{ cloudflared_package_path }}"
+    dest: "{{ cloudflared_binary_path }}"
+    remote_src: true
+    mode: "0755"
+    owner: root
+    group: root
+  when: ansible_os_family == 'Alpine'
+- name: Ensure cloudflared configuration directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ cloudflared_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Inspect disabled cloudflared watchdog service
+  become: true
+  ansible.builtin.stat:
+    path: "{{ cloudflared_watchdog_service_path }}"
+  register: cloudflared_disabled_watchdog_service
+  when: not cloudflared_watchdog_enabled | bool
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Inspect disabled cloudflared watchdog timer
+  become: true
+  ansible.builtin.stat:
+    path: "{{ cloudflared_watchdog_timer_path }}"
+  register: cloudflared_disabled_watchdog_timer
+  when:
+    - not cloudflared_watchdog_enabled | bool
+    - cloudflared_service_manager == 'systemd'
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Stop and disable disabled cloudflared watchdog timer
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ cloudflared_watchdog_timer_name }}.timer"
+    enabled: false
+    state: stopped
+  when:
+    - not cloudflared_watchdog_enabled | bool
+    - cloudflared_service_manager == 'systemd'
+    - cloudflared_disabled_watchdog_timer.stat.exists | default(false)
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Stop and disable disabled cloudflared watchdog systemd service
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ cloudflared_watchdog_service_name }}.service"
+    enabled: false
+    state: stopped
+  when:
+    - not cloudflared_watchdog_enabled | bool
+    - cloudflared_service_manager == 'systemd'
+    - cloudflared_disabled_watchdog_service.stat.exists | default(false)
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Stop and disable disabled cloudflared watchdog OpenRC service
+  become: true
+  ansible.builtin.service:
+    name: "{{ cloudflared_watchdog_service_name }}"
+    enabled: false
+    state: stopped
+  when:
+    - not cloudflared_watchdog_enabled | bool
+    - cloudflared_service_manager == 'openrc'
+    - cloudflared_disabled_watchdog_service.stat.exists | default(false)
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Remove disabled cloudflared watchdog artifacts
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ cloudflared_watchdog_script_path }}"
+    - "{{ cloudflared_watchdog_state_dir }}"
+    - "{{ cloudflared_watchdog_service_path }}"
+    - "{{ cloudflared_watchdog_timer_path }}"
+  when: not cloudflared_watchdog_enabled | bool
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Reload systemd after disabled cloudflared watchdog cleanup
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when:
+    - not cloudflared_watchdog_enabled | bool
+    - cloudflared_service_manager == 'systemd'
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Ensure cloudflared watchdog curl dependency exists
+  become: true
+  ansible.builtin.package:
+    name: curl
+    state: present
+  when: cloudflared_watchdog_enabled | bool
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Ensure cloudflared watchdog state directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ cloudflared_watchdog_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  when: cloudflared_watchdog_enabled | bool
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Ensure cloudflared watchdog script directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ cloudflared_watchdog_script_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: cloudflared_watchdog_enabled | bool
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Deploy cloudflared watchdog probe script
+  become: true
+  ansible.builtin.template:
+    src: cloudflared-watchdog.sh.j2
+    dest: "{{ cloudflared_watchdog_script_path }}"
+    owner: root
+    group: root
+    mode: "0750"
+  notify: Restart cloudflared watchdog
+  when: cloudflared_watchdog_enabled | bool
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Deploy cloudflared tunnel credentials
+  become: true
+  ansible.builtin.copy:
+    dest: "{{ cloudflared_credentials_path }}"
+    content: "{{ cloudflared_tunnel_credentials | to_nice_json }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart cloudflared
+
+- name: Deploy cloudflared ingress configuration
+  become: true
+  ansible.builtin.template:
+    src: config.yml.j2
+    dest: "{{ cloudflared_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart cloudflared
+
+- name: Deploy cloudflared systemd service
+  become: true
+  ansible.builtin.template:
+    src: cloudflared.service.j2
+    dest: "{{ cloudflared_service_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: cloudflared_service_manager == 'systemd'
+  notify:
+    - Reload systemd
+    - Restart cloudflared
+
+- name: Deploy cloudflared OpenRC init script
+  become: true
+  ansible.builtin.template:
+    src: cloudflared.initd.j2
+    dest: "{{ cloudflared_service_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: cloudflared_service_manager == 'openrc'
+  notify: Restart cloudflared
+- name: Flush cloudflared handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start cloudflared service
+  become: true
+  ansible.builtin.service:
+    name: "{{ cloudflared_service_name }}"
+    enabled: true
+    state: started
+
+- name: Deploy cloudflared watchdog systemd service
+  ansible.builtin.include_role:
+    name: vps.applications.application_service
+    apply:
+      become: true
+      tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+  vars:
+    app_service_name: "{{ cloudflared_watchdog_service_name }}"
+    app_service_description: Cloudflared readiness watchdog
+    app_service_type: oneshot
+    app_service_exec_start: "{{ cloudflared_watchdog_script_path }}"
+    app_service_dependencies:
+      - "{{ cloudflared_service_name }}.service"
+    app_service_enabled: false
+    app_service_state: stopped
+    app_service_restart: "no"
+    app_service_restart_on_change: false
+  when:
+    - cloudflared_watchdog_enabled | bool
+    - cloudflared_service_manager == 'systemd'
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Deploy cloudflared watchdog systemd timer
+  ansible.builtin.include_role:
+    name: vps.applications.application_timer
+    apply:
+      become: true
+      tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+  vars:
+    app_timer_name: "{{ cloudflared_watchdog_timer_name }}"
+    app_timer_description: Cloudflared readiness watchdog timer
+    app_timer_on_calendar: "{{ cloudflared_watchdog_schedule }}"
+    application_timer_app_timer_on_boot_sec: "{{ cloudflared_watchdog_on_boot_sec }}"
+    app_timer_persistent: true
+    app_timer_enabled: true
+    app_timer_state: started
+  when:
+    - cloudflared_watchdog_enabled | bool
+    - cloudflared_service_manager == 'systemd'
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Deploy cloudflared watchdog OpenRC service
+  become: true
+  ansible.builtin.template:
+    src: cloudflared-watchdog.initd.j2
+    dest: "{{ cloudflared_watchdog_service_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart cloudflared watchdog
+  when:
+    - cloudflared_watchdog_enabled | bool
+    - cloudflared_service_manager == 'openrc'
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Enable and start cloudflared watchdog OpenRC service
+  become: true
+  ansible.builtin.service:
+    name: "{{ cloudflared_watchdog_service_name }}"
+    enabled: true
+    state: started
+  when:
+    - cloudflared_watchdog_enabled | bool
+    - cloudflared_service_manager == 'openrc'
+  tags: [deploy, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Preserve original Tunnel DNS ownership before creation
+  become: true
+  ansible.builtin.copy:
+    dest: "{{ cloudflared_dns_fact_path }}"
+    mode: "0600"
+    force: false
+    content: >-
+      {{ {'hostname': cloudflared_dns_hostname, 'zone': cloudflared_dns_zone,
+          'target': cloudflared_tunnel_id ~ '.cfargotunnel.com',
+          'created': cloudflared_dns_records_response.json.result | length == 0} | to_nice_json }}
+  when:
+    - cloudflared_dns_hostname | length > 0
+    - not cloudflared_dns_fact_stat.stat.exists
+
+- name: Enroll explicitly managed Tunnel DNS record
+  community.general.cloudflare_dns:
+    zone: "{{ cloudflared_dns_zone }}"
+    record: "{{ cloudflared_dns_hostname }}"
+    type: CNAME
+    value: "{{ cloudflared_tunnel_id }}.cfargotunnel.com"
+    proxied: true
+    api_token: "{{ cloudflared_dns_api_token }}"
+    state: present
+  delegate_to: localhost
+  become: false
+  no_log: true
+  when: cloudflared_dns_hostname | length > 0

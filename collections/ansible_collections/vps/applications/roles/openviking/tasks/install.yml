@@ -1,0 +1,62 @@
+---
+# OpenViking install tasks
+
+- name: Check if uv is available in pipx venv
+  ansible.builtin.stat:
+    path: ~/.local/pipx/venvs/uv/bin/uv
+  register: openviking_uv_pipx_check
+  tags: [deploy, applications, openviking, openviking_install, phase5]
+
+- name: Install uv via pipx
+  ansible.builtin.command: pipx install uv
+  register: openviking_uv_install_result
+  changed_when: openviking_uv_install_result.rc == 0
+  when: not openviking_uv_pipx_check.stat.exists
+  tags: [deploy, applications, openviking, openviking_install, phase5]
+
+- name: Check if OpenViking executable exists
+  ansible.builtin.stat:
+    path: ~/.local/share/uv/tools/openviking/bin/openviking
+  register: openviking_executable_check
+  tags: [deploy, applications, openviking, openviking_install, phase5]
+
+- name: Install OpenViking via uv
+  ansible.builtin.command: ~/.local/pipx/venvs/uv/bin/uv tool install openviking
+  register: openviking_install_result
+  changed_when: openviking_install_result.rc == 0
+  when: not openviking_executable_check.stat.exists
+  tags: [deploy, applications, openviking, openviking_install, phase5]
+
+- name: Create symlink for OpenViking
+  ansible.builtin.file:
+    src: ~/.local/share/uv/tools/openviking/bin/openviking
+    dest: ~/.local/bin/openviking
+    state: link
+  tags: [deploy, applications, openviking, openviking_install, phase5]
+
+- name: Create OpenViking log directory
+  ansible.builtin.file:
+    path: "{{ openviking_log_dir }}"
+    state: directory
+    owner: "{{ openviking_user }}"
+    group: "{{ openviking_user }}"
+    mode: "0755"
+  tags: [deploy, applications, openviking, openviking_install, phase5]
+
+- name: Create OpenViking data directory
+  ansible.builtin.file:
+    path: "{{ openviking_data_dir }}"
+    state: directory
+    owner: "{{ openviking_user }}"
+    group: "{{ openviking_user }}"
+    mode: "0755"
+  tags: [deploy, applications, openviking, openviking_install, phase5]
+
+- name: Create OpenViking config directory
+  ansible.builtin.file:
+    path: ~/.local/pipx/venvs/openviking/.openviking
+    state: directory
+    owner: "{{ openviking_user }}"
+    group: "{{ openviking_user }}"
+    mode: "0755"
+  tags: [deploy, applications, openviking, openviking_install, phase5]

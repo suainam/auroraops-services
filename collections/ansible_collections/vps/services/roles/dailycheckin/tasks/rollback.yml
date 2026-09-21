@@ -1,0 +1,31 @@
+---
+- name: "[DailyCheckin] Disable and stop timer"
+  become: true
+  ansible.builtin.systemd:
+    name: dailycheckin.timer
+    enabled: false
+    state: stopped
+  tags: &dailycheckin_rollback_tags
+    - rollback
+    - services
+    - dailycheckin
+    - phase5
+
+- name: "[DailyCheckin] Disable and stop service"
+  become: true
+  ansible.builtin.systemd:
+    name: dailycheckin.service
+    enabled: false
+    state: stopped
+  tags: *dailycheckin_rollback_tags
+
+- name: "[DailyCheckin] Remove systemd units"
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/dailycheckin.timer
+    - /etc/systemd/system/dailycheckin.service
+  notify: "[DailyCheckin] Reload systemd"
+  tags: *dailycheckin_rollback_tags

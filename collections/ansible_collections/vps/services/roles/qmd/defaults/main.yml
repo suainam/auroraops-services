@@ -1,0 +1,13 @@
+---
+qmd_enabled: true
+qmd_local_dir: "{{ ansible_user_dir }}/.cache/qmd"
+qmd_services_base_dir: "{{ services_base_dir | default('/opt/dockers/services') }}"
+qmd_services_dir: "{{ qmd_services_base_dir }}/qmd"
+qmd_services_user: "{{ services_user | default(ansible_user_id) }}"
+qmd_services_group: "{{ services_group | default(ansible_user_id) }}"
+
+qmd_collections: []
+# Example:
+# qmd_collections:
+#   - { name: "auroraops", path: "/root/AuroraOps", mask: "*.md" }
+#   - { name: "docs", path: "/root/docs", mask: "*.md" }

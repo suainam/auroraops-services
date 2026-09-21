@@ -1,0 +1,36 @@
+---
+easytier_image: "{{ easytier_docker_image | default('easytier/easytier:latest') }}"
+easytier_config_dir: "/opt/easytier"
+
+# 网络标识（全局唯一，同一网络的节点必须一致）
+easytier_network_name: "auroraops"
+easytier_network_secret: "{{ vault_easytier_secret | default('') }}"
+
+# 虚拟 IP（同一子网内唯一）
+easytier_ipv4: ""
+easytier_dhcp: false
+
+# 监听模式：true=等待连接（cc15），false=主动连接远端（local）
+easytier_listen: true
+easytier_listen_port: 11010
+
+# 分层变量：对等节点（最终列表 = global + host - exclude）
+easytier_peers_global: []
+easytier_peers_host: []
+easytier_peers_exclude: []
+# 共享子网（subnet proxy）
+easytier_subnet_proxies_global: []
+easytier_subnet_proxies_host: []
+easytier_subnet_proxies_exclude: []
+# 退出节点（exit node）
+easytier_exit_nodes: []
+# WireGuard 门户（可选）
+# easytier_vpn_portal_wg: "wg://0.0.0.0:11013/10.14.14.0/24"
+easytier_vpn_portal_wg: ""
+
+# 防火墙端口
+easytier_listen_port_tcp: "{{ easytier_listen_port }}"
+easytier_listen_port_udp: "{{ easytier_listen_port }}"
+
+# TUN 设备路径
+easytier_tun_device: "/dev/net/tun"

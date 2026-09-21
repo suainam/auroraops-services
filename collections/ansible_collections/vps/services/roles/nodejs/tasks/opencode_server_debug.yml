@@ -1,0 +1,67 @@
+---
+# =============================================================================
+# OpenCode Server Debug Tasks
+# =============================================================================
+# Troubleshoot OpenCode server issues
+
+- name: "[opencode-server-debug] Get service status details"
+  ansible.builtin.systemd:
+    name: "{{ nodejs_opencode_server_service_name }}"
+  register: nodejs_opencode_service_details
+  tags: [deploy, services, nodejs, opencode_server_debug, phase3]
+
+- name: "[opencode-server-debug] Display service details"
+  ansible.builtin.debug:
+    msg:
+      - "Active State: {{ nodejs_opencode_service_details.status.ActiveState }}"
+      - "Sub State: {{ nodejs_opencode_service_details.status.SubState }}"
+      - "Result: {{ nodejs_opencode_service_details.status.Result }}"
+  tags: [deploy, services, nodejs, opencode_server_debug, phase3]
+
+- name: "[opencode-server-debug] Get recent service logs"
+  ansible.builtin.command: journalctl -u {{ nodejs_opencode_server_service_name }} -n 50 --no-pager
+  register: nodejs_opencode_service_logs
+  changed_when: false
+  tags: [deploy, services, nodejs, opencode_server_debug, phase3]
+
+- name: "[opencode-server-debug] Display service logs"
+  ansible.builtin.debug:
+    msg: "{{ nodejs_opencode_service_logs.stdout_lines }}"
+  tags: [deploy, services, nodejs, opencode_server_debug, phase3]
+
+- name: "[opencode-server-debug] Check if opencode binary exists"
+  ansible.builtin.stat:
+    path: /usr/local/bin/opencode
+  register: nodejs_opencode_binary_check
+  tags: [deploy, services, nodejs, opencode_server_debug, phase3]
+
+- name: "[opencode-server-debug] Display binary status"
+  ansible.builtin.debug:
+    msg: "OpenCode binary: {{ 'EXISTS' if nodejs_opencode_binary_check.stat.exists else 'NOT FOUND' }}"
+  tags: [deploy, services, nodejs, opencode_server_debug, phase3]
+
+- name: "[opencode-server-debug] Test opencode command"
+  ansible.builtin.command: /usr/local/bin/opencode --version
+  register: nodejs_opencode_cmd_test
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, nodejs, opencode_server_debug, phase3]
+
+- name: "[opencode-server-debug] Display command test result"
+  ansible.builtin.debug:
+    msg:
+      - "Return code: {{ nodejs_opencode_cmd_test.rc }}"
+      - "Output: {{ nodejs_opencode_cmd_test.stdout }}"
+      - "Error: {{ nodejs_opencode_cmd_test.stderr }}"
+  tags: [deploy, services, nodejs, opencode_server_debug, phase3]
+
+- name: "[opencode-server-debug] Check systemd service file"
+  ansible.builtin.slurp:
+    src: "/etc/systemd/system/{{ nodejs_opencode_server_service_name }}.service"
+  register: nodejs_opencode_service_file
+  tags: [deploy, services, nodejs, opencode_server_debug, phase3]
+
+- name: "[opencode-server-debug] Display service file content"
+  ansible.builtin.debug:
+    msg: "{{ (nodejs_opencode_service_file.content | b64decode).split('\n') }}"
+  tags: [deploy, services, nodejs, opencode_server_debug, phase3]

@@ -1,0 +1,106 @@
+{% raw %}
+/**
+ * AuroraOps Session Audit Plugin
+ * 
+ * Scans edited files at session end for common issues:
+ * - Residual debug: yes in production tasks
+ * - Plaintext password patterns
+ * - Missing tags on tasks
+ * - Direct vault file edits
+ * 
+ * Inspired by ECC's session.idle console.log audit pattern.
+ */
+export const SessionAuditPlugin = async ({ project, client, $, directory, worktree }) => {
+  const editedFiles = new Set();
+
+  const log = (level, message) =>
+    client.app.log({ body: { service: "auroraops-audit", level, message } });
+
+  return {
+    "file.edited": async (event) => {
+      if (event.path && event.path.match(/\.(ya?ml|j2)$/)) {
+        editedFiles.add(event.path);
+      }
+    },
+
+    "file.watcher.updated": async (event) => {
+      if (event.type === "change" && event.path.match(/\.(ya?ml|j2)$/)) {
+        editedFiles.add(event.path);
+      }
+    },
+
+    "session.idle": async () => {
+      if (editedFiles.size === 0) return;
+
+      log("info", "[Audit] Session idle - scanning edited Ansible files");
+
+      let totalIssues = 0;
+      const issueFiles = [];
+
+      for (const file of editedFiles) {
+        const issues = [];
+
+        // Check 1: Residual debug: yes
+        try {
+          const result = await $`grep -n "debug:.*yes" ${file} 2>/dev/null`.text();
+          if (result.trim()) {
+            issues.push("debug: yes found (should be removed for production)");
+          }
+        } catch { /* no match - good */ }
+
+        // Check 2: Plaintext password patterns
+        try {
+          const result = await $`grep -nE "password:[[:space:]]+['\"]?[^{]" ${file} 2>/dev/null`.text();
+          if (result.trim()) {
+            issues.push("possible plaintext password (use vault_* reference)");
+          }
+        } catch { /* no match - good */ }
+
+        // Check 3: Missing tags on tasks (only for .yml files in tasks/)
+        if (file.match(/\/tasks\/.*\.ya?ml$/)) {
+          try {
+            const taskCount = await $`grep -c "^- name:" ${file} 2>/dev/null || echo 0`.text();
+            const tagCount = await $`grep -c "tags:" ${file} 2>/dev/null || echo 0`.text();
+            const tasks = parseInt(taskCount.trim(), 10);
+            const tags = parseInt(tagCount.trim(), 10);
+            if (tasks > 0 && tags < tasks) {
+              issues.push(`${tasks - tags} task(s) missing tags`);
+            }
+          } catch { /* ignore */ }
+        }
+
+        // Check 4: Direct vault file edit
+        if (file.match(/secrets\/.*\.ya?ml$/) && !file.includes("vault.yml")) {
+          issues.push("direct edit of vault-adjacent file (use ansible-vault edit)");
+        }
+
+        if (issues.length > 0) {
+          totalIssues += issues.length;
+          issueFiles.push({ file, issues });
+        }
+      }
+
+      if (totalIssues > 0) {
+        log("warn", `[Audit] Found ${totalIssues} issue(s) in ${issueFiles.length} file(s):`);
+        for (const { file, issues } of issueFiles) {
+          log("warn", `  ${file}:`);
+          for (const issue of issues) {
+            log("warn", `    - ${issue}`);
+          }
+        }
+        log("warn", "[Audit] Fix issues before committing");
+      } else {
+        log("info", "[Audit] All checks passed");
+      }
+
+      editedFiles.clear();
+    },
+
+    "session.deleted": async () => {
+      editedFiles.clear();
+    },
+  };
+};
+
+export default SessionAuditPlugin;
+{% endraw %}

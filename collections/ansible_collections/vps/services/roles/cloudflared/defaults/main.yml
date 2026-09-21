@@ -1,0 +1,80 @@
+---
+cloudflared_enabled: false
+cloudflared_version: "2026.6.0"
+cloudflared_package_path: >-
+  {{ ('/tmp/cloudflared-' ~ cloudflared_version ~ '-' ~ (cloudflared_package_arch[ansible_architecture] | default('amd64')) ~ '.deb')
+     if ansible_os_family == 'Debian'
+     else ('/tmp/cloudflared-linux-' ~ (cloudflared_package_arch[ansible_architecture] | default('amd64'))) }}
+cloudflared_package_arch:
+  x86_64: amd64
+  aarch64: arm64
+cloudflared_package_checksum_deb:
+  x86_64: sha256:0f8d62a84cdf9474409a486d62c9269d9a4b28665d2c4e675cb87c062395d3f7
+  aarch64: sha256:b0bcc293670cafd150380efebea85073424e332f136003ae9fdf99b2c83a0231
+cloudflared_package_checksum_binary:
+  x86_64: sha256:08d27c4c5d3ed73ee3e98ef2ddceb4ad09fd4cfc28e243565a189538e8ccd706
+  aarch64: sha256:4d60da2f0f8a85590924ecffb96dc373f7602330ca0e5b0ec3ea27e2b1fa4bf6
+cloudflared_package_checksum: >-
+  {{ cloudflared_package_checksum_deb
+     if ansible_os_family == 'Debian'
+     else cloudflared_package_checksum_binary }}
+cloudflared_release_base_url: >-
+  https://github.com/cloudflare/cloudflared/releases/download/{{ cloudflared_version }}
+cloudflared_package_url: >-
+  {{ (cloudflared_release_base_url ~ '/cloudflared-linux-' ~ (cloudflared_package_arch[ansible_architecture] | default('amd64')) ~ '.deb')
+     if ansible_os_family == 'Debian'
+     else (cloudflared_release_base_url ~ '/cloudflared-linux-' ~ (cloudflared_package_arch[ansible_architecture] | default('amd64'))) }}
+cloudflared_download_environment: >-
+  {{ {
+       'http_proxy': proxy_http,
+       'https_proxy': proxy_https,
+       'HTTP_PROXY': proxy_http,
+       'HTTPS_PROXY': proxy_https
+     } if proxy_enabled | default(false) | bool else {} }}
+cloudflared_binary_path: /usr/bin/cloudflared
+cloudflared_service_name: cloudflared
+cloudflared_service_manager: >-
+  {{ 'openrc'
+     if (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Alpine'
+     else (ansible_service_mgr | default('systemd')) }}
+cloudflared_service_path: >-
+  {{ '/etc/systemd/system/cloudflared.service'
+     if cloudflared_service_manager == 'systemd'
+     else '/etc/init.d/cloudflared' }}
+cloudflared_config_dir: /etc/cloudflared
+cloudflared_config_path: /etc/cloudflared/config.yml
+cloudflared_credentials_path: "/etc/cloudflared/{{ cloudflared_tunnel_id }}.json"
+cloudflared_fact_path: /etc/ansible/facts.d/cloudflared.fact
+cloudflared_metrics_address: 127.0.0.1:20241
+cloudflared_metrics_url: "http://{{ cloudflared_metrics_address }}/ready"
+cloudflared_watchdog_enabled: true
+cloudflared_watchdog_service_name: cloudflared-watchdog
+cloudflared_watchdog_timer_name: cloudflared-watchdog
+cloudflared_watchdog_service_path: >-
+  {{ ('/etc/systemd/system/' ~ cloudflared_watchdog_service_name ~ '.service')
+     if cloudflared_service_manager == 'systemd'
+     else ('/etc/init.d/' ~ cloudflared_watchdog_service_name) }}
+cloudflared_watchdog_timer_path: "/etc/systemd/system/{{ cloudflared_watchdog_timer_name }}.timer"
+cloudflared_watchdog_script_path: /usr/local/sbin/cloudflared-watchdog
+cloudflared_watchdog_state_dir: /var/lib/cloudflared-watchdog
+cloudflared_watchdog_schedule: "*-*-* *:*:00"
+cloudflared_watchdog_on_boot_sec: 2min
+cloudflared_watchdog_failure_threshold: 3
+cloudflared_watchdog_timeout_seconds: 5
+cloudflared_watchdog_loop_interval_seconds: 60
+cloudflared_watchdog_curl_path: /usr/bin/curl
+cloudflared_watchdog_url: "{{ cloudflared_metrics_url }}"
+cloudflared_watchdog_log_tag: cloudflared-watchdog
+cloudflared_tunnel_credentials: "{{ vault_cloudflared_tunnel_credentials | default({}) }}"
+cloudflared_origin_url: "http://127.0.0.1:30007"
+cloudflared_tunnel_id: ""
+cloudflared_drill_hostname: bws-dr-test.msuai.top
+cloudflared_production_hostname: bws.msuai.top
+cloudflared_custom_ingresses: []
+cloudflared_verify_vaultwarden_backend: true
+
+# Optional explicit ingress DNS enrollment; unrelated records are never replaced.
+cloudflared_dns_hostname: ""
+cloudflared_dns_zone: ""
+cloudflared_dns_api_token: "{{ cloudflared_dns_api_token_override | default(certbot_cloudflare_api_token | default('')) }}"
+cloudflared_dns_fact_path: /etc/ansible/facts.d/cloudflared_dns.fact

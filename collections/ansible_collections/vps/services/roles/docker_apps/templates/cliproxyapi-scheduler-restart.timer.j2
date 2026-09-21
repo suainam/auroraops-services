@@ -1,0 +1,14 @@
+[Unit]
+Description=CLIProxyAPI scheduled restart at 07:20, 13:20, and 19:20 Asia/Shanghai
+Documentation=https://github.com/suainam/AuroraOps
+
+[Timer]
+Unit=cliproxyapi-scheduler-restart.service
+{% for calendar in docker_apps_cliproxyapi_restart_schedule | default(['*-*-* 07:20:00', '*-*-* 13:20:00', '*-*-* 19:20:00']) %}
+OnCalendar={{ calendar }}
+{% endfor %}
+Persistent=false
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

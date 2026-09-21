@@ -1,0 +1,138 @@
+---
+- name: Check if ZeroTier CLI is already installed
+  ansible.builtin.stat:
+    path: "{{ zerotier_cli_path }}"
+  register: zerotier_cli_stat
+  tags: [phase2]
+
+- name: Skip ZeroTier installation if already installed
+  ansible.builtin.debug:
+    msg: ZeroTier is already installed, skipping installation.
+  when: zerotier_cli_stat.stat.exists | default(false) | bool
+  tags: [phase2]
+
+- name: ZeroTier installation block
+  when: not (zerotier_cli_stat.stat.exists | default(false) | bool)
+  tags: [phase2]
+  block:
+    - name: Temporarily comment out cdrom apt sources
+      become: true
+      ansible.builtin.replace:
+        path: /etc/apt/sources.list
+        regexp: '^([^#]*deb\s+cdrom:.*)$'
+        replace: '# \1'
+      register: zerotier_cdrom_commented
+      tags: [phase2]
+
+    - name: Ensure GnuPG is installed
+      become: true
+      ansible.builtin.apt:
+        name: gnupg
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      tags: [phase2]
+
+    - name: Ensure APT keyring directory exists
+      become: true
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      tags: [phase2]
+
+    - name: Download ZeroTier GPG key from jsDelivr
+      ansible.builtin.get_url:
+        url: https://cdn.jsdelivr.net/gh/zerotier/ZeroTierOne@master/doc/contact%40zerotier.com.gpg
+        dest: /tmp/zerotier-key.asc
+        mode: "0644"
+        force: true
+        use_proxy: false
+      register: zerotier_jsd_download
+      failed_when: false
+      tags: [phase2]
+
+    - name: Download ZeroTier GPG key from GitHub fallback
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/zerotier/ZeroTierOne/master/doc/contact%40zerotier.com.gpg
+        dest: /tmp/zerotier-key.asc
+        mode: "0644"
+        force: true
+        use_proxy: true
+      environment: "{{ zerotier_environment_proxy }}"
+      when: zerotier_jsd_download.failed | default(false) | bool
+      tags: [phase2]
+
+    - name: Install ZeroTier GPG keyring
+      become: true
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --dearmor
+          - --batch
+          - --yes
+          - --output
+          - /etc/apt/keyrings/zerotier.gpg
+          - /tmp/zerotier-key.asc
+        creates: /etc/apt/keyrings/zerotier.gpg
+      tags: [phase2]
+
+    - name: Remove old ZeroTier repository if present
+      become: true
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/zerotier.list
+        state: absent
+      tags: [phase2]
+
+    - name: Add ZeroTier repository
+      become: true
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [signed-by=/etc/apt/keyrings/zerotier.gpg]
+          http://download.zerotier.com/debian/{{ ansible_distribution_release }}
+          {{ ansible_distribution_release }} main
+        filename: zerotier
+        state: present
+      tags: [phase2]
+
+    - name: Install ZeroTier
+      become: true
+      ansible.builtin.apt:
+        name: zerotier-one
+        state: present
+        update_cache: true
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      tags: [phase2]
+
+    - name: Ensure ZeroTier service is started and enabled
+      become: true
+      ansible.builtin.service:
+        name: zerotier-one
+        state: started
+        enabled: true
+      tags: [phase2]
+
+    - name: Allow ZeroTier port via UFW
+      become: true
+      community.general.ufw:
+        rule: allow
+        port: "{{ zerotier_port | string }}"
+        proto: udp
+      when: zerotier_ufw_stat.stat.exists | default(false) | bool
+      tags: [phase2]
+  always:
+    - name: Restore cdrom apt sources
+      become: true
+      ansible.builtin.replace:
+        path: /etc/apt/sources.list
+        regexp: '^#\s*(deb\s+cdrom:.*)$'
+        replace: '\1'
+      when:
+        - zerotier_cdrom_commented is defined
+        - zerotier_cdrom_commented.changed
+      tags: [phase2]

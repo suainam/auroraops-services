@@ -1,0 +1,69 @@
+---
+- name: Check managed ZeroTier moon backup for rollback
+  become: true
+  ansible.builtin.stat:
+    path: "{{ zerotier_moon_backup_marker }}"
+  register: zerotier_moon_restore_marker
+
+- name: Read managed ZeroTier moon backup manifest
+  become: true
+  ansible.builtin.slurp:
+    path: "{{ zerotier_moon_backup_marker }}"
+  register: zerotier_moon_restore_manifest_raw
+  when: zerotier_moon_restore_marker.stat.exists | default(false) | bool
+
+- name: Parse managed ZeroTier moon backup manifest
+  ansible.builtin.set_fact:
+    zerotier_moon_restore_manifest: >-
+      {{ zerotier_moon_restore_manifest_raw.content | b64decode | from_json }}
+  when: zerotier_moon_restore_marker.stat.exists | default(false) | bool
+
+- name: Reset active ZeroTier moon state before restore
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ zerotier_moon_json_path }}"
+    - "{{ zerotier_moons_dir_path }}"
+  notify: Restart ZeroTier
+  when: zerotier_moon_restore_marker.stat.exists | default(false) | bool
+
+- name: Restore managed ZeroTier moon.json backup
+  become: true
+  ansible.builtin.copy:
+    src: "{{ zerotier_moon_backup_dir }}/moon.json"
+    dest: "{{ zerotier_moon_json_path }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart ZeroTier
+  when:
+    - zerotier_moon_restore_marker.stat.exists | default(false) | bool
+    - zerotier_moon_restore_manifest.moon_json_existed | default(false) | bool
+
+- name: Recreate ZeroTier moons directory for rollback
+  become: true
+  ansible.builtin.file:
+    path: "{{ zerotier_moons_dir_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - zerotier_moon_restore_marker.stat.exists | default(false) | bool
+    - zerotier_moon_restore_manifest.moon_files | default([]) | length > 0
+
+- name: Restore managed ZeroTier moon file backups
+  become: true
+  ansible.builtin.copy:
+    src: "{{ zerotier_moon_backup_dir }}/moons.d/{{ item }}"
+    dest: "{{ zerotier_moons_dir_path }}/{{ item }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ zerotier_moon_restore_manifest.moon_files | default([]) }}"
+  notify: Restart ZeroTier
+  when: zerotier_moon_restore_marker.stat.exists | default(false) | bool

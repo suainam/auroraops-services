@@ -1,0 +1,24 @@
+---
+# OpenViking role entry point
+
+- name: OpenViking deployment
+  when: auroraops_roles['applications']['openviking'] | default(true) | bool
+  tags: [deploy, applications, openviking, phase5]
+  block:
+    - name: Import OpenViking install tasks
+      ansible.builtin.import_tasks: install.yml
+      tags: [deploy, applications, openviking, openviking_install, phase5]
+
+    - name: Import OpenViking MCP server tasks
+      ansible.builtin.import_tasks: mcp.yml
+      tags: [deploy, applications, openviking, openviking_mcp, phase5]
+
+    - name: Import OpenViking config tasks
+      ansible.builtin.import_tasks: config.yml
+      tags: [deploy, applications, openviking, openviking_config, phase5]
+
+- name: Report disabled OpenViking deployment
+  ansible.builtin.debug:
+    msg: "OpenViking deployment is disabled (auroraops_roles['applications']['openviking'] = false)"
+  when: not (auroraops_roles['applications']['openviking'] | default(true) | bool)
+  tags: [deploy, applications, openviking, phase5]

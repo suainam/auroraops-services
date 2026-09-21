@@ -1,0 +1,557 @@
+---
+- name: Deploy Sub-Store
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+  vars:
+    cdp_name: "sub_store"
+    cdp_image: "{{ sub_store_image }}"
+    cdp_pull: "{{ docker_apps_sub_store_pull | default(false) | bool }}"
+    container_deployer_cdp_pull: "{{ docker_apps_sub_store_pull | default(false) | bool }}"
+    cdp_memory: "{{ docker_apps_sub_store_memory | default('512m') }}"
+    cdp_memory_reservation: "{{ docker_apps_sub_store_memory_reservation | default('64m') }}"
+    cdp_dirs: ["data"]
+    cdp_ports:
+      - "127.0.0.1:{{ app_port_sub_store }}:3000"
+    cdp_volumes:
+      - "/opt/dockers/sub_store/data:/opt/app/data"
+    cdp_env:
+      SUB_STORE_BACKEND_MERGE: "true"
+      SUB_STORE_BACKEND_PREFIX: "true"
+      SUB_STORE_FRONTEND_BACKEND_PATH: "{{ sub_store_backend_path }}"
+      SUB_STORE_CORS_ALLOWED_ORIGINS: "http://127.0.0.1:{{ app_port_sub_store }}"
+      SUB_STORE_BACKEND_CUSTOM_NAME: "AuroraOps Sub-Store"
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Resolve effective Sub-Store providers
+  ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_providers.yml
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Resolve capability provider catalog
+  ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_capability_providers.yml
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Ensure Sub-Store capability registry directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ sub_store_capability_registry_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Install Sub-Store capability registry module
+  become: true
+  ansible.builtin.copy:
+    src: sub_store_profiler/registry.py
+    dest: "{{ sub_store_capability_registry_dir }}/registry.py"
+    owner: root
+    group: root
+    mode: "0644"
+  when: sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Install Sub-Store isolated probe runner
+  become: true
+  ansible.builtin.copy:
+    src: sub_store_profiler/probe_runner.py
+    dest: "{{ sub_store_capability_registry_dir }}/probe_runner.py"
+    owner: root
+    group: root
+    mode: "0644"
+  when: sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Install Sub-Store sing-box capability probe adapter
+  become: true
+  ansible.builtin.copy:
+    src: sub_store_profiler/singbox_probe_adapter.py
+    dest: "{{ sub_store_capability_registry_dir }}/singbox_probe_adapter.py"
+    owner: root
+    group: root
+    mode: "0755"
+  when: sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Install Sub-Store capability profiler
+  become: true
+  ansible.builtin.copy:
+    src: sub_store_profiler/profiler.py
+    dest: "{{ sub_store_capability_registry_dir }}/profiler.py"
+    owner: root
+    group: root
+    mode: "0755"
+  when: sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Install Sub-Store capability pool sync
+  become: true
+  ansible.builtin.copy:
+    src: sub_store_profiler/pool_sync.py
+    dest: "{{ sub_store_capability_registry_dir }}/pool_sync.py"
+    owner: root
+    group: root
+    mode: "0755"
+  when: sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Ensure capability registry state directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ sub_store_capability_registry_state_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Protect Sub-Store capability registry state
+  become: true
+  ansible.builtin.file:
+    path: "{{ sub_store_capability_registry_state_path }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0600"
+    access_time: preserve
+    modification_time: preserve
+  when: sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Remove deprecated ipapi.is credential if present
+  become: true
+  ansible.builtin.file:
+    path: "{{ sub_store_capability_registry_dir }}/ipapi.key"
+    state: absent
+  when: sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Validate Sub-Store provider catalog entries
+  ansible.builtin.assert:
+    that:
+      - item.name is string
+      - item.name | length > 0
+      - item.url is string
+      - item.url | length > 0
+      - item.url is match('^https?://')
+      - >-
+        item['additional-prefix'] is not defined or
+        (item['additional-prefix'] is string and
+         item['additional-prefix'] | length > 0 and
+         item['additional-prefix'] | length <= 64)
+      - >-
+        item['fallback-only'] is not defined or
+        item['fallback-only'] is boolean
+    fail_msg: >-
+      Each enabled Sub-Store provider requires name/url; optional
+      additional-prefix must be 1-64 characters and fallback-only must be boolean
+  loop: "{{ docker_apps_sub_store_capability_providers | default([]) }}"
+  when:
+    - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_profiler_enabled | bool or sub_store_capability_pools_enabled | bool
+    - sub_store_capability_nodes_input_path | length == 0
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Protect Sub-Store capability provider catalog
+  become: true
+  ansible.builtin.copy:
+    content: "{{ docker_apps_sub_store_capability_providers | to_json }}\n"
+    dest: "{{ sub_store_capability_provider_catalog_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_profiler_enabled | bool or sub_store_capability_pools_enabled | bool
+    - sub_store_capability_nodes_input_path | length == 0
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Validate Sub-Store capability profiler configuration
+  ansible.builtin.assert:
+    that:
+      - sub_store_capability_nodes_input_path | length > 0 or sub_store_capability_provider_catalog_path | length > 0
+      - sub_store_capability_probe_command | length > 0
+    fail_msg: "Capability profiler requires a node input/provider catalog and a mature probe adapter command"
+  when:
+    - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_profiler_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Deploy Sub-Store capability profiler service
+  ansible.builtin.include_role:
+    name: vps.applications.application_service
+  vars:
+    app_service_name: "sub-store-capability-profiler"
+    app_service_description: "Sub-Store capability profiler"
+    app_service_type: oneshot
+    app_service_exec_start: >-
+      {% if sub_store_capability_profiler_enabled | bool %}
+      /usr/bin/python3 {{ sub_store_capability_registry_dir | quote }}/profiler.py
+      --state {{ sub_store_capability_registry_state_path | quote }}
+      --timeout {{ sub_store_capability_probe_timeout_seconds }}
+      --geo-ttl {{ sub_store_capability_geo_ttl_seconds }}
+      --risk-ttl {{ sub_store_capability_pure_review_ttl_seconds | default(sub_store_capability_risk_ttl_seconds | default(86400)) }}
+      --probe-period {{ sub_store_capability_probe_period_seconds }}
+      --probe-buckets {{ sub_store_capability_probe_buckets }}
+      {% if sub_store_capability_nodes_input_path | length > 0 %}
+      --input {{ sub_store_capability_nodes_input_path | quote }}
+      {% else %}
+      --provider-catalog {{ sub_store_capability_provider_catalog_path | quote }}
+      --sub-store-base-url {{ sub_store_capability_sub_store_base_url | quote }}
+      --template {{ sub_store_subscription_name | quote }}
+      {% endif %}
+      {{ sub_store_capability_probe_command | map('quote') | join(' ') }}
+      {% else %}
+      /usr/bin/true
+      {% endif %}
+    app_service_timeout: "{{ sub_store_capability_profiler_timeout_seconds }}"
+    app_service_restart: "no"
+    app_service_exec_stop_post: >-
+      /bin/sh -c 'ids=$(/usr/bin/docker ps -aq --filter name=^sub-store-capability-probe-); [ -z "$ids" ] || /usr/bin/docker rm -f $ids >/dev/null 2>&1'
+    app_service_user: "root"
+    app_service_group: "root"
+    app_service_environment:
+      SINGBOX_PROBE_IMAGE: "{{ sub_store_capability_probe_singbox_image }}"
+    app_service_enabled: false
+    app_service_state: stopped
+  when:
+    - sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Deploy Sub-Store capability profiler timer
+  ansible.builtin.include_role:
+    name: vps.applications.application_timer
+  vars:
+    app_timer_name: "sub-store-capability-profiler"
+    app_timer_description: "Timer for Sub-Store capability profiler"
+    app_timer_on_calendar: "{{ sub_store_capability_profiler_on_calendar }}"
+    app_timer_persistent: false
+    app_timer_enabled: "{{ sub_store_capability_profiler_enabled | bool }}"
+    app_timer_state: "{{ (sub_store_capability_profiler_enabled | bool) | ternary('started', 'stopped') }}"
+  when:
+    - sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Run Sub-Store capability profiler once now
+  become: true
+  ansible.builtin.systemd_service:
+    name: sub-store-capability-profiler.service
+    state: started
+  when:
+    - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_profiler_enabled | bool
+    - sub_store_capability_profiler_run_now | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Deploy Sub-Store capability pool sync service
+  ansible.builtin.include_role:
+    name: vps.applications.application_service
+  vars:
+    app_service_name: "sub-store-capability-pools"
+    app_service_description: "Synchronize #220 capability filters into Mihomo profile"
+    app_service_type: oneshot
+    app_service_exec_start: >-
+      {% if sub_store_capability_pools_enabled | bool %}
+      /usr/bin/python3 {{ sub_store_capability_registry_dir | quote }}/pool_sync.py
+      --state {{ sub_store_capability_registry_state_path | quote }}
+      --provider-catalog {{ sub_store_capability_provider_catalog_path | quote }}
+      --template-path {{ sub_store_capability_profile_template_path | quote }}
+      --profile-path {{ sub_store_capability_profile_path | quote }}
+      --pure-max-abuse-score {{ sub_store_capability_pool_pure_max_abuse_score }}
+      {% else %}
+      /usr/bin/true
+      {% endif %}
+    app_service_timeout: "{{ sub_store_capability_pool_sync_timeout_seconds }}"
+    app_service_restart: "no"
+    app_service_user: "root"
+    app_service_group: "root"
+    app_service_enabled: false
+    app_service_state: stopped
+  when:
+    - sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Deploy Sub-Store capability pool sync timer
+  ansible.builtin.include_role:
+    name: vps.applications.application_timer
+  vars:
+    app_timer_name: "sub-store-capability-pools"
+    app_timer_description: "Timer for Sub-Store capability pool sync"
+    app_timer_on_calendar: "{{ sub_store_capability_pool_sync_on_calendar }}"
+    app_timer_persistent: false
+    app_timer_enabled: "{{ sub_store_capability_pools_enabled | bool }}"
+    app_timer_state: "{{ (sub_store_capability_pools_enabled | bool) | ternary('started', 'stopped') }}"
+  when:
+    - sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Render Sub-Store capability Mihomo profile template
+  become: true
+  ansible.builtin.template:
+    src: sub_store_capability_profile.yaml.j2
+    dest: "{{ sub_store_capability_profile_template_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: sub_store_capability_pools_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Run Sub-Store capability pool sync
+  become: true
+  ansible.builtin.systemd_service:
+    name: sub-store-capability-pools.service
+    state: started
+  when:
+    - not ansible_check_mode
+    - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_pools_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Gather stale capability service facts
+  ansible.builtin.service_facts:
+  when: >-
+    not (sub_store_capability_registry_enabled | bool)
+    or not (sub_store_capability_pools_enabled | bool)
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Disable stale capability profiler service
+  become: true
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop:
+    - sub-store-capability-profiler.service
+    - sub-store-capability-profiler.timer
+  when:
+    - not (sub_store_capability_registry_enabled | bool)
+    - item in ansible_facts.services
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Disable stale capability pool service
+  become: true
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop:
+    - sub-store-capability-pools.service
+    - sub-store-capability-pools.timer
+  when:
+    - not (sub_store_capability_pools_enabled | bool)
+    - item in ansible_facts.services
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Render Sub-Store Mihomo profile
+  become: true
+  ansible.builtin.template:
+    src: sub_store_mihomo_profile.yaml.j2
+    dest: "{{ sub_store_mihomo_profile_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Wait for Sub-Store backend
+  become: true
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}/api/utils/env"
+    method: GET
+    status_code: 200
+    return_content: false
+  register: docker_apps_sub_store_backend_probe
+  retries: 20
+  delay: 2
+  until: docker_apps_sub_store_backend_probe.status | default(0) == 200
+  when: not ansible_check_mode
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Read subscriptions from Sub-Store
+  become: true
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}/api/subs"
+    method: GET
+    status_code: 200
+    return_content: true
+  register: docker_apps_sub_store_subscriptions_probe
+  when: not ansible_check_mode
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Parse Sub-Store subscriptions response
+  ansible.builtin.set_fact:
+    docker_apps_sub_store_subscriptions_payload: >-
+      {{ docker_apps_sub_store_subscriptions_probe.content | from_json }}
+  when: not ansible_check_mode
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Validate Sub-Store subscriptions response
+  ansible.builtin.assert:
+    that:
+      - docker_apps_sub_store_subscriptions_payload['status'] == 'success'
+      - (docker_apps_sub_store_subscriptions_payload['data'] | type_debug) == 'list'
+    fail_msg: "Sub-Store subscriptions API returned an unexpected response"
+  when: not ansible_check_mode
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Build Sub-Store subscription name list
+  ansible.builtin.set_fact:
+    docker_apps_sub_store_existing_subscription_names: >-
+      {{ docker_apps_sub_store_subscriptions_payload['data']
+         | map(attribute='name') | list }}
+  when: not ansible_check_mode
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Create AuroraOps subscription in Sub-Store
+  become: true
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}/api/subs"
+    method: POST
+    body_format: json
+    body:
+      name: "{{ sub_store_subscription_name }}"
+      source: remote
+      url: "{{ sub_store_source_url }}"
+    status_code: 201
+    return_content: false
+  when:
+    - not ansible_check_mode
+    - sub_store_subscription_name not in docker_apps_sub_store_existing_subscription_names
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Upsert capability source subscriptions in existing Sub-Store
+  become: true
+  ansible.builtin.uri:
+    url: >-
+      http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}{{
+        ('/api/sub/' ~ (item.name | urlencode))
+        if item.name in docker_apps_sub_store_existing_subscription_names
+        else '/api/subs'
+      }}
+    method: "{{ 'PATCH' if item.name in docker_apps_sub_store_existing_subscription_names else 'POST' }}"
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      source: remote
+      url: "{{ item.url }}"
+    status_code: [200, 201]
+    return_content: false
+  loop: "{{ docker_apps_sub_store_capability_providers | default([]) }}"
+  when:
+    - not ansible_check_mode
+    - sub_store_capability_pools_enabled | bool
+    - item.name != sub_store_subscription_name
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Read collections from existing Sub-Store
+  become: true
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}/api/collections"
+    method: GET
+    status_code: 200
+    return_content: true
+  register: docker_apps_sub_store_collections_probe
+  when:
+    - not ansible_check_mode
+    - sub_store_capability_pools_enabled | bool
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Parse existing Sub-Store collections
+  ansible.builtin.set_fact:
+    docker_apps_sub_store_collections_payload: >-
+      {{ docker_apps_sub_store_collections_probe.content | from_json }}
+    docker_apps_sub_store_existing_collection_names: >-
+      {{ (docker_apps_sub_store_collections_probe.content | from_json)['data']
+         | map(attribute='name') | list }}
+  when:
+    - not ansible_check_mode
+    - sub_store_capability_pools_enabled | bool
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Validate existing Sub-Store collections response
+  ansible.builtin.assert:
+    that:
+      - docker_apps_sub_store_collections_payload['status'] == 'success'
+      - (docker_apps_sub_store_collections_payload['data'] | type_debug) == 'list'
+    fail_msg: "Sub-Store collections API returned an unexpected response"
+  when:
+    - not ansible_check_mode
+    - sub_store_capability_pools_enabled | bool
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Upsert single capability aggregate collection in existing Sub-Store
+  become: true
+  ansible.builtin.uri:
+    url: >-
+      http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}{{
+        ('/api/collection/' ~ (sub_store_capability_collection_name | urlencode))
+        if sub_store_capability_collection_name in docker_apps_sub_store_existing_collection_names
+        else '/api/collections'
+      }}
+    method: >-
+      {{ 'PATCH'
+         if sub_store_capability_collection_name in docker_apps_sub_store_existing_collection_names
+         else 'POST' }}
+    body_format: json
+    body:
+      name: "{{ sub_store_capability_collection_name }}"
+      subscriptions: >-
+        {{ docker_apps_sub_store_capability_providers | map(attribute='name') | list }}
+    status_code: [200, 201]
+    return_content: false
+  when:
+    - not ansible_check_mode
+    - sub_store_capability_pools_enabled | bool
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Validate Sub-Store capability aggregate output
+  become: true
+  ansible.builtin.uri:
+    url: >-
+      {{ 'http://127.0.0.1:' ~ app_port_sub_store ~ sub_store_backend_path
+         ~ '/download/collection/' ~ sub_store_capability_collection_name
+         ~ '/ClashMeta?prettyYaml=true' }}
+    method: GET
+    status_code: 200
+    return_content: false
+  when:
+    - not ansible_check_mode
+    - sub_store_capability_pools_enabled | bool
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Validate Sub-Store Mihomo output
+  become: true
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}/download/{{ sub_store_subscription_name }}/ClashMeta?prettyYaml=true"
+    method: GET
+    status_code: 200
+    return_content: false
+  when: not ansible_check_mode
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+- name: Validate Sub-Store sing-box output
+  become: true
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}/download/{{ sub_store_subscription_name }}/sing-box"
+    method: GET
+    status_code: 200
+    return_content: false
+  when: not ansible_check_mode
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]

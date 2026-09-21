@@ -1,0 +1,93 @@
+- name: Preflight PostgreSQL runtime capabilities
+  ansible.builtin.import_tasks: preflight.yml
+  when: auroraops_roles['applications']['postgresql'] | default(false) | bool
+  tags:
+    - deploy
+    - applications
+    - postgresql
+    - postgresql_preflight
+    - phase4
+
+- name: Check if PostgreSQL is installed
+  ansible.builtin.command: which psql
+  register: postgresql_check
+  changed_when: false
+  failed_when: false
+  when: auroraops_roles['applications']['postgresql'] | default(false) | bool
+  tags:
+    - deploy
+    - applications
+    - postgresql
+    - phase4
+
+- name: Set skip flag (considering force overwrite)
+  ansible.builtin.set_fact:
+    postgresql_installed: '{{ postgresql_check.rc == 0 }}'
+    postgresql_skip_all: '{{ postgresql_check.rc == 0 and not (postgresql_force_overwrite
+      | default(false) | bool) }}'
+  when: auroraops_roles['applications']['postgresql'] | default(false) | bool
+  tags:
+    - deploy
+    - applications
+    - postgresql
+    - phase4
+
+- name: PostgreSQL pre-installed - skip all (safe mode)
+  ansible.builtin.debug:
+    msg: PostgreSQL already installed by system, skipping all. Use FORCE=true to force
+      overwrite.
+  when:
+    - auroraops_roles['applications']['postgresql'] | default(false) | bool
+    - postgresql_skip_all | bool
+  tags:
+    - deploy
+    - applications
+    - postgresql
+    - phase4
+
+- name: Deploy PostgreSQL
+  when:
+    - auroraops_roles['applications']['postgresql'] | default(false) | bool
+    - not postgresql_skip_all | bool
+  tags:
+    - deploy
+    - applications
+    - postgresql
+    - phase4
+  block:
+    - name: Include PostgreSQL installation tasks
+      ansible.builtin.import_tasks: install.yml
+    - name: Include PostgreSQL configuration tasks
+      ansible.builtin.import_tasks: configure.yml
+    - name: Include PostgreSQL user and database management tasks
+      ansible.builtin.import_tasks: users_dbs.yml
+
+- name: Configure PostgreSQL logrotate independently of install safe mode
+  ansible.builtin.import_tasks: logrotate.yml
+  when: auroraops_roles['applications']['postgresql'] | default(false) | bool
+  tags:
+    - deploy
+    - applications
+    - postgresql
+    - postgresql_logrotate
+    - phase4
+
+- name: PostgreSQL Cleanup (when disabled)
+  when: not (auroraops_roles['applications']['postgresql'] | default(false) | bool)
+  tags:
+    - deploy
+    - applications
+    - postgresql
+    - phase4
+  block:
+    - name: Gather PostgreSQL service facts
+      ansible.builtin.service_facts:
+
+    - name: Stop PostgreSQL service
+      ansible.builtin.systemd:
+        name: postgresql
+        enabled: false
+        state: stopped
+      when:
+        - not ansible_check_mode
+        - "'postgresql.service' in ansible_facts.services"

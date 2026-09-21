@@ -1,0 +1,40 @@
+---
+# CLIProxyAPI Native 角色主入口
+# 启用控制变量: cliproxyapi_native_enabled AND auroraops_roles['services']['cliproxyapi_native']
+# 默认禁用，可在 host_vars 中通过 auroraops_roles.services.cliproxyapi_native: true 启用
+
+- name: Resolve CLIProxyAPI Native role state
+  ansible.builtin.set_fact:
+    cliproxyapi_native_role_enabled: >-
+      {{ cliproxyapi_native_enabled | bool and
+         auroraops_roles['services']['cliproxyapi_native'] | default(false) | bool }}
+  tags: [deploy, services, cliproxyapi_native, phase5]
+
+- name: Report disabled CLIProxyAPI Native role
+  ansible.builtin.debug:
+    msg: "Role cliproxyapi_native is disabled, skipping"
+  when: not cliproxyapi_native_role_enabled
+  tags: [deploy, services, cliproxyapi_native, phase5]
+
+- name: Run CLIProxyAPI Native preflight
+  ansible.builtin.import_tasks: preflight.yml
+  when: cliproxyapi_native_role_enabled
+  tags: [deploy, services, cliproxyapi_native, cliproxyapi_native_preflight, phase5]
+
+- name: CLIProxyAPI Native 部署
+  when:
+    - cliproxyapi_native_role_enabled
+    - not ansible_check_mode
+  tags: [deploy, services, cliproxyapi_native, phase5]
+  block:
+    - name: 安装 CLIProxyAPI 二进制
+      ansible.builtin.import_tasks: install.yml
+      tags: [deploy, services, cliproxyapi_native, cliproxyapi_native_install, phase5]
+
+    - name: 配置 CLIProxyAPI 及 Systemd 服务
+      ansible.builtin.import_tasks: configure.yml
+      tags: [deploy, services, cliproxyapi_native, cliproxyapi_native_config, phase5]
+
+    - name: 验证 CLIProxyAPI 部署
+      ansible.builtin.import_tasks: verify.yml
+      tags: [verify, services, cliproxyapi_native, cliproxyapi_native_verify, phase5, deploy]

@@ -1,0 +1,66 @@
+---
+- name: 验证 Certbot 及其 DNS Cloudflare 插件是否已安装在虚拟环境中
+  become: true
+  ansible.builtin.command: "{{ system_python_venv_path | default('/opt/aurora_venv') }}/bin/certbot plugins"
+  register: certbot_plugins_raw
+  changed_when: false
+  failed_when: "'dns-cloudflare' not in certbot_plugins_raw.stdout"
+  when: certbot_create_method == 'dns' and certbot_dns_plugin == 'cloudflare'
+  tags: [verify, services, certbot, phase4]
+- name: 验证 Certbot DNS 凭证文件是否存在且权限正确
+  ansible.builtin.stat:
+    path: "{{ certbot_dns_credentials_file }}"
+  register: certbot_credentials_file_check
+  failed_when: not certbot_credentials_file_check.stat.exists or certbot_credentials_file_check.stat.mode != '0600'
+  when: certbot_create_method == 'dns' and certbot_dns_plugin is defined
+  tags:
+    - verify
+    - services
+    - certbot
+    - certbot_verify_credentials_file
+    - phase4
+- name: 验证 Certbot 证书文件信息
+  ansible.builtin.stat:
+    path: /etc/letsencrypt/live/{{ item }}/fullchain.pem
+  loop: "{{ certbot_certs | map(attribute='domains') | map('first') | list }}"
+  register: certbot_cert_file_check
+  tags:
+    - verify
+    - services
+    - certbot
+    - phase4
+- name: 检查 Certbot 证书是否存在
+  ansible.builtin.assert:
+    that: item.stat.exists
+    fail_msg: "证书文件不存在: {{ item.invocation.module_args.path }}"
+  loop: "{{ certbot_cert_file_check.results }}"
+  tags:
+    - verify
+    - services
+    - certbot
+    - certbot_verify_cert_exists
+    - phase4
+- name: 验证 Certbot 证书有效期 (示例：检查是否在未来 30 天内过期)
+  ansible.builtin.command: openssl x509 -in /etc/letsencrypt/live/{{ item }}/fullchain.pem -checkend 2592000 -noout
+  loop: "{{ certbot_certs | map(attribute='domains') | map('first') | list }}"
+  register: certbot_cert_expiry_check
+  changed_when: false
+  failed_when: certbot_cert_expiry_check.rc != 0
+  tags:
+    - verify
+    - services
+    - certbot
+    - certbot_verify_cert_expiry
+    - phase4
+- name: Verify Certbot logrotate configuration
+  ansible.builtin.import_tasks: ../../../common/tasks/verify_optional_logrotate.yml
+  vars:
+    optional_logrotate_owner: Certbot
+    optional_logrotate_enabled: "{{ certbot_logrotate_enabled }}"
+    optional_logrotate_config_path: "{{ certbot_logrotate_config_path }}"
+  tags:
+    - verify
+    - services
+    - certbot
+    - certbot_verify_logrotate_config
+    - phase4

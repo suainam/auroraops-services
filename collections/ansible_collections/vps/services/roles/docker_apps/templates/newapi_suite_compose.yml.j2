@@ -1,0 +1,67 @@
+services:
+  new-api:
+    container_name: new-api
+    image: {{ newapi_image }}
+    restart: always
+    networks:
+      - sweb
+    ports:
+      - "127.0.0.1:{{ app_port_newapi }}:3000"
+    volumes:
+      - ./new-api/data:/data
+      - ./new-api/logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      TZ: "Asia/Shanghai"
+      SYNC_FREQUENCY: "60"
+      NODE_TYPE: "master"
+{% if newapi_use_postgres | bool %}
+      SQL_DSN: "postgres://{{ newapi_pg_user }}:{{ newapi_pg_pass | urlencode }}@{{ newapi_pg_host }}:{{ newapi_pg_port | string }}/{{ newapi_pg_db }}?sslmode=disable"
+{% endif %}
+{% if newapi_use_redis | bool %}
+      REDIS_CONN_STRING: "redis://:{{ newapi_redis_pass | urlencode }}@{{ newapi_redis_host }}:{{ newapi_redis_port | string }}/0"
+{% endif %}
+    cpus: 0.5
+    mem_limit: 192M
+    mem_reservation: 128M
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status || exit 1"]
+      interval: 1800s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+{% if newapi_deploy_neko | bool %}
+  neko-api-key-tool:
+    container_name: neko-api-key-tool
+    build:
+      context: ./neko-api-key-tool-src
+      dockerfile: Dockerfile
+    image: {{ neko_key_tool_image }}
+    restart: always
+    mem_limit: 256M
+    mem_reservation: 128M
+    cpus: "0.5"
+    networks:
+      - sweb
+    ports:
+      - "127.0.0.1:{{ app_port_neko_key_tool }}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:80 || exit 1"]
+      interval: 1800s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+{% endif %}
+
+networks:
+  sweb:
+    external: true

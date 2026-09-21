@@ -1,0 +1,51 @@
+---
+# =============================================================================
+# Inspect OpenCode Binary
+# =============================================================================
+
+- name: "[opencode-inspect] Check file type"
+  ansible.builtin.command: file /usr/bin/opencode
+  register: nodejs_opencode_file_type
+  changed_when: false
+  tags: [deploy, services, nodejs, opencode_inspect, phase3]
+
+- name: "[opencode-inspect] Display file type"
+  ansible.builtin.debug:
+    msg: "{{ nodejs_opencode_file_type.stdout }}"
+  tags: [deploy, services, nodejs, opencode_inspect, phase3]
+
+- name: "[opencode-inspect] Read first few lines"
+  ansible.builtin.command: head -20 /usr/bin/opencode
+  register: nodejs_opencode_content
+  changed_when: false
+  tags: [deploy, services, nodejs, opencode_inspect, phase3]
+
+- name: "[opencode-inspect] Display content"
+  ansible.builtin.debug:
+    msg: "{{ nodejs_opencode_content.stdout_lines }}"
+  tags: [deploy, services, nodejs, opencode_inspect, phase3]
+
+- name: "[opencode-inspect] Check if its a symlink"
+  ansible.builtin.stat:
+    path: /usr/bin/opencode
+  register: nodejs_opencode_stat
+  tags: [deploy, services, nodejs, opencode_inspect, phase3]
+
+- name: "[opencode-inspect] Display stat info"
+  ansible.builtin.debug:
+    msg:
+      - "Is link: {{ nodejs_opencode_stat.stat.islnk }}"
+      - "Link target: {{ nodejs_opencode_stat.stat.lnk_target | default('N/A') }}"
+      - "Executable: {{ nodejs_opencode_stat.stat.executable }}"
+  tags: [deploy, services, nodejs, opencode_inspect, phase3]
+
+- name: "[opencode-inspect] Try running with node directly"
+  ansible.builtin.shell: node /usr/bin/opencode --version 2>&1 || true
+  register: nodejs_opencode_node_run
+  changed_when: false
+  tags: [deploy, services, nodejs, opencode_inspect, phase3]
+
+- name: "[opencode-inspect] Display node run result"
+  ansible.builtin.debug:
+    msg: "{{ nodejs_opencode_node_run.stdout_lines }}"
+  tags: [deploy, services, nodejs, opencode_inspect, phase3]

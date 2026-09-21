@@ -1,0 +1,111 @@
+---
+- name: Preflight PostgreSQL runtime capabilities for rollback
+  ansible.builtin.import_tasks: preflight.yml
+  tags:
+    - rollback
+    - applications
+    - postgresql
+    - postgresql_preflight
+    - phase4
+
+- name: Remove application database during rollback
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_db:
+    name: "{{ postgresql_app_db_name }}"
+    state: absent
+  register: postgresql_rollback_database_result
+  failed_when: false
+  tags:
+    - rollback
+    - applications
+    - postgresql
+    - postgresql_rollback_users_dbs
+    - phase4
+
+- name: Remove application database user during rollback
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_user:
+    name: "{{ postgresql_app_db_user }}"
+    state: absent
+  register: postgresql_rollback_user_result
+  failed_when: false
+  tags:
+    - rollback
+    - applications
+    - postgresql
+    - postgresql_rollback_users_dbs
+    - phase4
+
+- name: Remove managed pg_hba.conf during rollback
+  ansible.builtin.file:
+    path: "/etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf"
+    state: absent
+  tags:
+    - rollback
+    - applications
+    - postgresql
+    - postgresql_rollback_config
+    - phase4
+
+- name: Remove managed postgresql.conf during rollback
+  ansible.builtin.file:
+    path: "/etc/postgresql/{{ postgresql_version }}/main/postgresql.conf"
+    state: absent
+  tags:
+    - rollback
+    - applications
+    - postgresql
+    - postgresql_rollback_config
+    - phase4
+
+- name: Stop and disable PostgreSQL service during rollback
+  ansible.builtin.service:
+    name: postgresql
+    state: stopped
+    enabled: false
+  register: postgresql_rollback_service_result
+  failed_when: false
+  tags:
+    - rollback
+    - applications
+    - postgresql
+    - postgresql_rollback_install
+    - phase4
+
+- name: Remove PostgreSQL data directory during rollback
+  ansible.builtin.file:
+    path: "{{ postgresql_data_directory_path }}"
+    state: absent
+  tags:
+    - rollback
+    - applications
+    - postgresql
+    - postgresql_rollback_install
+    - phase4
+
+- name: Uninstall PostgreSQL packages during rollback
+  ansible.builtin.apt:
+    name:
+      - "postgresql-{{ postgresql_version }}"
+      - "postgresql-client-{{ postgresql_version }}"
+      - python3-psycopg2
+    state: absent
+  tags:
+    - rollback
+    - applications
+    - postgresql
+    - postgresql_rollback_install
+    - phase4
+
+- name: Remove PostgreSQL logrotate configuration during rollback
+  ansible.builtin.file:
+    path: "{{ postgresql_logrotate_config_path }}"
+    state: absent
+  tags:
+    - rollback
+    - applications
+    - postgresql
+    - postgresql_rollback_logrotate
+    - phase4

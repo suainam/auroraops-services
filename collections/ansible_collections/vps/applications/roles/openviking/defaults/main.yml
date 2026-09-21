@@ -1,0 +1,37 @@
+---
+# =============================================================================
+# OpenViking Role - Default Variables
+# =============================================================================
+# Domain: applications
+# Phase: phase5
+# =============================================================================
+
+# Enable/Disable
+openviking_enabled: true
+
+# User and Paths
+openviking_user: "root"
+openviking_venv_path: "/root/.local/share/uv/tools/openviking"
+openviking_bin_path: "/root/.local/bin"
+openviking_python_version: "3.11"
+
+# Service Configuration
+openviking_port: "{{ app_port_openviking }}"
+openviking_host: "127.0.0.1"
+openviking_data_dir: "/opt/openviking/data"
+openviking_log_dir: "/var/log/openviking"
+openviking_log_file: "{{ openviking_log_dir }}/openviking.log"
+
+# API Configuration (global defaults - empty, must be provided via group_vars/host_vars)
+openviking_embedding_api_base: ""
+openviking_embedding_api_key: ""
+openviking_embedding_model: ""
+openviking_embedding_dimension: 1536
+
+openviking_vlm_api_base: ""
+openviking_vlm_api_key: ""
+openviking_vlm_model: ""
+
+# Control Variables
+openviking_service_state: "started"
+openviking_auto_start: true

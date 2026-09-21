@@ -1,0 +1,28 @@
+---
+# Local Test Cleanup Tasks
+# 清理本地 Docker 测试容器和镜像
+
+- name: Stop and remove local test container
+  community.docker.docker_container:
+    name: "{{ ansibletest_local_container_name }}"
+    state: absent
+  tags: [rollback, system, ansibletest, ansibletest_cleanup, phase3]
+
+- name: Remove old test containers
+  community.docker.docker_container:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - auroraops-test-runner-old
+    - auroraops-test-temp
+  tags: [rollback, system, ansibletest, ansibletest_cleanup, phase3]
+
+- name: Display cleanup status
+  ansible.builtin.debug:
+    msg: "Local test containers cleaned up successfully"
+  tags: [rollback, system, ansibletest, ansibletest_cleanup, phase3]
+
+- name: Check for dangling images (optional cleanup)
+  ansible.builtin.debug:
+    msg: "To remove dangling images, run: docker image prune -f"
+  tags: [rollback, system, ansibletest, ansibletest_cleanup, phase3]

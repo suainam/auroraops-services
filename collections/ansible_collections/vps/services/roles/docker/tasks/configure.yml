@@ -1,0 +1,46 @@
+# tasks/configure.yml
+---
+- name: Deploy Docker daemon configuration
+  become: true
+  ansible.builtin.template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+  notify: Restart Docker service
+  tags: [deploy, services, docker, docker_config, phase3]
+
+- name: Check if UFW exists
+  ansible.builtin.stat:
+    path: /etc/ufw/after.rules
+  register: docker_ufw_after_rules_exists
+  tags: [deploy, services, docker, firewall, phase3]
+
+- name: Ensure destructive UFW-Docker compatibility blocks are removed from after.rules
+  become: true
+  ansible.builtin.blockinfile:
+    path: /etc/ufw/after.rules
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: DOCKER-USER RULES"
+    state: absent
+  when: docker_ufw_after_rules_exists.stat.exists
+  tags: [deploy, services, docker, firewall, phase3]
+
+- name: Ensure docker group exists
+  become: true
+  ansible.builtin.group:
+    name: docker
+    state: present
+  tags: [deploy, services, docker, docker_config, phase3]
+
+- name: Add users to docker group
+  become: true
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  loop: "{{ docker__users }}"
+  when: item != 'root'
+  tags: [deploy, services, docker, docker_config, phase3]
+
+- name: Configure Docker and Backup logrotate
+  ansible.builtin.import_tasks: logrotate.yml
+  tags: [deploy, services, docker, logrotate, phase3]

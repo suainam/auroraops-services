@@ -1,0 +1,59 @@
+---
+# =============================================================================
+# Hermes Agent Configuration
+# =============================================================================
+# 部署 Hermes 配置文件:
+#   1. 创建 ~/.hermes/ 目录结构
+#   2. 部署 config.yaml (主配置)
+#   3. 部署 .env (API keys 和 tokens)
+#   4. 部署 SOUL.md (人格设定)
+
+- name: Configure Hermes Agent
+  tags: [deploy, services, nodejs, hermes, phase3]
+  block:
+    - name: Ensure Hermes home directory structure exists
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ nodejs_hermes_user }}"
+        mode: "0700"
+      loop:
+        - "{{ nodejs_hermes_home }}"
+        - "{{ nodejs_hermes_home }}/cron"
+        - "{{ nodejs_hermes_home }}/sessions"
+        - "{{ nodejs_hermes_home }}/logs"
+        - "{{ nodejs_hermes_home }}/pairing"
+        - "{{ nodejs_hermes_home }}/hooks"
+        - "{{ nodejs_hermes_home }}/image_cache"
+        - "{{ nodejs_hermes_home }}/audio_cache"
+        - "{{ nodejs_hermes_home }}/memories"
+        - "{{ nodejs_hermes_home }}/skills"
+      tags: [deploy, services, nodejs, hermes, phase3]
+
+    - name: Deploy Hermes main configuration
+      ansible.builtin.template:
+        src: hermes_config.yaml.j2
+        dest: "{{ nodejs_hermes_home }}/config.yaml"
+        owner: "{{ nodejs_hermes_user }}"
+        mode: "0600"
+      notify: restart hermes gateway
+      tags: [deploy, services, nodejs, hermes, phase3]
+
+    - name: Deploy Hermes environment file (secrets)
+      no_log: true
+      diff: false
+      ansible.builtin.template:
+        src: hermes_env.j2
+        dest: "{{ nodejs_hermes_home }}/.env"
+        owner: "{{ nodejs_hermes_user }}"
+        mode: "0600"
+      notify: restart hermes gateway
+      tags: [deploy, services, nodejs, hermes, phase3]
+
+    - name: Deploy Hermes SOUL.md (personality)
+      ansible.builtin.template:
+        src: hermes_soul.md.j2
+        dest: "{{ nodejs_hermes_home }}/SOUL.md"
+        owner: "{{ nodejs_hermes_user }}"
+        mode: "0600"
+      tags: [deploy, services, nodejs, hermes, phase3]

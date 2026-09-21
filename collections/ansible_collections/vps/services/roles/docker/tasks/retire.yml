@@ -1,0 +1,352 @@
+---
+# tasks/retire.yml
+# ==============================================================================
+# Docker Retirement Workflow (Native Host Migration)
+# ==============================================================================
+
+# ----------------------------------------------------------------------------
+# 1. Preflight Probes & Safety Assertions
+# ----------------------------------------------------------------------------
+- name: Check if docker binary exists on target host
+  ansible.builtin.command: which docker
+  register: docker_retire_which_docker
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+- name: Detect if docker.service is currently active
+  ansible.builtin.systemd_service:
+    name: docker.service
+  register: docker_retire_service_active
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+- name: Check for running containers when docker daemon is active
+  become: true
+  ansible.builtin.command: docker ps -q
+  register: docker_retire_running_containers
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - docker_retire_which_docker.rc == 0
+    - docker_retire_service_active.rc == 0
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+- name: Fail if running containers are detected before retirement
+  ansible.builtin.fail:
+    msg: >-
+      Docker retirement check failed: running containers detected (IDs: {{ docker_retire_running_containers.stdout_lines }}).
+      All containers must be stopped or migrated before Docker can be retired.
+  when:
+    - docker_retirement_require_no_running_containers | default(true) | bool
+    - docker_retire_running_containers.stdout is defined
+    - (docker_retire_running_containers.stdout | trim | length) > 0
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+- name: Check status of required native services
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+  register: docker_retire_native_service_checks
+  loop: "{{ docker_retirement_required_active_services | default([]) }}"
+  when: (docker_retirement_required_active_services | default([]) | length) > 0
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+- name: Fail if any required native service is not active
+  ansible.builtin.fail:
+    msg: "Docker retirement check failed: required native service '{{ item.item }}' is not active."
+  loop: "{{ docker_retire_native_service_checks.results | default([]) }}"
+  when:
+    - item.status is defined
+    - item.status.ActiveState | default('') != 'active'
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+- name: Check Vaultwarden standby snapshot marker
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_retirement_standby_latest_path }}"
+  register: docker_retire_standby_latest_stat
+  check_mode: false
+  when: docker_retirement_require_standby_snapshot | default(false) | bool
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+- name: Fail if Vaultwarden standby snapshot marker is missing
+  ansible.builtin.fail:
+    msg: "Docker retirement check failed: verified standby snapshot missing at '{{ docker_retirement_standby_latest_path }}'."
+  when:
+    - docker_retirement_require_standby_snapshot | default(false) | bool
+    - not (docker_retire_standby_latest_stat.stat.exists | default(false))
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+- name: Check if Vaultwarden standby verification script exists
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_retirement_standby_script_path }}"
+  register: docker_retire_standby_script_stat
+  check_mode: false
+  when:
+    - docker_retirement_require_standby_snapshot | default(false) | bool
+    - docker_retire_standby_latest_stat.stat.exists | default(false)
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+- name: Execute Vaultwarden standby snapshot verification
+  become: true
+  ansible.builtin.command: "{{ docker_retirement_standby_script_path }} verify latest"
+  register: docker_retire_standby_verify
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - docker_retirement_require_standby_snapshot | default(false) | bool
+    - docker_retire_standby_script_stat.stat.exists | default(false)
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+- name: Fail if Vaultwarden standby snapshot verification failed
+  ansible.builtin.fail:
+    msg: >-
+      Docker retirement check failed: standby snapshot verification failed:
+      {{ docker_retire_standby_verify.stderr | default(docker_retire_standby_verify.stdout) }}
+  when:
+    - docker_retirement_require_standby_snapshot | default(false) | bool
+    - docker_retire_standby_script_stat.stat.exists | default(false)
+    - docker_retire_standby_verify.rc != 0
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+# ----------------------------------------------------------------------------
+# 2. Package Discovery & APT Simulation
+# ----------------------------------------------------------------------------
+- name: Query installed Docker and containerd package statuses and versions
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['dpkg-query', '-W', '-f=${Package}\t${Version}\t${Status}\n']
+        + docker_retirement_packages
+      }}
+  register: docker_retire_dpkg_query
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+- name: Parse currently installed Docker packages
+  ansible.builtin.set_fact:
+    docker_retire_installed_packages: >-
+      {{
+        docker_retire_dpkg_query.stdout_lines | default([])
+        | select('search', 'install ok installed')
+        | map('regex_replace', '^([^\t]+)\t.*$', '\1')
+        | list
+      }}
+    docker_retire_package_specs: >-
+      {{
+        docker_retire_dpkg_query.stdout_lines | default([])
+        | select('search', 'install ok installed')
+        | map('regex_replace', '^([^\t]+)\t([^\t]+)\t.*$', '\1=\2')
+        | list
+      }}
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+- name: Run APT removal simulation to detect unexpected reverse dependency removals
+  become: true
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['apt-get', 'remove', '--simulate', '--no-install-recommends']
+        + docker_retire_installed_packages
+      }}
+  register: docker_retire_apt_sim
+  changed_when: false
+  check_mode: false
+  when: (docker_retire_installed_packages | default([]) | length) > 0
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+- name: Parse packages simulated for removal by APT
+  ansible.builtin.set_fact:
+    docker_retire_simulated_removals: >-
+      {{
+        docker_retire_apt_sim.stdout_lines | default([])
+        | select('match', '^Remv\s+')
+        | map('regex_replace', '^Remv\s+([^\s:]+).*$', '\1')
+        | unique
+        | list
+      }}
+  when: (docker_retire_installed_packages | default([]) | length) > 0
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+- name: Calculate unexpected reverse dependency package removals
+  ansible.builtin.set_fact:
+    docker_retire_unexpected_removals: >-
+      {{
+        docker_retire_simulated_removals | default([])
+        | difference(docker_retirement_allowed_removal_packages | default(docker_retirement_packages))
+      }}
+  when: (docker_retire_installed_packages | default([]) | length) > 0
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+- name: Abort retirement if APT simulation detects unexpected reverse dependency removals
+  ansible.builtin.fail:
+    msg: >-
+      Docker retirement check failed: APT removal simulation detected unexpected package removal(s): {{ docker_retire_unexpected_removals }}.
+      Aborting retirement to protect system integrity and reverse dependencies.
+  when:
+    - (docker_retire_installed_packages | default([]) | length) > 0
+    - (docker_retire_unexpected_removals | default([]) | length) > 0
+  tags: [deploy, services, docker, docker_retire, docker_retire_preflight, phase3]
+
+# ----------------------------------------------------------------------------
+# 3. Baseline & Recovery Fact Persistence (Deploy Mode Only)
+# ----------------------------------------------------------------------------
+- name: Check if Docker retirement baseline fact already exists
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_retirement_fact_path }}"
+  register: docker_retire_existing_fact_stat
+  when: not ansible_check_mode
+  tags: [deploy, services, docker, docker_retire, phase3]
+
+- name: Probe preexisting service active states for baseline
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+  register: docker_retire_service_active_probes
+  loop:
+    - docker.service
+    - docker.socket
+    - containerd.service
+  when:
+    - not ansible_check_mode
+    - not (docker_retire_existing_fact_stat.stat.exists | default(false))
+  tags: [deploy, services, docker, docker_retire, phase3]
+
+- name: Probe preexisting service enabled states for baseline
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+  register: docker_retire_service_enabled_probes
+  loop:
+    - docker.service
+    - docker.socket
+    - containerd.service
+  when:
+    - not ansible_check_mode
+    - not (docker_retire_existing_fact_stat.stat.exists | default(false))
+  tags: [deploy, services, docker, docker_retire, phase3]
+
+- name: Probe data directories presence for baseline
+  become: true
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: docker_retire_data_dir_stats
+  check_mode: false
+  loop:
+    - /var/lib/docker
+    - /opt/dockers
+  when:
+    - not ansible_check_mode
+    - not (docker_retire_existing_fact_stat.stat.exists | default(false))
+  tags: [deploy, services, docker, docker_retire, phase3]
+
+- name: Ensure /etc/ansible/facts.d directory exists for baseline fact
+  become: true
+  ansible.builtin.file:
+    path: "{{ docker_retirement_fact_path | dirname }}"
+    state: directory
+    mode: "0755"
+  when:
+    - not ansible_check_mode
+    - not (docker_retire_existing_fact_stat.stat.exists | default(false))
+  tags: [deploy, services, docker, docker_retire, phase3]
+
+- name: Write Docker retirement recovery baseline fact
+  become: true
+  ansible.builtin.copy:
+    dest: "{{ docker_retirement_fact_path }}"
+    mode: "0644"
+    content: >-
+      {{
+        {
+          'auroraops_managed': true,
+          'version': 1,
+          'retired': true,
+          'docker_state': 'absent',
+          'installed_packages': docker_retire_installed_packages | default([]),
+          'package_specs': docker_retire_package_specs | default([]),
+          'services': {
+            'docker.service': {
+              'active': (docker_retire_service_active_probes.results[0].stdout | default('inactive')) == 'active',
+              'enabled': (docker_retire_service_enabled_probes.results[0].stdout | default('disabled')) == 'enabled'
+            },
+            'docker.socket': {
+              'active': (docker_retire_service_active_probes.results[1].stdout | default('inactive')) == 'active',
+              'enabled': (docker_retire_service_enabled_probes.results[1].stdout | default('disabled')) == 'enabled'
+            },
+            'containerd.service': {
+              'active': (docker_retire_service_active_probes.results[2].stdout | default('inactive')) == 'active',
+              'enabled': (docker_retire_service_enabled_probes.results[2].stdout | default('disabled')) == 'enabled'
+            }
+          },
+          'data_dirs': {
+            '/var/lib/docker': {
+              'exists': docker_retire_data_dir_stats.results[0].stat.exists | default(false)
+            },
+            '/opt/dockers': {
+              'exists': docker_retire_data_dir_stats.results[1].stat.exists | default(false)
+            }
+          }
+        } | to_nice_json
+      }}
+  when:
+    - not ansible_check_mode
+    - not (docker_retire_existing_fact_stat.stat.exists | default(false))
+  tags: [deploy, services, docker, docker_retire, phase3]
+
+# ----------------------------------------------------------------------------
+# 4. Stop and Disable Services
+# ----------------------------------------------------------------------------
+- name: Stop and disable Docker and containerd services
+  become: true
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop:
+    - docker.service
+    - docker.socket
+    - containerd.service
+  failed_when: false
+  tags: [deploy, services, docker, docker_retire, phase3]
+
+# ----------------------------------------------------------------------------
+# 5. Uninstall Exact Docker Packages (No autoremove, no purge, no data deletion)
+# ----------------------------------------------------------------------------
+- name: Uninstall Docker and containerd packages
+  become: true
+  ansible.builtin.apt:
+    name: "{{ docker_retire_installed_packages }}"
+    state: absent
+    purge: false
+    autoremove: false
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  when: (docker_retire_installed_packages | default([]) | length) > 0
+  tags: [deploy, services, docker, docker_retire, phase3]
+
+# ----------------------------------------------------------------------------
+# 6. Safety Assertions: Verify Data Directories Preserved
+# ----------------------------------------------------------------------------
+- name: Verify /var/lib/docker preserved
+  become: true
+  ansible.builtin.stat:
+    path: /var/lib/docker
+  register: docker_retire_post_var_lib_stat
+  when:
+    - not ansible_check_mode
+    - docker_retirement_preserve_data | default(true) | bool
+  tags: [deploy, services, docker, docker_retire, phase3]
+
+- name: Assert /var/lib/docker was not deleted
+  ansible.builtin.assert:
+    that:
+      - docker_retire_post_var_lib_stat.stat.exists
+    fail_msg: "Safety violation: /var/lib/docker was unexpectedly deleted during retirement!"
+  when:
+    - not ansible_check_mode
+    - docker_retirement_preserve_data | default(true) | bool
+    - docker_retire_existing_fact_stat.stat.exists | default(false) or (docker_retire_data_dir_stats.results[0].stat.exists | default(false))
+  tags: [deploy, services, docker, docker_retire, phase3]

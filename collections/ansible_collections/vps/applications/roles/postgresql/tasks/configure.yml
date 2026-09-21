@@ -1,0 +1,29 @@
+---
+- name: "配置 postgresql.conf"
+  ansible.builtin.template:
+    src: "postgresql.conf.j2"
+    dest: "/etc/postgresql/{{ postgresql_version }}/main/postgresql.conf"
+    owner: "postgres"
+    group: "postgres"
+    mode: "0644"
+  notify: "重启 PostgreSQL"
+  tags: [deploy, applications, postgresql, configure, phase4]
+
+- name: "配置 pg_hba.conf"
+  ansible.builtin.template:
+    src: "pg_hba.conf.j2"
+    dest: "/etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf"
+    owner: "postgres"
+    group: "postgres"
+    mode: "0640"
+  notify: "重启 PostgreSQL"
+  tags: [deploy, applications, postgresql, configure, phase4]
+
+- name: "Allow Docker subnets to access PostgreSQL via UFW"
+  become: true
+  community.general.ufw:
+    rule: allow
+    src: "172.16.0.0/12"
+    port: "{{ postgresql_port | string }}"
+    proto: tcp
+  tags: [deploy, applications, postgresql, configure, phase4]

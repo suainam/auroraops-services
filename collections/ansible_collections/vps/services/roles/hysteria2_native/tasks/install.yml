@@ -1,0 +1,99 @@
+---
+- name: Check if hysteria2-client binary already exists
+  become: true
+  ansible.builtin.stat:
+    path: "{{ hysteria2_native_binary_path }}"
+    checksum_algorithm: sha256
+  register: hysteria2_native_binary_stat
+  tags: [deploy, services, hysteria2_native, hysteria2_native_install, phase3]
+
+- name: Determine if binary download/update is needed based on existence and checksum
+  ansible.builtin.set_fact:
+    hysteria2_native_needs_install: >-
+      {{
+        not (hysteria2_native_binary_stat.stat.exists | default(false) | bool)
+        or (
+          hysteria2_native_expected_sha256 | length > 0
+          and (hysteria2_native_binary_stat.stat.checksum | default('')) != hysteria2_native_expected_sha256
+        )
+      }}
+  tags: [deploy, services, hysteria2_native, hysteria2_native_install, phase3]
+
+- name: Create install directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ hysteria2_native_install_dir }}"
+    state: directory
+    owner: "{{ hysteria2_native_user }}"
+    group: "{{ hysteria2_native_group }}"
+    mode: "{{ hysteria2_native_dir_mode }}"
+  tags: [deploy, services, hysteria2_native, hysteria2_native_install, phase3]
+
+# Controller staging workflow:
+# Prevents remote download failure when remote host's current proxy (e.g. 10809) is not yet active.
+# In check mode, skip controller download and copy to prevent copy failure on fresh host.
+- name: Controller-side download and remote copy
+  when:
+    - hysteria2_native_needs_install | bool
+    - hysteria2_native_use_controller_staging | bool
+    - not ansible_check_mode | bool
+  block:
+    - name: Ensure controller staging directory exists
+      ansible.builtin.file:
+        path: "{{ hysteria2_native_controller_staging_dir }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      run_once: true
+      become: false
+      tags: [deploy, services, hysteria2_native, hysteria2_native_install, phase3]
+
+    - name: Download Hysteria2 binary on controller
+      ansible.builtin.get_url:
+        url: "{{ hysteria2_native_binary_url }}"
+        dest: "{{ hysteria2_native_controller_staging_dir }}/{{ hysteria2_native_binary_filename }}"
+        checksum: "{{ hysteria2_native_checksum | default(omit) }}"
+        mode: "0755"
+      delegate_to: localhost
+      run_once: true
+      become: false
+      tags: [deploy, services, hysteria2_native, hysteria2_native_install, phase3]
+
+    - name: Copy Hysteria2 binary from controller to target host
+      become: true
+      ansible.builtin.copy:
+        src: "{{ hysteria2_native_controller_staging_dir }}/{{ hysteria2_native_binary_filename }}"
+        dest: "{{ hysteria2_native_binary_path }}"
+        owner: "{{ hysteria2_native_user }}"
+        group: "{{ hysteria2_native_group }}"
+        mode: "0755"
+      notify: restart hysteria2-native
+      tags: [deploy, services, hysteria2_native, hysteria2_native_install, phase3]
+
+- name: Direct target host download (fallback when controller staging disabled)
+  become: true
+  ansible.builtin.get_url:
+    url: "{{ hysteria2_native_binary_url }}"
+    dest: "{{ hysteria2_native_binary_path }}"
+    checksum: "{{ hysteria2_native_checksum | default(omit) }}"
+    owner: "{{ hysteria2_native_user }}"
+    group: "{{ hysteria2_native_group }}"
+    mode: "0755"
+  notify: restart hysteria2-native
+  when:
+    - hysteria2_native_needs_install | bool
+    - not (hysteria2_native_use_controller_staging | bool)
+    - not ansible_check_mode | bool
+  tags: [deploy, services, hysteria2_native, hysteria2_native_install, phase3]
+
+- name: Ensure Hysteria2 binary executable permissions
+  become: true
+  ansible.builtin.file:
+    path: "{{ hysteria2_native_binary_path }}"
+    mode: "0755"
+    owner: "{{ hysteria2_native_user }}"
+    group: "{{ hysteria2_native_group }}"
+  when:
+    - not ansible_check_mode | bool
+    - hysteria2_native_binary_stat.stat.exists | default(false) | bool
+  tags: [deploy, services, hysteria2_native, hysteria2_native_install, phase3]

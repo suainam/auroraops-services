@@ -1,0 +1,116 @@
+---
+- name: Create Pi Terminal application directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ pi_terminal_app_dir }}", mode: "0755"}
+    - {path: "{{ pi_terminal_state_dir }}", mode: "0750"}
+  tags: [deploy, applications, pi_terminal, pi_terminal_deploy, phase5]
+
+- name: Create isolated Pi secrets directory
+  ansible.builtin.file:
+    path: "{{ pi_terminal_secrets_dir }}"
+    state: directory
+    owner: "{{ pi_terminal_container_uid }}"
+    group: "{{ pi_terminal_container_gid }}"
+    mode: "0700"
+  tags: [deploy, applications, pi_terminal, pi_terminal_deploy, phase5]
+
+- name: Create isolated Pi workspace
+  ansible.builtin.file:
+    path: "{{ pi_terminal_workspace_dir }}"
+    state: directory
+    owner: "{{ pi_terminal_container_uid }}"
+    group: "{{ pi_terminal_container_gid }}"
+    mode: "0750"
+  tags: [deploy, applications, pi_terminal, pi_terminal_deploy, phase5]
+
+- name: Inspect persisted Pi Terminal password
+  ansible.builtin.stat:
+    path: "{{ pi_terminal_password_file }}"
+  register: pi_terminal_password_stat
+  tags: [deploy, applications, pi_terminal, pi_terminal_deploy, phase5]
+
+- name: Persist configured Pi Terminal password
+  ansible.builtin.copy:
+    content: "{{ pi_terminal_basic_auth_password }}\n"
+    dest: "{{ pi_terminal_password_file }}"
+    owner: "{{ pi_terminal_container_uid }}"
+    group: "{{ pi_terminal_container_gid }}"
+    mode: "0400"
+  when:
+    - pi_terminal_basic_auth_password | length > 0
+    - pi_terminal_force_password | bool or not pi_terminal_password_stat.stat.exists
+  no_log: true
+  tags: [deploy, applications, pi_terminal, pi_terminal_deploy, phase5]
+
+- name: Generate Pi Terminal password
+  ansible.builtin.command: openssl rand -hex 24
+  register: pi_terminal_generated_password
+  changed_when: true
+  when:
+    - pi_terminal_basic_auth_password | length == 0
+    - pi_terminal_force_password | bool or not pi_terminal_password_stat.stat.exists
+  no_log: true
+  tags: [deploy, applications, pi_terminal, pi_terminal_deploy, phase5]
+
+- name: Persist generated Pi Terminal password
+  ansible.builtin.copy:
+    content: "{{ pi_terminal_generated_password.stdout }}\n"
+    dest: "{{ pi_terminal_password_file }}"
+    owner: "{{ pi_terminal_container_uid }}"
+    group: "{{ pi_terminal_container_gid }}"
+    mode: "0400"
+  when:
+    - pi_terminal_generated_password is not skipped
+    - pi_terminal_generated_password.stdout is defined
+  no_log: true
+  tags: [deploy, applications, pi_terminal, pi_terminal_deploy, phase5]
+
+- name: Persist Pi Terminal username
+  ansible.builtin.copy:
+    content: "{{ pi_terminal_basic_auth_username }}\n"
+    dest: "{{ pi_terminal_username_file }}"
+    owner: "{{ pi_terminal_container_uid }}"
+    group: "{{ pi_terminal_container_gid }}"
+    mode: "0400"
+  tags: [deploy, applications, pi_terminal, pi_terminal_deploy, phase5]
+
+- name: Render Pi Terminal container files
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ pi_terminal_app_dir }}/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - {src: Dockerfile.j2, dest: Dockerfile, mode: "0644"}
+    - {src: omp-config.yml.j2, dest: omp-config.yml, mode: "0644"}
+    - {src: start-pi.sh.j2, dest: start-pi.sh, mode: "0755"}
+    - {src: start-server.sh.j2, dest: start-server.sh, mode: "0755"}
+    - {src: tmux.conf.j2, dest: tmux.conf, mode: "0644"}
+  tags: [deploy, applications, pi_terminal, pi_terminal_deploy, phase5]
+
+- name: Deploy Pi Terminal compose stack
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+  vars:
+    cdp_name: "{{ pi_terminal_name }}"
+    cdp_image: "pi-terminal:omp-{{ pi_terminal_omp_version }}"
+    cdp_base_path: "{{ pi_terminal_base_path }}"
+    cdp_compose_enabled: true
+    cdp_compose_template: pi_terminal_docker-compose.yml.j2
+    cdp_compose_build: policy
+    cdp_compose_pull: missing
+  tags: [deploy, applications, pi_terminal, pi_terminal_deploy, phase5]
+
+- name: Report Pi Terminal credential location
+  ansible.builtin.debug:
+    msg: >-
+      Pi Terminal deployed. Username is {{ pi_terminal_basic_auth_username }};
+      retrieve the password from {{ pi_terminal_password_file }} on the target host.
+  tags: [deploy, applications, pi_terminal, pi_terminal_deploy, phase5]

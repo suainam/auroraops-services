@@ -1,0 +1,11 @@
+[Unit]
+Description=IP2Free Health Check timer (every 5 min)
+After=network-online.target
+
+[Timer]
+OnCalendar={{ ip2free_health_schedule }}
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

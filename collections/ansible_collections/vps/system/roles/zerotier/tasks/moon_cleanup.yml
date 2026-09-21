@@ -1,0 +1,86 @@
+---
+- name: Check ZeroTier moon backup marker
+  become: true
+  ansible.builtin.stat:
+    path: "{{ zerotier_moon_backup_marker }}"
+  register: zerotier_moon_backup_marker_stat
+
+- name: Discover active ZeroTier moon files
+  become: true
+  ansible.builtin.find:
+    paths: "{{ zerotier_moons_dir_path }}"
+    patterns: "*.moon"
+    file_type: file
+    recurse: false
+  register: zerotier_active_moon_files
+  when: zerotier_moons_dir_stat.stat.exists | default(false) | bool
+
+- name: Backup existing ZeroTier moon configuration
+  when: not (zerotier_moon_backup_marker_stat.stat.exists | default(false) | bool)
+  block:
+    - name: Create ZeroTier moon backup directories
+      become: true
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      loop:
+        - "{{ zerotier_moon_backup_dir }}"
+        - "{{ zerotier_moon_backup_dir }}/moons.d"
+
+    - name: Backup active ZeroTier moon.json
+      become: true
+      ansible.builtin.copy:
+        src: "{{ zerotier_moon_json_path }}"
+        dest: "{{ zerotier_moon_backup_dir }}/moon.json"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0600"
+      when: zerotier_moon_json_stat.stat.exists | default(false) | bool
+
+    - name: Backup active ZeroTier moon files
+      become: true
+      ansible.builtin.copy:
+        src: "{{ item.path }}"
+        dest: "{{ zerotier_moon_backup_dir }}/moons.d/{{ item.path | basename }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0600"
+      loop: "{{ zerotier_active_moon_files.files | default([]) }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+
+    - name: Record ZeroTier moon backup manifest
+      become: true
+      ansible.builtin.copy:
+        dest: "{{ zerotier_moon_backup_marker }}"
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          {{
+            {
+              "auroraops_managed": True,
+              "created_at": ansible_date_time.iso8601 | default("unknown"),
+              "moon_json_existed": zerotier_moon_json_stat.stat.exists | default(false) | bool,
+              "moon_files": zerotier_active_moon_files.files | default([]) | map(attribute="path") | map("basename") | list
+            } | to_nice_json
+          }}
+
+- name: Remove managed ZeroTier moon.json
+  become: true
+  ansible.builtin.file:
+    path: "{{ zerotier_moon_json_path }}"
+    state: absent
+  notify: Restart ZeroTier
+
+- name: Remove managed ZeroTier moons directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ zerotier_moons_dir_path }}"
+    state: absent
+  notify: Restart ZeroTier

@@ -1,0 +1,194 @@
+---
+- name: Validate Vertex source archive on controller
+  ansible.builtin.stat:
+    path: "{{ docker_apps_vertex_source_archive }}"
+    checksum_algorithm: sha256
+  delegate_to: localhost
+  become: false
+  check_mode: false
+  register: docker_apps_vertex_source_stat
+  tags: [deploy, services, docker_apps, vertex, phase5]
+
+- name: Validate Vertex source archive contract
+  ansible.builtin.assert:
+    that:
+      - docker_apps_vertex_source_stat.stat.exists
+      - docker_apps_vertex_source_stat.stat.isreg
+      - >-
+        docker_apps_vertex_source_sha256 | length == 0
+        or docker_apps_vertex_source_stat.stat.checksum == docker_apps_vertex_source_sha256
+    fail_msg: >-
+      Vertex source archive is missing or has an unexpected SHA-256.
+      Check vertex_source_archive and vertex_source_sha256.
+  tags: [deploy, services, docker_apps, vertex, phase5]
+
+- name: Validate Vertex Vault secret contract
+  ansible.builtin.assert:
+    that:
+      - docker_apps_vertex_admin_password | length >= 16
+      - docker_apps_vertex_api_key is match('^sk-[^:\\s]+$')
+    fail_msg: >-
+      Set vault_vertex_admin_password (16+ chars) and
+      vault_vertex_api_key (sk-...) in secrets/vault.yml.
+  no_log: true
+  tags: [deploy, services, docker_apps, vertex, phase5]
+
+- name: Ensure Vertex data directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ docker_apps_vertex_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  tags: [deploy, services, docker_apps, vertex, phase5]
+- name: Ensure Vertex persistent directories exist
+  become: true
+  ansible.builtin.file:
+    path: "{{ docker_apps_vertex_data_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ docker_apps_vertex_uid }}"
+    group: "{{ docker_apps_vertex_gid }}"
+    mode: '0750'
+  loop:
+    - config
+    - logs
+    - assets
+  tags: [deploy, services, docker_apps, vertex, phase5]
+
+- name: Upload Vertex source archive
+  become: true
+  ansible.builtin.copy:
+    src: "{{ docker_apps_vertex_source_archive }}"
+    dest: "{{ docker_apps_vertex_data_dir }}/source.tar.gz"
+    owner: root
+    group: root
+    mode: '0600'
+  register: docker_apps_vertex_source_upload
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, vertex, phase5]
+
+- name: Remove stale Vertex source tree after archive change
+  become: true
+  ansible.builtin.file:
+    path: "{{ docker_apps_vertex_source_dir }}"
+    state: absent
+  when:
+    - not ansible_check_mode
+    - docker_apps_vertex_source_upload.changed
+  tags: [deploy, services, docker_apps, vertex, phase5]
+
+- name: Ensure Vertex source directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ docker_apps_vertex_source_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, vertex, phase5]
+- name: Check extracted Vertex source
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_apps_vertex_source_dir }}/go.mod"
+  register: docker_apps_vertex_source_tree
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, vertex, phase5]
+
+
+- name: Extract Vertex source archive
+  become: true
+  ansible.builtin.unarchive:
+    src: "{{ docker_apps_vertex_data_dir }}/source.tar.gz"
+    dest: "{{ docker_apps_vertex_source_dir }}"
+    remote_src: true
+    extra_opts:
+      - --no-same-owner
+  when:
+    - not ansible_check_mode
+    - >-
+      docker_apps_vertex_source_upload.changed
+      or not docker_apps_vertex_source_tree.stat.exists
+  tags: [deploy, services, docker_apps, vertex, phase5]
+
+- name: Seed Vertex config
+  become: true
+  no_log: true
+  diff: false
+  ansible.builtin.template:
+    src: vertex_config.json.j2
+    dest: "{{ docker_apps_vertex_config_dir }}/config.json"
+    owner: "{{ docker_apps_vertex_uid }}"
+    group: "{{ docker_apps_vertex_gid }}"
+    mode: '0600'
+    force: false
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, vertex, phase5]
+
+
+- name: Seed Vertex API keys
+  become: true
+  no_log: true
+  diff: false
+  ansible.builtin.template:
+    src: vertex_api_keys.txt.j2
+    dest: "{{ docker_apps_vertex_config_dir }}/api_keys.txt"
+    owner: "{{ docker_apps_vertex_uid }}"
+    group: "{{ docker_apps_vertex_gid }}"
+    mode: '0600'
+    force: false
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, vertex, phase5]
+
+
+- name: Deploy Vertex proxy
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+    apply:
+      tags:
+        - deploy
+        - services
+        - docker_apps
+        - vertex
+        - phase5
+  vars:
+    cdp_name: "vertex-proxy"
+    cdp_image: "{{ docker_apps_vertex_image }}"
+    cdp_base_path: "{{ docker_apps_vertex_data_root }}"
+    cdp_dirs: [config, logs, assets]
+    cdp_dir_owner: "{{ docker_apps_vertex_uid }}"
+    cdp_dir_group: "{{ docker_apps_vertex_gid }}"
+    cdp_dir_mode: '0750'
+    cdp_compose_enabled: true
+    cdp_compose_template: vertex_compose.yml.j2
+    cdp_compose_vars:
+      vertex_image: "{{ docker_apps_vertex_image }}"
+      vertex_port: "{{ docker_apps_app_port_vertex }}"
+      vertex_source_dir: "{{ docker_apps_vertex_source_dir }}"
+      vertex_config_dir: "{{ docker_apps_vertex_config_dir }}"
+      vertex_logs_dir: "{{ docker_apps_vertex_logs_dir }}"
+      vertex_assets_dir: "{{ docker_apps_vertex_assets_dir }}"
+      vertex_uid: "{{ docker_apps_vertex_uid }}"
+      vertex_gid: "{{ docker_apps_vertex_gid }}"
+      vertex_memory: "{{ docker_apps_vertex_memory }}"
+      vertex_memory_reservation: "{{ docker_apps_vertex_memory_reservation }}"
+      vertex_cpus: "{{ docker_apps_vertex_cpus }}"
+    cdp_compose_build: always
+    cdp_compose_pull: missing
+    cdp_compose_remove_orphans: false
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, vertex, phase5]
+- name: Enforce Vertex secret file permissions
+  become: true
+  ansible.builtin.file:
+    path: "{{ docker_apps_vertex_config_dir }}/{{ item }}"
+    state: file
+    owner: "{{ docker_apps_vertex_uid }}"
+    group: "{{ docker_apps_vertex_gid }}"
+    mode: '0600'
+  loop:
+    - config.json
+    - api_keys.txt
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, vertex, phase5]

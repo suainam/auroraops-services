@@ -1,0 +1,44 @@
+---
+- name: "[Application Service Verify] Check service file: {{ application_service_name }}"
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ application_service_name }}.service"
+  register: application_service_verify_file_stat
+  tags:
+    - phase3
+    - applications
+    - application_service
+    - verify
+
+- name: "[Application Service Verify] Assert service file exists: {{ application_service_name }}"
+  ansible.builtin.assert:
+    that:
+      - application_service_verify_file_stat.stat.exists
+    msg: "{{ application_service_name }}.service file does not exist"
+  tags:
+    - phase3
+    - applications
+    - application_service
+    - verify
+
+- name: "[Application Service Verify] Read service state: {{ application_service_name }}"
+  ansible.builtin.systemd:
+    name: "{{ application_service_name }}.service"
+  register: application_service_verify_status
+  tags:
+    - phase3
+    - applications
+    - application_service
+    - verify
+
+- name: "[Application Service Verify] Assert service is enabled and running: {{ application_service_name }}"
+  ansible.builtin.assert:
+    that:
+      - application_service_verify_status.status.ActiveState == 'active'
+      - application_service_verify_status.status.LoadState == 'loaded'
+      - application_service_verify_status.status.UnitFileState == 'enabled'
+    msg: "{{ application_service_name }} service is not active, loaded, or enabled"
+  tags:
+    - phase3
+    - applications
+    - application_service
+    - verify

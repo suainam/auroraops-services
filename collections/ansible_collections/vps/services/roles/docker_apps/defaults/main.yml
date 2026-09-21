@@ -1,0 +1,293 @@
+---
+# Role 内部统一使用 docker_apps_*；旧 inventory 输入只作为单向兼容回退。
+docker_apps_docker_user_uid: "{{ docker_user_uid | default('1000') }}"
+docker_apps_docker_user_gid: "{{ docker_user_gid | default('1000') }}"
+
+# Hysteria2 loopback client
+docker_apps_hysteria2_client_enabled: "{{ hysteria2_client_enabled | default(false) }}"
+docker_apps_hysteria2_client_config_dir: >-
+  {{ hysteria2_client_config_dir | default('/opt/dockers/hysteria2-client') }}
+docker_apps_hysteria2_client_server: >-
+  {{ hysteria2_client_server | default(singbox_domain) }}
+docker_apps_hysteria2_client_port: >-
+  {{ hysteria2_client_port | default(app_port_singbox_hysteria) }}
+docker_apps_hysteria2_client_password: >-
+  {{ hysteria2_client_password | default(hysteria_auth_password) }}
+docker_apps_hysteria2_client_sni: "{{ hysteria2_client_sni | default('bing.com') }}"
+docker_apps_hysteria2_client_alpn: >-
+  {{ hysteria2_client_alpn | default(['h3']) }}
+docker_apps_hysteria2_client_obfs_type: >-
+  {{ hysteria2_client_obfs_type | default('salamander') }}
+docker_apps_hysteria2_client_obfs_password: >-
+  {{ hysteria2_client_obfs_password | default(hysteria_obfs_password) }}
+docker_apps_hysteria2_client_insecure: "{{ hysteria2_client_insecure | default(true) }}"
+docker_apps_hysteria2_client_memory: "{{ hysteria2_client_memory | default('96m') }}"
+docker_apps_hysteria2_client_memory_reservation: >-
+  {{ hysteria2_client_memory_reservation | default('48m') }}
+docker_apps_hysteria2_client_cpus: "{{ hysteria2_client_cpus | default('0.5') }}"
+docker_apps_hysteria2_client_networks: >-
+  {{ hysteria2_client_networks | default([]) }}
+
+# Sub-Store
+docker_apps_sub_store_pull: false
+
+# GCLI2API
+docker_apps_app_port_gcli2api_api: "{{ app_port_gcli2api_api | default(30006) }}"
+docker_apps_app_port_gcli2api_web: "{{ app_port_gcli2api_web | default(30005) }}"
+# DS2API
+docker_apps_ds2api_enabled: false
+docker_apps_ds2api_pull: false
+docker_apps_app_port_ds2api: "{{ app_port_ds2api | default(30019) }}"
+docker_apps_ds2api_memory: "{{ ds2api_memory | default('512m') }}"
+docker_apps_ds2api_memory_reservation: "{{ ds2api_memory_reservation | default('128m') }}"
+docker_apps_ds2api_data_dir: >-
+  {{ ds2api_data_dir | default('/opt/dockers/ds2api/data') }}
+docker_apps_ds2api_admin_key: >-
+  {{ vault_ds2api_admin_key | default('') }}
+docker_apps_ds2api_config: >-
+  {{ vault_ds2api_config | default({}) }}
+
+# Vertex AI Proxy
+docker_apps_app_port_vertex: "{{ app_port_vertex | default(30020) }}"
+docker_apps_vertex_image: >-
+  {{ vertex_image | default('vertex-proxy:20260809-0a2df82') }}
+docker_apps_vertex_data_root: "{{ vertex_data_root | default('/opt/dockers') }}"
+docker_apps_vertex_data_dir: >-
+  {{ vertex_data_dir | default(docker_apps_vertex_data_root ~ '/vertex-proxy') }}
+docker_apps_vertex_source_dir: >-
+  {{ vertex_source_dir | default(docker_apps_vertex_data_dir ~ '/source') }}
+docker_apps_vertex_source_archive: >-
+  {{ vertex_source_archive | default('/tmp/vertex-src.tar.gz') }}
+docker_apps_vertex_source_sha256: "{{ vertex_source_sha256 | default('') }}"
+docker_apps_vertex_config_dir: >-
+  {{ vertex_config_dir | default(docker_apps_vertex_data_dir ~ '/config') }}
+docker_apps_vertex_logs_dir: >-
+  {{ vertex_logs_dir | default(docker_apps_vertex_data_dir ~ '/logs') }}
+docker_apps_vertex_assets_dir: >-
+  {{ vertex_assets_dir | default(docker_apps_vertex_data_dir ~ '/assets') }}
+docker_apps_vertex_uid: "{{ vertex_uid | default(1000) }}"
+docker_apps_vertex_gid: "{{ vertex_gid | default(1000) }}"
+docker_apps_vertex_memory: "{{ vertex_memory | default('640m') }}"
+docker_apps_vertex_memory_reservation: >-
+  {{ vertex_memory_reservation | default('384m') }}
+docker_apps_vertex_cpus: "{{ vertex_cpus | default('0.75') }}"
+docker_apps_vertex_admin_password: "{{ vault_vertex_admin_password | default('') }}"
+docker_apps_vertex_api_key: "{{ vault_vertex_api_key | default('') }}"
+
+# Vaultwarden
+docker_apps_app_port_vaultwarden_http: >-
+  {{ app_port_vaultwarden_http | default(30007) }}
+docker_apps_app_port_vaultwarden_ws: >-
+  {{ app_port_vaultwarden_ws | default(30008) }}
+docker_apps_vaultwarden_admin_token_plaintext: >-
+  {{ vaultwarden_admin_token_plaintext | default(vault_vaultwarden_admin_token | default('')) }}
+docker_apps_vaultwarden_smtp_username: >-
+  {{ vaultwarden_smtp_username | default(vault_vaultwarden_smtp_username | default('')) }}
+docker_apps_vaultwarden_smtp_password: >-
+  {{ vaultwarden_smtp_password | default(vault_vaultwarden_smtp_password | default('')) }}
+docker_apps_vaultwarden_admin_token_hash_file: >-
+  {{ vaultwarden_admin_token_hash_file | default('/opt/dockers/vaultwarden/.admin_token.argon2') }}
+docker_apps_vaultwarden_admin_token_fingerprint_file: >-
+  {{ vaultwarden_admin_token_fingerprint_file | default('/opt/dockers/vaultwarden/.admin_token.sha256') }}
+
+# Gemini Balance
+docker_apps_app_port_gemini_balance: "{{ app_port_gemini_balance | default(30009) }}"
+
+# ===========================================
+# Docker Apps 容器管理 - 分层变量
+# ===========================================
+# 变量优先级（从高到低）:
+#   1. host_vars/<host>.yml (主机特定)
+#   2. group_vars/all/docker_apps.yml (全局默认)
+#   3. role/defaults/main.yml (技术默认)
+#
+# 使用规则:
+#   - docker_apps_containers_global: 所有主机都需要的容器
+#   - docker_apps_containers_host: 主机特定容器（在 host_vars 中定义）
+#   - docker_apps_containers_exclude: 主机排除的容器（在 host_vars 中定义）
+#   - 最终列表 = global + host - exclude
+# ===========================================
+
+docker_apps_containers_global: []
+docker_apps_containers_host: []
+docker_apps_containers_exclude: []
+
+# 旧容器启用变量（保留兼容，已废弃）
+docker_apps_gemini_balance_enabled: false
+docker_apps_gcli2api_enabled: true
+docker_apps_sillytavern_enabled: true
+docker_apps_vaultwarden_enabled: true
+docker_apps_vaultwarden_state: "started"
+docker_apps_vaultwarden_restart_policy: "always"
+docker_apps_vaultwarden_pull: false
+docker_apps_vaultwarden_bind_address: "127.0.0.1"
+docker_apps_vaultwarden_publish_prefix: >-
+  {{
+    (docker_apps_vaultwarden_bind_address ~ ':')
+    if docker_apps_vaultwarden_bind_address | length > 0
+    else ''
+  }}
+docker_apps_vaultwarden_compatibility_matrix_path: >-
+  {{ ansible_config_file | dirname }}/docs/compatibility/vaultwarden.json
+docker_apps_vaultwarden_admin_hash_source_host: ""
+docker_apps_vaultwarden_check_mode_hash: >-
+  $argon2id$v=19$m=65540,t=3,p=4$Y2hlY2ttb2Rl$Y2hlY2ttb2RlY2hlY2ttb2RlY2hlY2ttb2Rl
+docker_apps_flare_enabled: true
+docker_apps_singbox_enabled: true
+docker_apps_cliproxyapi_enabled: true
+docker_apps_newapi_suite_enabled: true
+
+# SillyTavern
+docker_apps_sillytavern_basic_auth_username: >-
+  {{ sillytavern_basic_auth_username | default(vault_slt_name) }}
+docker_apps_sillytavern_basic_auth_password: >-
+  {{ sillytavern_basic_auth_password | default(vault_slt_password) }}
+
+# Sing-box Role 内部输入；旧 inventory 名只作为单向兼容回退。
+docker_apps_singbox_optimizer_subdomain: >-
+  {{ singbox_optimizer_subdomain | default('assets.suai.eu.org') }}
+docker_apps_singbox_reality_sni_candidates: >-
+  {{
+    singbox_reality_sni_candidates
+    | default([
+        'www.microsoft.com',
+        'dl.google.com',
+        'images.apple.com',
+        'www.yahoo.com',
+        'www.amazon.com',
+        'www.cloudflare.com',
+        'www.wikipedia.org',
+        'www.ebay.com',
+        'www.netflix.com'
+      ])
+  }}
+docker_apps_singbox_reality_short_id_count: >-
+  {{ singbox_reality_short_id_count | default(4) }}
+
+# Country Flag Mapping
+docker_apps_country_flags:
+  CN: "🇨🇳"
+  US: "🇺🇸"
+  HK: "🇭🇰"
+  JP: "🇯🇵"
+  SG: "🇸🇬"
+  KR: "🇰🇷"
+  TW: "🇹🇼"
+  GB: "🇬🇧"
+  DE: "🇩🇪"
+  FR: "🇫🇷"
+  CA: "🇨🇦"
+  AU: "🇦🇺"
+  IN: "🇮🇳"
+  RU: "🇷🇺"
+  UNKNOWN: "🌍"
+
+# Flare
+docker_apps_app_port_flare: "{{ app_port_flare | default(30004) }}"
+
+# New API
+docker_apps_app_port_newapi: "{{ app_port_newapi | default(30001) }}"
+docker_apps_newapi_deploy_neko: "{{ newapi_deploy_neko | default(false) }}"
+
+# CLIProxyAPI authentication keys are sensitive and must be supplied by Vault.
+docker_apps_cliproxyapi_api_keys: >-
+  {{
+    cliproxyapi_api_keys
+    | default(vault_cliproxyapi_api_keys | default([]), true)
+  }}
+docker_apps_cliproxyapi_ai_providers_file: >-
+  {{ cliproxyapi_ai_providers_file | default('') }}
+# Optional full runtime config seed, encrypted in the repository.
+docker_apps_cliproxyapi_config_seed_file: >-
+  {{ cliproxyapi_config_seed_file | default('') }}
+docker_apps_app_port_cliproxyapi: "{{ app_port_cliproxyapi | default(30011) }}"
+docker_apps_cliproxyapi_bind_address: "{{ cliproxyapi_bind_address | default('127.0.0.1') }}"
+docker_apps_cliproxyapi_networks: >-
+  {{ cliproxyapi_networks | default([{'name': 'sweb'}]) }}
+docker_apps_cliproxyapi_use_postgres: "{{ cliproxyapi_use_postgres | default(true) }}"
+docker_apps_cliproxyapi_pg_host: >-
+  {{ cliproxyapi_pg_host | default('host.docker.internal') }}
+docker_apps_cliproxyapi_pg_port: "{{ cliproxyapi_pg_port | default(5432) }}"
+docker_apps_cliproxyapi_pg_db: "{{ cliproxyapi_pg_db | default('cliproxyapi') }}"
+docker_apps_cliproxyapi_pg_user: "{{ cliproxyapi_pg_user | default('cliproxyapi') }}"
+docker_apps_cliproxyapi_pg_pass: >-
+  {{ cliproxyapi_pg_pass | default(cliproxyapi_db_password | default('')) }}
+
+# Manifest
+docker_apps_app_port_manifest: "{{ app_port_manifest | default(30013) }}"
+docker_apps_manifest_port: "{{ manifest_port | default(2099) }}"
+docker_apps_manifest_pg_host: "{{ manifest_pg_host | default('host.docker.internal') }}"
+docker_apps_manifest_pg_port: "{{ manifest_pg_port | default(5432) }}"
+docker_apps_manifest_pg_db: "{{ manifest_pg_db | default('manifest') }}"
+docker_apps_manifest_pg_user: >-
+  {{ manifest_pg_user | default(postgresql_app_db_user | default('admin')) }}
+docker_apps_manifest_pg_pass: >-
+  {{ manifest_pg_pass | default(postgresql_db_admin_password | default('')) }}
+docker_apps_manifest_auth_secret: "{{ manifest_auth_secret | default('') }}"
+docker_apps_manifest_auth_url: "{{ manifest_auth_url | default('') }}"
+
+# Neko API Key Tool
+docker_apps_app_port_neko_key_tool: "{{ app_port_neko_key_tool | default(30010) }}"
+docker_apps_neko_key_tool_image: >-
+  {{ neko_key_tool_image | default('neko-api-key-tool:local') }}
+docker_apps_neko_key_tool_repo: >-
+  {{ neko_key_tool_repo | default('https://github.com/Calcium-Ion/neko-api-key-tool.git') }}
+docker_apps_neko_key_tool_show_balance: "{{ neko_key_tool_show_balance | default(true) }}"
+docker_apps_neko_key_tool_show_detail: "{{ neko_key_tool_show_detail | default(true) }}"
+docker_apps_neko_key_tool_show_icongithub: >-
+  {{ neko_key_tool_show_icongithub | default(false) }}
+docker_apps_neko_key_tool_base_url: >-
+  {{ neko_key_tool_base_url | default('{"msuai": "https://api.msuai.top"}') }}
+
+# New API feature flags
+docker_apps_newapi_use_postgres: "{{ newapi_use_postgres | default(false) }}"
+docker_apps_newapi_use_redis: "{{ newapi_use_redis | default(false) }}"
+
+# New API Postgres
+docker_apps_newapi_pg_host: "{{ newapi_pg_host | default('host.docker.internal') }}"
+docker_apps_newapi_pg_port: "{{ newapi_pg_port | default(5432) }}"
+docker_apps_newapi_pg_db: "{{ newapi_pg_db | default('new_api') }}"
+docker_apps_newapi_pg_user: >-
+  {{ newapi_pg_user | default(postgresql_app_db_user | default('admin')) }}
+docker_apps_newapi_pg_pass: >-
+  {{ newapi_pg_pass | default(postgresql_db_admin_password | default('')) }}
+
+# New API Redis
+docker_apps_newapi_redis_host: "{{ newapi_redis_host | default('host.docker.internal') }}"
+docker_apps_newapi_redis_port: "{{ newapi_redis_port | default(6379) }}"
+docker_apps_newapi_redis_pass: >-
+  {{ newapi_redis_pass | default(redis_db_admin_password | default('')) }}
+
+# Sing-box network and routing inputs
+docker_apps_singbox_inbound_listen: >-
+  {{ singbox_inbound_listen | default('::') }}
+docker_apps_singbox_shared_port: "{{ singbox_shared_port | default(8443) }}"
+docker_apps_singbox_certificate_domain: >-
+  {{ singbox_certificate_domain | default('msuai.top') }}
+docker_apps_singbox_block_bt: "{{ singbox_block_bt | default(true) }}"
+docker_apps_singbox_block_ads: "{{ singbox_block_ads | default(true) }}"
+docker_apps_singbox_block_cn_domains: >-
+  {{ singbox_block_cn_domains | default(true) }}
+docker_apps_singbox_warp_enabled: "{{ singbox_warp_enabled | default(false) }}"
+docker_apps_singbox_warp_port: "{{ app_port_singbox_warp | default(40000) }}"
+docker_apps_warp_pull: "{{ warp_pull | default('missing') }}"
+docker_apps_warp_image: "{{ warp_image | default('caomingjun/warp:2026.6.880.0-2.12.0') }}"
+docker_apps_warp_memory: "{{ warp_memory | default('192m') }}"
+docker_apps_warp_memory_reservation: "{{ warp_memory_reservation | default('96m') }}"
+docker_apps_warp_cpus: "{{ warp_cpus | default('0.25') }}"
+
+# ShellCrash
+docker_apps_shellcrash_enabled: true  # 旧变量（保留兼容，已废弃）
+docker_apps_shellcrash_parent_interface: >-
+  {{ shellcrash_parent_interface | default('enp4s0') }}
+docker_apps_shellcrash_subnet: "{{ shellcrash_subnet | default('192.168.31.0/24') }}"
+docker_apps_shellcrash_gateway: "{{ shellcrash_gateway | default('192.168.31.1') }}"
+docker_apps_shellcrash_container_ip: >-
+  {{ shellcrash_container_ip | default('192.168.31.200') }}
+docker_apps_shellcrash_config_source: >-
+  {{ shellcrash_config_source | default('/vol1/1000/compose/shellcrash/config.yaml') }}
+
+# opcotoai_toolkit
+docker_apps_opcotoai_toolkit_repo_url: >-
+  {{ opcotoai_toolkit_repo_url | default('https://github.com/lhq1363511234/opctoai-toolkit.git') }}
+docker_apps_opcotoai_toolkit_version: "{{ opcotoai_toolkit_version | default('main') }}"

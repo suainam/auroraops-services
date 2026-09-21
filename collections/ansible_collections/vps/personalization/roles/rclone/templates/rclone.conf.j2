@@ -1,0 +1,17 @@
+[onedrive]
+type = onedrive
+token = {{ rclone_onedrive_token }}
+drive_id = {{ rclone_onedrive_drive_id }}
+drive_type = personal
+
+[gdrive]
+type = drive
+scope = drive
+token = {{ rclone_gdrive_token }}
+use_trash = false
+
+# 包含用户自定义的 rclone 配置
+{% if rclone_include_user_configs | default(true) %}
+[include]
+  path = /root/.config/rclone/rclone.conf.d/*.conf
+{% endif %}

@@ -1,0 +1,42 @@
+---
+- name: Verify Redis service is running
+  ansible.builtin.service_facts:
+  tags: [phase3, applications, redis, verify]
+
+- name: Check if redis-server is running
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.services['redis-server.service'].state == 'running'
+      - ansible_facts.services['redis-server.service'].status == 'enabled'
+    msg: "Redis service is not running or not enabled!"
+  tags: [phase3, applications, redis, verify]
+
+- name: Check Redis port listening
+  ansible.builtin.wait_for:
+    port: "{{ redis_port }}"
+    host: >-
+      {{ ansible_default_ipv4.address
+         if redis_bind_address == '0.0.0.0'
+         else redis_bind_address }}
+    timeout: 5
+    state: started
+  tags: [phase3, applications, redis, verify]
+
+- name: Test Redis connection with password
+  ansible.builtin.command: >
+    redis-cli
+    -h {{ ansible_default_ipv4.address if redis_bind_address == '0.0.0.0' else redis_bind_address }}
+    -p {{ redis_port }}
+    -a {{ redis_db_admin_password }}
+    ping
+  register: redis_ping_result
+  changed_when: false
+  failed_when: "'PONG' not in redis_ping_result.stdout"
+  tags: [phase3, applications, redis, verify]
+
+- name: Assert Redis ping successful
+  ansible.builtin.assert:
+    that:
+      - "'PONG' in redis_ping_result.stdout"
+    msg: "Redis connection or authentication failed!"
+  tags: [phase3, applications, redis, verify]

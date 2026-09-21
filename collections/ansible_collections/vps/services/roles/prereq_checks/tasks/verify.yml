@@ -1,0 +1,10 @@
+---
+# prereq_checks verify re-runs the same gates used during deploy.
+
+- name: "[prereq] Re-run prerequisite checks during verify"
+  ansible.builtin.import_tasks: main.yml
+  tags:
+    - verify
+    - services
+    - prereq_checks
+    - phase3

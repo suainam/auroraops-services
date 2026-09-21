@@ -1,0 +1,42 @@
+---
+- name: 验证 Certbot 可执行文件是否存在
+  ansible.builtin.stat:
+    path: /usr/bin/certbot
+  register: certbot_executable_check
+  failed_when: not certbot_executable_check.stat.exists
+  tags: [certbot] # 移除了 'verify' 和 'verify_certbot'
+
+- name: 验证 Certbot DNS Cloudflare 插件的 Python 模块是否存在
+  ansible.builtin.command: python3 -c "import certbot_dns_cloudflare"
+  register: certbot_dns_plugin_module_check
+  changed_when: false
+  failed_when: certbot_dns_plugin_module_check.rc != 0
+  when: certbot_create_method == 'dns' and certbot_dns_plugin == 'cloudflare'
+  tags: [certbot] # 移除了 'verify' 和 'verify_certbot'
+
+- name: 验证 Certbot 证书是否存在 (如果 certbot_certs 已定义)
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ item.domains[0] }}/fullchain.pem"
+  loop: "{{ certbot_certs }}"
+  when: certbot_certs is defined and certbot_certs | length > 0
+  register: cert_file_check
+  failed_when: not item.stat.exists
+  loop_control:
+    label: "{{ item.domains[0] }}"
+  tags: [certbot] # 移除了 'verify' 和 'verify_certbot'
+
+- name: 验证 Certbot DNS 凭证文件是否存在且权限正确
+  ansible.builtin.stat:
+    path: "{{ certbot_dns_credentials_file }}"
+  register: dns_credentials_stat
+  failed_when: not dns_credentials_stat.stat.exists or dns_credentials_stat.stat.mode != '0600'
+  when: certbot_create_method == 'dns' and certbot_dns_plugin is defined
+  tags: [certbot] # 移除了 'verify' 和 'verify_certbot'
+
+- name: 验证 Certbot 自动续订 cron job 或 systemd timer 是否存在
+  ansible.builtin.command: systemctl list-timers --all | grep certbot
+  register: certbot_timer_check
+  changed_when: false
+  failed_when: certbot_timer_check.rc != 0
+  when: certbot_auto_renew
+  tags: [certbot] # 移除了 'verify' 和 'verify_certbot'

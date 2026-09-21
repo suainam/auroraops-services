@@ -1,0 +1,18 @@
+---
+ip2free_gateway_ip2free_dir: "/opt/ip2free"
+ip2free_gateway_ip2free_python: "/opt/aurora_venv/bin/python3"
+ip2free_gateway_ip2free_pip: "/opt/aurora_venv/bin/pip"
+ip2free_gateway_ip2free_config_file: "{{ ip2free_gateway_ip2free_dir }}/config.json"
+ip2free_gateway_ip2free_email: ""
+ip2free_gateway_ip2free_password: ""
+ip2free_gateway_ip2free_proxy_source: "both"
+ip2free_gateway_ip2free_auto_claim: true
+ip2free_gateway_ip2free_health_timeout: 5
+ip2free_gateway_ip2free_max_nodes: 50
+ip2free_gateway_ip2free_manage_prerequisites: false
+ip2free_gateway_ip2free_agent_schedule: "*-*-* 07,11,15,19,23:00:01"
+ip2free_gateway_ip2free_health_schedule: "*:0/30"
+ip2free_gateway_ip2free_requirements:
+  - requests
+  - PySocks
+  - ddddocr

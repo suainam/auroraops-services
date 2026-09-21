@@ -1,0 +1,175 @@
+---
+# tasks/rollback.yml
+# ==============================================================================
+# Docker Rollback Workflow
+# Supports rolling back retirement (restores packages & services) as well as
+# legacy deployment rollback (stops service, leaves user data untouched).
+# ==============================================================================
+
+# ----------------------------------------------------------------------------
+# 1. Probe Retirement Recovery Baseline
+# ----------------------------------------------------------------------------
+- name: Check if Docker retirement recovery baseline exists
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_retirement_fact_path }}"
+  register: docker_rollback_fact_stat
+  tags:
+    - rollback
+    - services
+    - docker
+    - docker_rollback_baseline
+    - phase3
+
+# ----------------------------------------------------------------------------
+# 2. Rollback Retirement: Restore Packages & Service State
+# ----------------------------------------------------------------------------
+- name: Read Docker retirement baseline
+  become: true
+  ansible.builtin.slurp:
+    path: "{{ docker_retirement_fact_path }}"
+  register: docker_rollback_fact_raw
+  when: docker_rollback_fact_stat.stat.exists
+  tags:
+    - rollback
+    - services
+    - docker
+    - docker_rollback_baseline
+    - phase3
+
+- name: Parse Docker retirement baseline
+  ansible.builtin.set_fact:
+    docker_rollback_baseline: "{{ docker_rollback_fact_raw.content | b64decode | from_json }}"
+  when: docker_rollback_fact_stat.stat.exists
+  tags:
+    - rollback
+    - services
+    - docker
+    - docker_rollback_baseline
+    - phase3
+
+- name: Reinstall retired Docker and containerd packages
+  become: true
+  ansible.builtin.apt:
+    name: "{{ docker_rollback_baseline.installed_packages }}"
+    state: present
+    update_cache: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  when:
+    - docker_rollback_fact_stat.stat.exists
+    - docker_rollback_baseline.installed_packages is defined
+    - (docker_rollback_baseline.installed_packages | length) > 0
+  tags:
+    - rollback
+    - services
+    - docker
+    - docker_rollback_package
+    - phase3
+
+- name: Restore containerd service state
+  become: true
+  ansible.builtin.systemd_service:
+    name: containerd.service
+    enabled: "{{ docker_rollback_baseline.services['containerd.service'].enabled | default(true) }}"
+    state: "{{ 'started' if (docker_rollback_baseline.services['containerd.service'].active | default(true)) else 'stopped' }}"
+  when:
+    - docker_rollback_fact_stat.stat.exists
+    - docker_rollback_baseline.services['containerd.service'] is defined
+  failed_when: false
+  tags:
+    - rollback
+    - services
+    - docker
+    - docker_rollback_service
+    - phase3
+
+- name: Restore Docker socket service state
+  become: true
+  ansible.builtin.systemd_service:
+    name: docker.socket
+    enabled: "{{ docker_rollback_baseline.services['docker.socket'].enabled | default(true) }}"
+    state: "{{ 'started' if (docker_rollback_baseline.services['docker.socket'].active | default(true)) else 'stopped' }}"
+  when:
+    - docker_rollback_fact_stat.stat.exists
+    - docker_rollback_baseline.services['docker.socket'] is defined
+  failed_when: false
+  tags:
+    - rollback
+    - services
+    - docker
+    - docker_rollback_service
+    - phase3
+
+- name: Restore Docker daemon service state
+  become: true
+  ansible.builtin.systemd_service:
+    name: docker.service
+    enabled: "{{ docker_rollback_baseline.services['docker.service'].enabled | default(true) }}"
+    state: "{{ 'started' if (docker_rollback_baseline.services['docker.service'].active | default(true)) else 'stopped' }}"
+  when:
+    - docker_rollback_fact_stat.stat.exists
+    - docker_rollback_baseline.services['docker.service'] is defined
+  failed_when: false
+  tags:
+    - rollback
+    - services
+    - docker
+    - docker_rollback_service
+    - phase3
+
+- name: Remove Docker retirement recovery baseline after restoration
+  become: true
+  ansible.builtin.file:
+    path: "{{ docker_retirement_fact_path }}"
+    state: absent
+  when: docker_rollback_fact_stat.stat.exists
+  tags:
+    - rollback
+    - services
+    - docker
+    - docker_rollback_baseline
+    - phase3
+
+# ----------------------------------------------------------------------------
+# 3. Legacy Rollback Fallback (When No Retirement Baseline Exists)
+# Note: Data directories (/var/lib/docker, /opt/dockers) are NEVER deleted.
+# ----------------------------------------------------------------------------
+- name: Gather Docker service facts for legacy rollback
+  ansible.builtin.service_facts:
+  when: not docker_rollback_fact_stat.stat.exists
+  tags:
+    - rollback
+    - services
+    - docker
+    - docker_rollback_service
+    - phase3
+
+- name: Disable and stop Docker service (legacy rollback)
+  become: true
+  ansible.builtin.service:
+    name: docker
+    enabled: false
+    state: stopped
+  when:
+    - not docker_rollback_fact_stat.stat.exists
+    - "'docker.service' in ansible_facts.services"
+  tags:
+    - rollback
+    - services
+    - docker
+    - docker_rollback_service
+    - phase3
+
+- name: Remove Docker logrotate configuration (legacy rollback)
+  become: true
+  ansible.builtin.file:
+    path: /etc/logrotate.d/docker
+    state: absent
+  when: not docker_rollback_fact_stat.stat.exists
+  tags:
+    - rollback
+    - services
+    - docker
+    - docker_remove_logrotate_config
+    - phase3

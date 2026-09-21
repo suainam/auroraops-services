@@ -1,0 +1,64 @@
+---
+# =============================================================================
+# OpenClaw AI Bot Gateway Configuration
+# =============================================================================
+# 控制方式: nodejs_apps 列表包含 'openclaw' 时执行
+# 变量来源: group_vars/all/openclaw.yml (敏感变量从 vault 加载)
+
+- name: Install OpenClaw npm package
+  community.general.npm:
+    name: openclaw
+    global: true
+    state: latest
+  tags: [deploy, services, nodejs, openclaw, phase3]
+
+- name: Check if OpenClaw CLI is installed
+  ansible.builtin.command: which openclaw
+  register: nodejs_openclaw_check
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, nodejs, openclaw, phase3]
+
+- name: OpenClaw CLI not installed - warn user
+  ansible.builtin.debug:
+    msg: "WARNING: openclaw CLI not found. Please install manually: npm install -g openclaw@latest"
+  when: nodejs_openclaw_check.rc != 0
+  tags: [deploy, services, nodejs, openclaw, phase3]
+
+- name: Include OpenClaw configuration tasks
+  ansible.builtin.include_tasks: openclaw_config.yml
+  when: nodejs_openclaw_check.rc == 0
+  tags: [deploy, services, nodejs, openclaw, phase3]
+
+- name: Ensure OpenClaw required directories exist
+  ansible.builtin.file:
+    path: "{{ nodejs_openclaw_home }}/agents/main/sessions"
+    state: directory
+    owner: "{{ nodejs_openclaw_user }}"
+    mode: "0700"
+  when: nodejs_openclaw_check.rc == 0
+  tags: [deploy, services, nodejs, openclaw, phase3]
+
+- name: Install OpenClaw Gateway service (user systemd)
+  ansible.builtin.command: openclaw gateway install
+  when: nodejs_openclaw_check.rc == 0
+  changed_when: false
+  tags: [deploy, services, nodejs, openclaw, phase3]
+
+- name: Enable systemd lingering for root user (keep user services running after logout)
+  become: true
+  ansible.builtin.command: loginctl enable-linger {{ nodejs_openclaw_user }}
+  when: nodejs_openclaw_check.rc == 0
+  changed_when: false
+  tags: [deploy, services, nodejs, openclaw, phase3]
+
+- name: Start and enable OpenClaw Gateway service (user systemd)
+  become: true
+  become_user: "{{ nodejs_openclaw_user }}"
+  ansible.builtin.systemd_service:
+    name: openclaw-gateway
+    scope: user
+    state: started
+    enabled: true
+  when: nodejs_openclaw_check.rc == 0
+  tags: [deploy, services, nodejs, openclaw, phase3]

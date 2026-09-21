@@ -1,0 +1,27 @@
+# tasks/install.yml
+---
+- name: 确保 Certbot 和 Cloudflare 插件已安装在全局虚拟环境中
+  become: true
+  ansible.builtin.pip:
+    name:
+      - certbot
+      - certbot-dns-cloudflare
+    virtualenv: "{{ system_python_venv_path | default('/opt/aurora_venv') }}"
+    state: present
+  tags: [deploy, services, certbot, install, phase4]
+
+- name: 清理可能冲突的系统/旧版 Certbot 二进制文件
+  become: true
+  ansible.builtin.file:
+    path: /usr/local/bin/certbot
+    state: absent
+  tags: [deploy, services, certbot, install, phase4]
+
+- name: 创建 Certbot 软链接 (兼容现有系统命令)
+  become: true
+  ansible.builtin.file:
+    src: "{{ system_python_venv_path | default('/opt/aurora_venv') }}/bin/certbot"
+    dest: /usr/bin/certbot
+    state: link
+    force: true
+  tags: [deploy, services, certbot, install, phase4]

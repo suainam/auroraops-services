@@ -1,0 +1,48 @@
+{
+  "email_provider": {{ grok_register_email_provider | to_json }},
+  "defaultDomains": {{ grok_register_default_domains | to_json }},
+  "cloudflare_api_base": {{ grok_register_cloudflare_api_base | to_json }},
+  "cloudflare_api_key": {{ grok_register_cloudflare_api_key | to_json }},
+  "cloudflare_auth_mode": {{ grok_register_cloudflare_auth_mode | to_json }},
+  "cloudflare_custom_auth": "",
+  "cloudflare_path_domains": {{ grok_register_cloudflare_path_domains | to_json }},
+  "cloudflare_path_accounts": {{ grok_register_cloudflare_path_accounts | to_json }},
+  "cloudflare_path_token": {{ grok_register_cloudflare_path_token | to_json }},
+  "cloudflare_path_messages": {{ grok_register_cloudflare_path_messages | to_json }},
+  "proxy": {{ grok_register_proxy | to_json }},
+  "cpa_proxy": {{ grok_register_cpa_proxy | to_json }},
+  "enable_nsfw": {{ grok_register_enable_nsfw | to_json }},
+  "debug_mode": {{ grok_register_debug_mode | to_json }},
+  "close_browser_on_stop": {{ grok_register_close_browser_on_stop | to_json }},
+  "log_level": {{ grok_register_log_level | to_json }},
+  "register_count": {{ grok_register_register_count | int | to_json }},
+  "register_workers": {{ grok_register_worker_count | int | to_json }},
+  "register_threads": {{ grok_register_worker_count | int | to_json }},
+  "user_agent": {{ grok_register_user_agent | to_json }},
+{% if grok_register_duckmail_enabled | bool %}
+  "duckmail_api_key": {{ grok_register_duckmail_api_key | to_json }},
+  "duckmail_api_base": {{ grok_register_duckmail_api_base | to_json }},
+{% else %}
+  "duckmail_api_key": "",
+  "duckmail_api_base": "https://api.duckmail.sbs",
+{% endif %}
+{% if grok_register_yyds_enabled | bool %}
+  "yyds_api_key": {{ grok_register_yyds_api_key | to_json }},
+  "yyds_jwt": {{ grok_register_yyds_jwt | to_json }},
+  "yyds_default_domain": {{ grok_register_yyds_default_domain | to_json }},
+{% else %}
+  "yyds_api_key": "",
+  "yyds_jwt": "",
+  "yyds_default_domain": "",
+{% endif %}
+  "cpa_auto_add": {{ grok_register_cpa_auto_add | to_json }},
+  "cpa_export_enabled": {{ grok_register_cpa_export_enabled | to_json }},
+  "cpa_auth_dir": {{ grok_register_cpa_auth_dir | to_json }},
+  "cpa_remote_url": {{ (grok_register_cpa_remote_url if grok_register_cpa_remote_contract_verified | bool else '') | to_json }},
+  "cpa_management_key": {{ grok_register_cpa_management_key | to_json }},
+  "cpa_copy_to_hotload": {{ grok_register_cpa_copy_to_hotload | to_json }},
+  "cpa_hotload_dir": {{ grok_register_cpa_hotload_dir | to_json }},
+  "cpa_base_url": {{ grok_register_cpa_base_url | to_json }},
+  "cpa_headless": {{ grok_register_cpa_headless | to_json }},
+  "cpa_force_standalone": {{ grok_register_cpa_force_standalone | to_json }}
+}

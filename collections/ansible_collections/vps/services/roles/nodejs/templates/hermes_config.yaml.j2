@@ -1,0 +1,169 @@
+# =============================================================================
+# Hermes Agent Configuration
+# 由 Ansible 管理 - 请勿手动修改
+# =============================================================================
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+model:
+  default: "{{ nodejs_hermes_model_default }}"
+  provider: "{{ nodejs_hermes_model_provider }}"
+  base_url: "{{ nodejs_hermes_model_base_url }}"
+  max_tokens: {{ nodejs_hermes_model_max_tokens }}
+
+{% if nodejs_hermes_model_fallbacks | length > 0 %}
+  fallbacks:
+{% for fb in nodejs_hermes_model_fallbacks %}
+    - "{{ fb }}"
+{% endfor %}
+{% endif %}
+{% if (hermes_local_new_api_base_url | length > 0 and hermes_local_new_api_key | length > 0) or hermes_deepseek_api_key | length > 0 %}
+  providers:
+{% if hermes_local_new_api_base_url | length > 0 and hermes_local_new_api_key | length > 0 %}
+    local-new-api:
+      type: openai
+      api_key: ${LOCAL_NEW_API_KEY}
+      base_url: {{ hermes_local_new_api_base_url }}
+      models:
+        - id: "gemini-2.5-pro"
+          name: "Gemini 2.5 Pro (Local)"
+          context_length: 200000
+          max_tokens: 8192
+{% endif %}
+{% if hermes_deepseek_api_key | length > 0 %}
+    deepseek:
+      type: openai
+      api_key: ${DEEPSEEK_API_KEY}
+      base_url: https://api.deepseek.com/v1
+      models:
+        - id: "deepseek-v4-flash"
+          name: "DeepSeek V4 Flash"
+          context_length: 128000
+          max_tokens: 16384
+        - id: "deepseek-chat"
+          name: "DeepSeek V3"
+          context_length: 64000
+          max_tokens: 8192
+{% endif %}
+{% if hermes_openrouter_api_key | length > 0 %}
+    openrouter:
+      type: openai
+      api_key: ${OPENROUTER_API_KEY}
+      base_url: https://openrouter.ai/api/v1
+      models:
+        - id: "google/gemini-2.5-flash"
+          name: "Gemini 2.5 Flash"
+          context_length: 1000000
+          max_tokens: 8192
+{% endif %}
+{% endif %}
+
+# =============================================================================
+# Terminal Configuration
+# =============================================================================
+terminal:
+  backend: "{{ nodejs_hermes_terminal_backend }}"
+  cwd: "{{ nodejs_hermes_terminal_cwd }}"
+  timeout: {{ nodejs_hermes_terminal_timeout }}
+  env_passthrough: []
+
+# =============================================================================
+# Telegram Platform
+# =============================================================================
+{% if nodejs_hermes_telegram_enabled %}
+platforms:
+  telegram:
+    dm_policy: "{{ nodejs_hermes_telegram_dm_policy }}"
+    group_policy: "{{ nodejs_hermes_telegram_group_policy }}"
+{% else %}
+platforms:
+  telegram:
+    enabled: false
+{% endif %}
+
+# =============================================================================
+# Discord Platform
+# =============================================================================
+{% if nodejs_hermes_discord_enabled %}
+  discord:
+    dm_policy: "{{ nodejs_hermes_discord_dm_policy }}"
+    group_policy: "{{ nodejs_hermes_discord_group_policy }}"
+    allowed_users:
+{% for uid in hermes_discord_allowed_users %}
+      - "{{ uid }}"
+{% endfor %}
+    guilds:
+{% for guild in hermes_discord_guilds %}
+      - id: "{{ guild.id }}"
+{% if guild.slug is defined %}
+        slug: "{{ guild.slug }}"
+{% endif %}
+{% endfor %}
+{% endif %}
+
+# =============================================================================
+# Platform Toolsets
+# =============================================================================
+platform_toolsets:
+  cli: [hermes-cli]
+  telegram: [hermes-telegram]
+  discord: [hermes-discord]
+
+# =============================================================================
+# Memory
+# =============================================================================
+memory:
+  memory_enabled: {{ 'true' if nodejs_hermes_memory_enabled else 'false' }}
+  user_profile_enabled: {{ 'true' if nodejs_hermes_user_profile_enabled else 'false' }}
+  memory_char_limit: {{ nodejs_hermes_memory_char_limit }}
+  user_char_limit: {{ nodejs_hermes_user_char_limit }}
+  nudge_interval: 10
+  flush_min_turns: 6
+
+# =============================================================================
+# Agent Behavior
+# =============================================================================
+agent:
+  max_turns: {{ nodejs_hermes_agent_max_turns }}
+  reasoning_effort: "{{ nodejs_hermes_agent_reasoning_effort }}"
+  verbose: {{ 'true' if nodejs_hermes_agent_verbose else 'false' }}
+
+# =============================================================================
+# Display
+# =============================================================================
+display:
+  compact: {{ 'true' if nodejs_hermes_display_compact else 'false' }}
+  streaming: {{ 'true' if nodejs_hermes_display_streaming else 'false' }}
+  tool_progress: all
+  cleanup_progress: false
+
+# =============================================================================
+# Auxiliary Models (vision, web_extract, compression, etc.)
+# =============================================================================
+auxiliary:
+  vision:
+    provider: "zai"
+    model: "glm-4.7-flash"
+    timeout: 120
+  web_extract:
+    provider: "zai"
+    model: "glm-4.7-flash"
+    timeout: 120
+  compression:
+    provider: "{{ nodejs_hermes_aux_compression_provider }}"
+    model: "{{ nodejs_hermes_aux_compression_model }}"
+    timeout: {{ nodejs_hermes_aux_compression_timeout }}
+  session_search:
+    provider: "zai"
+    model: "glm-4.7-flash"
+    timeout: 30
+
+# =============================================================================
+# Context Compression
+# =============================================================================
+compression:
+  enabled: {{ 'true' if nodejs_hermes_compression_enabled else 'false' }}
+  threshold: {{ nodejs_hermes_compression_threshold }}
+  target_ratio: {{ nodejs_hermes_compression_target_ratio }}
+  protect_last_n: {{ nodejs_hermes_compression_protect_last_n }}

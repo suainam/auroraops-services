@@ -1,0 +1,21 @@
+proxy-providers:
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) %}
+{% set prefix = provider['additional-prefix'] | default('[' ~ provider.name ~ ']') %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+  source-{{ provider_id }}:
+    type: http
+    url: "https://{{ singbox_domain }}/{{ sub_store_capability_source_provider_suffix }}-{{ provider_id | urlencode }}.yaml"
+    path: ./proxy_providers/{{ provider_id }}.yaml
+    interval: 3600
+    override:
+      additional-prefix: {{ (prefix ~ ' ') | to_json }}
+    health-check: &cap_health_{{ loop.index0 }}
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 300
+      timeout: 5000
+      lazy: true
+      expected-status: 204
+{% endif %}
+{% endfor %}

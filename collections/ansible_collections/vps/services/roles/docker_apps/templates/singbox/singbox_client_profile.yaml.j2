@@ -1,0 +1,222 @@
+# Mihomo (Clash Meta) 配置
+# 生成时间: {{ now() | to_json }}
+
+# === 基础配置 ===
+port: 7890
+socks-port: 7891
+mixed-port: 7893
+allow-lan: true
+bind-address: "*"
+mode: rule
+log-level: info
+external-controller: 0.0.0.0:9090
+
+# === DNS 配置 ===
+dns:
+  enable: true
+  enhanced-mode: fake-ip
+  listen: 0.0.0.0:53
+  nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  fallback:
+    - https://1.1.1.1/dns-query
+    - https://8.8.8.8/dns-query
+  fallback-filter:
+    geoip: true
+    ipcidr:
+      - 240.0.0.0/4
+
+# === 代理节点 ===
+proxies:
+{% set raw_sub_nodes = (docker_apps_singbox_processed_nodes | default(singbox_nodes)) + (singbox_extra_nodes | default([])) %}
+{% set all_sub_nodes = raw_sub_nodes | rejectattr('name', 'search', 'resi') | list if not (auroraops_roles['services']['ip2free_gateway'] | default(false) | bool) else raw_sub_nodes %}
+{% for node in all_sub_nodes %}
+{% set has_flag = node.name is regex('^[^\\x00-\\x7f]') %}
+{% set current_flag = docker_apps_country_flags[docker_apps_singbox_host_country | default('UNKNOWN')] | default('🌍') %}
+{% set display_name = node.name if has_flag else (current_flag + ' ' + node.name) %}
+{% if node.type == 'vless' %}
+{% if not node.transport is defined or node.transport == 'tcp' %}
+  - name: "{{ display_name }}"
+    type: vless
+    server: "{{ node.server | default(singbox_domain) }}"
+    port: {{ (443 if not node.reality | default(true) else node.port) }}
+    uuid: "{{ node.uuid }}"
+    network: tcp
+    tls: true
+    servername: "{{ node.sni }}"
+{% if node.reality | default(true) %}
+    flow: xtls-rprx-vision
+    udp: true
+    client-fingerprint: chrome
+    reality-opts:
+      public-key: "{{ docker_apps_singbox_reality_public_key }}"
+      short-id: "{{ docker_apps_singbox_short_ids_gen.stdout_lines[0] | default('') }}"
+{% else %}
+    udp: true
+{% endif %}
+{% elif node.transport == 'grpc' %}
+  - name: "{{ display_name }}"
+    type: vless
+    server: "{{ node.server | default(singbox_domain) }}"
+    port: {{ (443 if not node.reality | default(true) else node.port) }}
+    uuid: "{{ node.uuid }}"
+    network: grpc
+    tls: true
+    servername: "{{ node.sni }}"
+    alpn:
+      - h2
+    grpc-opts:
+      grpc-service-name: "{{ node.service_name }}"
+{% if node.reality | default(true) %}
+    udp: true
+    client-fingerprint: chrome
+    reality-opts:
+      public-key: "{{ docker_apps_singbox_reality_public_key }}"
+      short-id: "{{ docker_apps_singbox_short_ids_gen.stdout_lines[0] | default('') }}"
+{% else %}
+    udp: true
+{% endif %}
+{% endif %}
+{% elif node.type == 'hysteria2' and (not ('resi' in node.name) or (auroraops_roles['services']['ip2free_gateway'] | default(false) | bool)) %}
+  - name: "{{ display_name }}"
+    type: hysteria2
+    server: "{{ node.server | default(singbox_domain) }}"
+    port: {{ node.port }}
+    password: "{{ node.password }}"
+    sni: "{{ node.sni | default('') }}"
+    skip-cert-verify: {{ node.insecure | default(false) | lower }}
+    alpn:
+      - "{{ node.alpn | default('h3') }}"
+{% if node.obfs is defined %}
+    obfs: salamander
+    obfs-password: "{{ node.obfs_password }}"
+{% endif %}
+{% if singbox_hopping_enabled | default(true) %}
+  - name: "{{ display_name }}-hopping"
+    type: hysteria2
+    server: "{{ node.server | default(singbox_domain) }}"
+    ports: "{{ (node.hopping_range | default(firewall_hysteria_hopping.port_range | default(app_port_hysteria_hopping_range | default('30100:30200')))) | replace(':', '-') }}"
+    hop-interval: "30s"
+    password: "{{ node.password }}"
+    sni: "{{ node.sni | default('') }}"
+    skip-cert-verify: {{ node.insecure | default(false) | lower }}
+    alpn:
+      - "{{ node.alpn | default('h3') }}"
+{% if node.obfs is defined %}
+    obfs: salamander
+    obfs-password: "{{ node.obfs_password }}"
+{% endif %}
+{% endif %}
+{% elif node.type == 'trojan' %}
+  - name: "{{ display_name }}"
+    type: trojan
+    server: "{{ node.server | default(singbox_domain) }}"
+    port: 443
+    password: "{{ node.password }}"
+    network: {{ node.transport | default('tcp') }}
+    sni: "{{ node.sni | default('') }}"
+    skip-cert-verify: false
+{% if node.transport == 'ws' %}
+    ws-opts:
+      path: "{{ node.path | default('/') }}"
+{% if node.host is defined %}
+      headers:
+        Host: "{{ node.host }}"
+{% endif %}
+{% endif %}
+{% elif node.type == 'anytls' %}
+  - name: "{{ display_name }}"
+    type: anytls
+    server: "{{ node.server | default(singbox_domain) }}"
+    port: {{ node.port }}
+    password: "{{ node.password }}"
+    sni: "{{ node.sni | default('') }}"
+    skip-cert-verify: {{ node.insecure | default(false) | lower }}
+{% elif node.type == 'tuic' %}
+  - name: "{{ display_name }}"
+    type: tuic
+    server: "{{ node.server | default(singbox_domain) }}"
+    port: {{ node.port }}
+    uuid: "{{ node.uuid }}"
+    password: "{{ node.password }}"
+    alpn:
+      - h3
+    reduce-rtt: true
+    request-timeout: 8000
+    udp-relay-mode: native
+    congestion-controller: bbr
+    skip-cert-verify: {{ node.insecure | default(false) | lower }}
+    sni: "{{ node.sni | default('') }}"
+{% endif %}
+{% endfor %}
+
+# === 代理组 ===
+proxy-groups:
+  - name: "🚀 节点选择"
+    type: select
+    proxies:
+      - "⚡️ 自动延迟"
+      - "🛡️ 自动稳定"
+      - "🔴 直连"
+      - "🌍 国外"
+      - "🇨🇳 国内"
+{% for node in all_sub_nodes %}
+{% set has_flag = node.name is regex('^[^\\x00-\\x7f]') %}
+{% set current_flag = docker_apps_country_flags[docker_apps_singbox_host_country | default('UNKNOWN')] | default('🌍') %}
+{% set display_name = node.name if has_flag else (current_flag + ' ' + node.name) %}
+      - "{{ display_name }}"
+{% endfor %}
+
+  - name: "⚡️ 自动延迟"
+    type: url-test
+    proxies:
+{% for node in all_sub_nodes %}
+{% set has_flag = node.name is regex('^[^\\x00-\\x7f]') %}
+{% set current_flag = docker_apps_country_flags[docker_apps_singbox_host_country | default('UNKNOWN')] | default('🌍') %}
+{% set display_name = node.name if has_flag else (current_flag + ' ' + node.name) %}
+      - "{{ display_name }}"
+{% endfor %}
+    url: https://cp.cloudflare.com/generate_204
+    interval: 60
+    tolerance: 50
+
+  - name: "🛡️ 自动稳定"
+    type: url-test
+    proxies:
+{% for node in all_sub_nodes %}
+{% set has_flag = node.name is regex('^[^\\x00-\\x7f]') %}
+{% set current_flag = docker_apps_country_flags[docker_apps_singbox_host_country | default('UNKNOWN')] | default('🌍') %}
+{% set display_name = node.name if has_flag else (current_flag + ' ' + node.name) %}
+      - "{{ display_name }}"
+{% endfor %}
+    url: https://cp.cloudflare.com/generate_204
+    interval: 300
+    tolerance: 150
+
+  - name: "🌍 国外"
+    type: select
+    proxies:
+      - "⚡️ 自动延迟"
+      - "🛡️ 自动稳定"
+{% for node in all_sub_nodes %}
+{% set has_flag = node.name is regex('^[^\\x00-\\x7f]') %}
+{% set current_flag = docker_apps_country_flags[docker_apps_singbox_host_country | default('UNKNOWN')] | default('🌍') %}
+{% set display_name = node.name if has_flag else (current_flag + ' ' + node.name) %}
+      - "{{ display_name }}"
+{% endfor %}
+
+  - name: "🇨🇳 国内"
+    type: select
+    proxies:
+      - DIRECT
+
+  - name: "🔴 直连"
+    type: select
+    proxies:
+      - DIRECT
+
+# === 路由规则 ===
+rules:
+  - GEOIP,CN,DIRECT
+  - MATCH,🚀 节点选择

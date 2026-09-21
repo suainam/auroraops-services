@@ -1,0 +1,14 @@
+[Unit]
+Description=IP2Free Agent - Claim rewards and fetch proxies
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart={{ ip2free_gateway_ip2free_python }} {{ ip2free_gateway_ip2free_dir }}/ip2free_agent.py
+User=root
+Group=root
+Restart=no
+# Transient exhaustion exits successfully in degraded mode; the timer owns future retries.
+StandardOutput=journal
+StandardError=journal

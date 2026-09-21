@@ -1,0 +1,210 @@
+---
+- name: Restore focused Nginx site configuration baseline
+  ansible.builtin.import_tasks: rollback_site_config.yml
+  tags: [rollback, services, nginx, nginx_site_config, phase4]
+
+- name: 检查是否存在备份文件
+  become: true
+  ansible.builtin.stat:
+    path: /var/backups/auroraops/nginx/last_stable.tar.gz
+  register: nginx_backup_stat
+  tags:
+    - rollback
+    - services
+    - nginx
+    - phase4
+- name: 恢复 Nginx 配置备份
+  become: true
+  when: nginx_backup_stat.stat.exists
+  tags:
+    - rollback
+    - services
+    - nginx
+    - phase4
+  block:
+    - name: 停止 Nginx 服务
+      ansible.builtin.service:
+        name: nginx
+        state: stopped
+    - name: 清理当前的 Nginx 配置目录
+      ansible.builtin.file:
+        path: /etc/nginx
+        state: absent
+    - name: 重新创建 Nginx 配置目录
+      ansible.builtin.file:
+        path: /etc/nginx
+        state: directory
+        mode: "0755"
+    - name: 解压备份文件
+      ansible.builtin.unarchive:
+        src: /var/backups/auroraops/nginx/last_stable.tar.gz
+        dest: /etc/nginx
+        remote_src: true
+    - name: 启动 Nginx 服务
+      ansible.builtin.service:
+        name: nginx
+        state: started
+- name: Gather Nginx service facts for cleanup fallback
+  ansible.builtin.service_facts:
+  when: not nginx_backup_stat.stat.exists
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_rollback_service
+    - phase4
+
+- name: 如果没有备份，则执行清理操作 (回退到未安装状态)
+  become: true
+  when: not nginx_backup_stat.stat.exists
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_rollback_service
+    - phase4
+  block:
+    - name: 禁用并停止 Nginx 服务
+      ansible.builtin.service:
+        name: nginx
+        enabled: false
+        state: stopped
+      when: "'nginx.service' in ansible_facts.services"
+- name: 卸载 Nginx 软件包 (示例回滚操作)
+  become: true
+  ansible.builtin.apt:
+    name: nginx
+    state: absent
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_uninstall_package
+    - phase4
+- name: 移除 Nginx 站点启用链接 (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/{{ item }}.conf
+    state: absent
+  loop: "{{ nginx_sites_to_deploy }}"
+  loop_control:
+    loop_var: item
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_remove_site_enable
+    - phase4
+- name: 移除 Nginx 站点配置文件 (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: /etc/nginx/sites-available/{{ item }}.conf
+    state: absent
+  loop: "{{ nginx_sites_to_deploy }}"
+  loop_control:
+    loop_var: item
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_remove_site_config
+    - phase4
+- name: 移除默认虚拟主机配置文件 (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: /etc/nginx/sites-available/default
+    state: absent
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_remove_default_site
+    - phase4
+- name: 移除通用 SSL 配置 (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: /etc/nginx/conf.d/common_ssl.conf
+    state: absent
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_remove_common_ssl
+    - phase4
+- name: 移除通用 Headers 配置 (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: /etc/nginx/conf.d/common_headers.conf
+    state: absent
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_remove_common_headers
+    - phase4
+- name: 移除通用 Performance 配置 (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: /etc/nginx/conf.d/common_performance.conf
+    state: absent
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_remove_common_performance
+    - phase4
+- name: 移除 Cloudflare IP 列表配置 (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: /etc/nginx/conf.d/cfip.conf
+    state: absent
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_remove_cfip
+    - phase4
+- name: 移除 Nginx 主配置文件 (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: /etc/nginx/nginx.conf
+    state: absent
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_remove_main_conf
+    - phase4
+- name: 移除 Nginx 配置目录 (警告：此操作会删除所有 Nginx 配置) (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: /etc/nginx
+    state: absent
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_remove_config_dir
+    - phase4
+- name: 移除 Nginx 默认欢迎页 (如果存在) (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: /var/www/html/index.nginx-debian.html
+    state: absent
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_remove_default_welcome_page
+    - phase4
+- name: 移除 Nginx logrotate 配置文件 (示例回滚操作)
+  become: true
+  ansible.builtin.file:
+    path: "{{ nginx_logrotate_config_path }}"
+    state: absent
+  tags:
+    - rollback
+    - services
+    - nginx
+    - nginx_remove_logrotate_config
+    - phase4

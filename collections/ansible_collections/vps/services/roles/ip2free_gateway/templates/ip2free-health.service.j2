@@ -1,0 +1,13 @@
+[Unit]
+Description=IP2Free Health Check - Test SOCKS5 nodes and merge subscription
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart={{ ip2free_python }} {{ ip2free_dir }}/health_check.py
+User=root
+Group=root
+Restart=no
+StandardOutput=journal
+StandardError=journal

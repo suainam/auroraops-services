@@ -1,0 +1,20 @@
+---
+zerotier_network_id: ""
+zerotier_port: 9993
+zerotier_api_url: "https://my.zerotier.com"
+zerotier_enable_moon: false
+# Opt-in ownership of Moon state. When true and zerotier_enable_moon is false,
+# historical Moon files are backed up once and removed from the active config.
+zerotier_manage_moons: false
+zerotier_moon_backup_dir: "/var/lib/zerotier-one/auroraops-moon-backup"
+zerotier_moon_backup_marker: "{{ zerotier_moon_backup_dir }}/backup.json"
+zerotier_package_name: "zerotier-one"
+zerotier_cli_path: "/usr/sbin/zerotier-cli"
+zerotier_service_name: "zerotier-one"
+zerotier_fact_path: "/etc/ansible/facts.d/zerotier.fact"
+zerotier_repo_path: "/etc/apt/sources.list.d/zerotier.list"
+zerotier_keyring_path: "/etc/apt/keyrings/zerotier.gpg"
+zerotier_moon_json_path: "/var/lib/zerotier-one/moon.json"
+zerotier_moons_dir_path: "/var/lib/zerotier-one/moons.d"
+
+zerotier_environment_proxy: {}

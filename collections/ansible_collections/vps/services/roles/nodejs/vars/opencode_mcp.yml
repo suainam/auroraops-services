@@ -1,0 +1,47 @@
+---
+# =============================================================================
+# OpenCode MCP (Model Context Protocol) Configuration (Universal)
+# =============================================================================
+# This file contains MCP server configurations that are common across all hosts.
+# These configurations are loaded via include_vars in opencode_config.yml.
+#
+# MCP Servers:
+#   - context7: Documentation search and code examples
+#   - gh_grep: GitHub code search
+#   - qmd: Local knowledge base search (requires qmd installed + bun in PATH)
+#   - openviking: OpenViking Context DB (requires openviking role)
+#
+# API Keys are stored in secrets/vault.yml:
+#   - vault_opencode_context7_api_key
+#
+# Source: Extracted from /root/.config/opencode/opencode.json
+# Last updated: 2026-02-18
+
+nodejs_openviking_venv_bin_path: "~/.local/share/uv/tools/openviking/bin"
+
+nodejs_opencode_mcp:
+  context7:
+    enabled: true
+    type: "remote"
+    url: "https://mcp.context7.com/mcp"
+    headers:
+      CONTEXT7_API_KEY: "{{ vault_opencode_context7_api_key }}"
+
+  gh_grep:
+    type: "remote"
+    url: "https://mcp.grep.app"
+
+  qmd:
+    type: "local"
+    command: ["qmd", "mcp"]
+    enabled: "{{ auroraops_roles['services']['qmd'] | default(false) | bool }}"
+
+  openviking:
+    type: "local"
+    command: ["{{ nodejs_openviking_venv_bin_path }}/python", "/usr/local/bin/openviking_mcp.py"]
+    enabled: "{{ auroraops_roles['applications']['openviking'] | default(false) | bool }}"
+
+  context-mode:
+    type: "local"
+    command: ["/usr/bin/context-mode"]
+    enabled: "{{ opencode_mcp_context_mode_enabled | default(false) | bool }}"

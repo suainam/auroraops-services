@@ -1,0 +1,184 @@
+# tasks/install.yml
+---
+- name: 强制收集 Ansible Facts
+  ansible.builtin.setup:
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Read Linux Mint release metadata
+  ansible.builtin.slurp:
+    path: /etc/os-release
+  register: docker_linux_mint_release_raw
+  when: ansible_distribution == 'Linux Mint'
+  tags: [deploy, services, docker, install, phase3]
+
+- name: 检测 Linux Mint 的 Ubuntu 基础版本
+  ansible.builtin.set_fact:
+    docker_ubuntu_codename: >-
+      {{
+        (docker_linux_mint_release_raw.content | b64decode
+          | regex_findall('(?m)^UBUNTU_CODENAME=(.+)$')
+          | first | default(ansible_distribution_release))
+      }}
+  when: ansible_distribution == 'Linux Mint'
+  tags: [deploy, services, docker, install, phase3]
+
+- name: 设置 Docker 安装所需的发行版变量
+  ansible.builtin.set_fact:
+    docker_repo_dist: "{{ 'ubuntu' if ansible_distribution == 'Linux Mint' else ansible_distribution | lower }}"
+    docker_repo_release: "{{ docker_ubuntu_codename | default(ansible_lsb.codename) | default(ansible_distribution_release) }}"
+  tags: [deploy, services, docker, install, phase3]
+
+- name: 检查 Docker 是否已安装
+  ansible.builtin.command: which docker
+  register: docker_check
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, docker, install, phase3]
+
+- name: 跳过 Docker 安装（已安装）
+  ansible.builtin.debug:
+    msg: "Docker 已安装，跳过安装步骤"
+  when: docker_check.rc == 0
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Install Docker prerequisites
+  become: true
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  when: docker_check.rc != 0
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Create directory for Docker GPG key
+  become: true
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  when: docker_check.rc != 0
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Check if Docker GPG key exists
+  ansible.builtin.stat:
+    path: /etc/apt/keyrings/docker.asc
+  register: docker_gpg_key
+  when: docker_check.rc != 0
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Download Docker's official GPG key
+  become: true
+  ansible.builtin.get_url:
+    url: "https://download.docker.com/linux/{{ docker_repo_dist }}/gpg"
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+  when:
+    - docker_check.rc != 0
+    - not docker_gpg_key.stat.exists | default(false)
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Add Docker repository
+  become: true
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ ansible_architecture | replace('x86_64', 'amd64') | replace('aarch64', 'arm64') }}
+      signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/{{ docker_repo_dist }}
+      {{ docker_repo_release }} stable
+    state: present
+    filename: docker
+  when: docker_check.rc != 0
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Install Docker and related packages
+  become: true
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+      - python3-docker
+    state: present
+    update_cache: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  when: docker_check.rc != 0
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Ensure /etc/docker directory exists
+  become: true
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    mode: "0755"
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Detect systemd availability (fallback if base role hasn't set global fact)
+  ansible.builtin.command: pidof systemd
+  register: _docker_systemd_check
+  changed_when: false
+  failed_when: false
+  when: docker_auroraops_has_systemd is not defined
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Set local systemd fact if not already set
+  ansible.builtin.set_fact:
+    docker_auroraops_has_systemd: "{{ _docker_systemd_check.rc == 0 }}"
+  when: docker_auroraops_has_systemd is not defined
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Ensure Docker service is running and enabled (systemd)
+  become: true
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+  when: docker_auroraops_has_systemd | default(false) | bool
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Check Docker daemon in non-systemd mode
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -x
+      - dockerd
+  register: docker_manual_daemon_check
+  changed_when: false
+  failed_when: false
+  when: not (docker_auroraops_has_systemd | default(false) | bool)
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Start Docker daemon manually (non-systemd fallback)
+  become: true
+  ansible.builtin.shell: |
+    nohup dockerd > /var/log/dockerd.log 2>&1 &
+    sleep 3
+  changed_when: true
+  when:
+    - not (docker_auroraops_has_systemd | default(false) | bool)
+    - docker_manual_daemon_check.rc != 0
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Verify Docker daemon in non-systemd mode
+  become: true
+  ansible.builtin.command:
+    argv:
+      - docker
+      - info
+  changed_when: false
+  when: not (docker_auroraops_has_systemd | default(false) | bool)
+  tags: [deploy, services, docker, install, phase3]
+
+- name: Set Docker installation fact for dependent roles
+  become: true
+  ansible.builtin.set_fact:
+    docker_service_installed: true
+    cacheable: true
+  tags: [deploy, services, docker, install, phase3]

@@ -1,0 +1,53 @@
+---
+# QMD 角色任务
+# 启用控制变量: auroraops_roles['services']['qmd'] (定义在 group_vars/all/roles.yml 和 host_vars/)
+# 默认启用，可通过 host_vars 中的 auroraops_roles.services.qmd: false 禁用
+
+- name: QMD 部署
+  when: auroraops_roles['services']['qmd'] | default(true) | bool
+  tags: [deploy, services, qmd, phase3]
+  block:
+    - name: Install bun and qmd
+      ansible.builtin.import_tasks: install.yml
+      tags: [deploy, services, qmd, qmd_install, phase3]
+
+    - name: Configure bun in PATH
+      ansible.builtin.import_tasks: profile.yml
+      tags: [deploy, services, qmd, qmd_config, phase3]
+
+    - name: Configure collections
+      ansible.builtin.import_tasks: collections.yml
+      tags: [deploy, services, qmd, qmd_collections, phase3]
+
+    - name: Create soft links
+      ansible.builtin.import_tasks: links.yml
+      tags: [deploy, services, qmd, qmd_links, phase3]
+
+    - name: Verify soft links
+      ansible.builtin.import_tasks: verify.yml
+      tags: [verify, services, qmd, qmd_verify, phase3, deploy]
+
+
+- name: QMD 清理（禁用时）
+  when: not (auroraops_roles['services']['qmd'] | default(true) | bool)
+  tags: [deploy, services, qmd, phase3]
+  block:
+    - name: Gather QMD service facts
+      ansible.builtin.service_facts:
+      tags: [deploy, services, qmd, phase3]
+
+    - name: 停止 QMD 服务（如果存在）
+      ansible.builtin.systemd:
+        name: qmd
+        enabled: false
+        state: stopped
+      when:
+        - not ansible_check_mode
+        - "'qmd.service' in ansible_facts.services"
+      tags: [deploy, services, qmd, phase3]
+
+    - name: 移除 QMD 二进制文件
+      ansible.builtin.file:
+        path: /usr/local/bin/qmd
+        state: absent
+      tags: [deploy, services, qmd, phase3]

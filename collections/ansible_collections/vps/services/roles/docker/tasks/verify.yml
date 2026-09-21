@@ -1,0 +1,298 @@
+---
+# tasks/verify.yml
+# ==============================================================================
+# Docker Verification Workflow (Installed vs Retired)
+# ==============================================================================
+
+# ----------------------------------------------------------------------------
+# 1. Standard Verification (docker_state == 'present')
+# ----------------------------------------------------------------------------
+- name: 验证 Docker 是否已安装
+  become: true
+  ansible.builtin.command: docker --version
+  register: docker_version_check
+  changed_when: false
+  failed_when: docker_version_check.rc != 0
+  when: docker_state | default('present') == 'present'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_install
+    - phase3
+
+- name: 验证 Docker 服务是否运行
+  become: true
+  ansible.builtin.service_facts:
+  when: docker_state | default('present') == 'present'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_service
+    - phase3
+  register: docker_service_status
+
+- name: 检查 Docker 服务是否运行和启用
+  ansible.builtin.assert:
+    that:
+      - docker_service_status.ansible_facts.services['docker.service'].state == 'running'
+      - docker_service_status.ansible_facts.services['docker.service'].status == 'enabled'
+    fail_msg: Docker 服务未运行或未启用
+  when: docker_state | default('present') == 'present'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_service
+    - phase3
+
+- name: 验证 Docker logrotate 配置文件是否存在
+  become: true
+  ansible.builtin.stat:
+    path: /etc/logrotate.d/docker
+  register: docker_logrotate_check
+  failed_when: not docker_logrotate_check.stat.exists
+  when: docker_state | default('present') == 'present'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_logrotate_config
+    - phase3
+
+- name: 验证 Docker logrotate 配置内容 (例如，检查 rotate count)
+  become: true
+  ansible.builtin.command: grep 'rotate 7' /etc/logrotate.d/docker
+  register: docker_logrotate_content_check
+  changed_when: false
+  failed_when: docker_logrotate_content_check.rc != 0
+  when: docker_state | default('present') == 'present'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_logrotate_config
+    - phase3
+
+# ----------------------------------------------------------------------------
+# 2. Retirement Verification (docker_state == 'absent')
+# ----------------------------------------------------------------------------
+- name: 验证 Docker CLI 二进制文件已不存在
+  ansible.builtin.command: which docker
+  register: docker_verify_which_docker
+  changed_when: false
+  failed_when: false
+  when: docker_state | default('present') == 'absent'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3
+
+- name: 断言 Docker CLI 二进制文件已不存在
+  ansible.builtin.assert:
+    that:
+      - docker_verify_which_docker.rc != 0
+    fail_msg: "Docker retirement verification failed: docker binary still exists at '{{ docker_verify_which_docker.stdout }}'."
+  when: docker_state | default('present') == 'absent'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3
+
+- name: 验证 dockerd 守护进程二进制文件已不存在
+  become: true
+  ansible.builtin.stat:
+    path: /usr/bin/dockerd
+  register: docker_verify_dockerd_stat
+  when: docker_state | default('present') == 'absent'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3
+
+- name: 断言 dockerd 守护进程二进制文件已不存在
+  ansible.builtin.assert:
+    that:
+      - not docker_verify_dockerd_stat.stat.exists
+    fail_msg: "Docker retirement verification failed: /usr/bin/dockerd still exists."
+  when: docker_state | default('present') == 'absent'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3
+
+- name: 验证 containerd 二进制文件已不存在
+  become: true
+  ansible.builtin.stat:
+    path: /usr/bin/containerd
+  register: docker_verify_containerd_stat
+  when: docker_state | default('present') == 'absent'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3
+
+- name: 断言 containerd 二进制文件已不存在
+  ansible.builtin.assert:
+    that:
+      - not docker_verify_containerd_stat.stat.exists
+    fail_msg: "Docker retirement verification failed: /usr/bin/containerd still exists."
+  when: docker_state | default('present') == 'absent'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3
+
+- name: 查询 Docker 软件包安装状态
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['dpkg-query', '-W', '-f=${Package}\t${Status}\n']
+        + docker_retirement_packages
+      }}
+  register: docker_verify_dpkg
+  changed_when: false
+  failed_when: false
+  when: docker_state | default('present') == 'absent'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3
+
+- name: 断言 Docker 软件包均未安装
+  ansible.builtin.assert:
+    that:
+      - (docker_verify_dpkg.stdout_lines | default([]) | select('search', 'install ok installed') | list | length) == 0
+    fail_msg: >-
+      Docker retirement verification failed: Docker packages still installed:
+      {{ docker_verify_dpkg.stdout_lines | select('search', 'install ok installed') | list }}
+  when: docker_state | default('present') == 'absent'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3
+
+- name: 检查 Docker 与 containerd 服务活跃状态
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+  register: docker_verify_service_status
+  loop:
+    - docker.service
+    - docker.socket
+    - containerd.service
+  when: docker_state | default('present') == 'absent'
+  tags: [verify, services, docker, docker_verify, docker_verify_retire, phase3]
+
+- name: 断言 Docker 与 containerd 服务均未处于 active 状态
+  ansible.builtin.assert:
+    that:
+      - item.status.ActiveState | default('inactive') != 'active'
+    fail_msg: "Docker retirement verify failed: service '{{ item.item }}' is still active."
+  loop: "{{ docker_verify_service_status.results | default([]) }}"
+  when: docker_state | default('present') == 'absent'
+  tags: [verify, services, docker, docker_verify, docker_verify_retire, phase3]
+
+- name: 验证 Docker 退出恢复基线 Fact 文件存在
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_retirement_fact_path }}"
+  register: docker_verify_fact_stat
+  when: docker_state | default('present') == 'absent'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3
+
+- name: 断言 Docker 退出恢复基线 Fact 文件存在
+  ansible.builtin.assert:
+    that:
+      - docker_verify_fact_stat.stat.exists
+    fail_msg: "Docker retirement verification failed: baseline fact file missing at '{{ docker_retirement_fact_path }}'."
+  when: docker_state | default('present') == 'absent'
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3
+
+- name: 读取 Docker 退出恢复基线 Fact 内容
+  become: true
+  ansible.builtin.slurp:
+    path: "{{ docker_retirement_fact_path }}"
+  register: docker_verify_fact_raw
+  when:
+    - docker_state | default('present') == 'absent'
+    - docker_verify_fact_stat.stat.exists | default(false)
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3
+
+- name: 解析 Docker 退出恢复基线 Fact
+  ansible.builtin.set_fact:
+    docker_verify_baseline_data: "{{ docker_verify_fact_raw.content | b64decode | from_json }}"
+  when:
+    - docker_state | default('present') == 'absent'
+    - docker_verify_fact_stat.stat.exists | default(false)
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3
+
+- name: 检查 /var/lib/docker 数据目录保留状态
+  become: true
+  ansible.builtin.stat:
+    path: /var/lib/docker
+  register: docker_verify_var_lib_stat
+  when:
+    - docker_state | default('present') == 'absent'
+    - docker_retirement_preserve_data | default(true) | bool
+    - docker_verify_baseline_data is defined
+    - docker_verify_baseline_data.data_dirs['/var/lib/docker'].exists | default(true)
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3
+
+- name: 断言 /var/lib/docker 数据目录未被误删
+  ansible.builtin.assert:
+    that:
+      - docker_verify_var_lib_stat.stat.exists
+    fail_msg: "Docker retirement verification failed: preserved data directory /var/lib/docker is missing!"
+  when:
+    - docker_state | default('present') == 'absent'
+    - docker_retirement_preserve_data | default(true) | bool
+    - docker_verify_baseline_data is defined
+    - docker_verify_baseline_data.data_dirs['/var/lib/docker'].exists | default(true)
+  tags:
+    - verify
+    - services
+    - docker
+    - docker_verify_retire
+    - phase3

@@ -1,0 +1,19 @@
+[Unit]
+Description=Cloudflare Tunnel for Vaultwarden disaster recovery
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+TimeoutStartSec=0
+ExecStart={{ cloudflared_binary_path }} tunnel --no-autoupdate --config {{ cloudflared_config_path }} run
+Restart=on-failure
+RestartSec=5s
+User=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

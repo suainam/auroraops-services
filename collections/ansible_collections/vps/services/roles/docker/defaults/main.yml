@@ -1,0 +1,118 @@
+---
+# 默认将 admin 用户和当前 ansible 用户添加到 docker 组
+docker__users:
+  - "{{ admin_user | default('admin') }}"
+  - "{{ ansible_user | default(lookup('env', 'USER')) }}"
+
+# 修复 nickjj.docker 在新版 Ansible 中的布尔判断问题
+docker__version: false
+docker__compose_v2_version: false
+docker__install_compose_plugin: true
+docker__channel: stable
+docker__edition: ce
+
+# 显式置空以避免循环逻辑错误
+docker__pip_dependencies: []
+docker__pip_virtualenv_packages: []
+docker__default_pip_dependencies: []
+docker__default_pip_virtualenv_packages: []
+
+docker_logrotate_configs:
+  - name: docker
+    log_path: /var/lib/docker/containers/*/*.log
+    rotate_count: 7
+    compress: true
+    delaycompress: true
+    missingok: true
+    notifempty: true
+    create_owner: root
+    create_group: adm
+  - name: docker_backups_fast
+    log_path:
+      - /opt/backups/docker/seeds/docker_config_seed.tar.gz
+      - /opt/backups/docker/db/vaultwarden_db.tar.gz
+    rotate_count: 5
+    interval: daily
+    missingok: true
+    notifempty: false
+    nocreate: true
+  - name: docker_backups_full
+    log_path:
+      - /opt/backups/docker/full/docker_full_*.tar.gz
+    rotate_count: 2
+    interval: daily
+    missingok: true
+    notifempty: false
+    nocreate: true
+  - name: docker_backup_logs
+    log_path: /var/log/docker_backup.log
+    rotate_count: 7
+    interval: daily
+    compress: true
+    missingok: true
+    notifempty: true
+    create_owner: root
+    create_group: adm
+
+docker__daemon_options:
+  log-driver: "json-file"
+  log-opts:
+    max-size: "10m"
+    max-file: "3"
+  "live-restore": true
+  "no-new-privileges": true
+  # 国内镜像源配置 (当 use_domestic_mirrors 为 true 时启用)
+  "registry-mirrors": >-
+    {{
+      [
+        'https://docker.mirrors.ustc.edu.cn',
+        'https://hub-mirror.c.163.com',
+        'https://docker.fnnas.com',
+        'https://registry.hub.docker.com',
+        'https://dockerproxy.com',
+        'https://mirror.baidubce.com',
+        'https://docker.m.daocloud.io',
+        'https://docker.nju.edu.cn',
+        'https://docker.mirrors.sjtug.sjtu.edu.cn',
+        'https://ghcr.nju.edu.cn',
+        'https://docker.pullfree.pw',
+        'https://docker.1panel.live',
+        'https://docker.unlimit.soft'
+      ] | unique
+      if use_domestic_mirrors | default(false)
+      else []
+    }}
+
+# Docker lifecycle state: 'present' (default) or 'absent' (opt-in retirement)
+docker_state: present
+
+# Docker retirement preflight and safety controls
+docker_retirement_require_no_running_containers: true
+docker_retirement_required_active_services: []
+docker_retirement_require_standby_snapshot: false
+docker_retirement_standby_latest_path: /opt/vaultwarden-standby/latest.json
+docker_retirement_standby_script_path: /usr/local/sbin/vaultwarden_standby.py
+
+# Exact packages to inspect and remove during retirement (no autoremove / no purge)
+docker_retirement_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+  - docker-ce-rootless-extras
+
+# Allowed package removals in APT simulation.
+# If APT simulate attempts to remove any package NOT in this list, retirement aborts.
+docker_retirement_allowed_removal_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+  - docker-ce-rootless-extras
+  - runc
+
+# Recovery baseline fact path
+docker_retirement_fact_path: /etc/ansible/facts.d/docker_retirement.fact
+docker_retirement_preserve_data: true

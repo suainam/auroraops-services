@@ -1,0 +1,243 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.2.1",
+    "lastTouchedAt": "2026-02-25T08:20:01Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-02-25T08:20:01Z",
+    "lastRunVersion": "2026.2.1",
+    "lastRunCommand": "ansible-deploy",
+    "lastRunMode": "local"
+  },
+  "logging": {
+    "level": "debug",
+    "redactSensitive": "tools",
+    "consoleLevel": "debug"
+  },
+  "auth": {
+    "profiles": {
+      "zai:default": {
+        "provider": "zai",
+        "mode": "api_key"
+      },
+      "google:default": {
+        "provider": "google",
+        "mode": "api_key"
+      }
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "local-new-api": {
+        "baseUrl": "http://localhost:30001/v1",
+        "apiKey": "{{ vault_openclaw_local_new_api_key }}",
+        "api": "openai-responses",
+        "models": [
+          {
+            "id": "gemini-2.5-pro",
+            "name": "Gemini 2.5 Pro (Local)",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          }        ]
+      },      "zai": {
+        "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+        "apiKey": "{{ vault_openclaw_zai_api_key }}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "glm-4.7-flash",
+            "name": "GLM-4.7 Flash (Free)",
+            "reasoning": true,
+            "input": ["text", "image"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 128000,
+            "maxTokens": 4096
+          },          {
+            "id": "glm-5",
+            "name": "GLM-5",
+            "reasoning": true,
+            "input": ["text"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 204800,
+            "maxTokens": 131072
+          },          {
+            "id": "glm-4.7",
+            "name": "GLM-4.7",
+            "reasoning": true,
+            "input": ["text"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 204800,
+            "maxTokens": 131072
+          },          {
+            "id": "glm-4.7-flashx",
+            "name": "GLM-4.7 FlashX",
+            "reasoning": true,
+            "input": ["text"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 204800,
+            "maxTokens": 131072
+          },          {
+            "id": "glm-4.5-air",
+            "name": "GLM-4.5 Air",
+            "reasoning": true,
+            "input": ["text", "image"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 128000,
+            "maxTokens": 4096
+          }        ]
+      },
+      "openrouter": {
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "apiKey": "{{ vault_openclaw_openrouter_api_key }}",
+        "api": "openai-responses",
+        "models": [
+          {
+            "id": "openrouter/auto",
+            "name": "OpenRouter Auto",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          }
+        ]
+      }    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "zai/glm-4.5-air",
+        "fallbacks": ["zai/glm-4.7-flash", "local-new-api/gemini-2.5-pro", "openrouter/arcee-ai/trinity-large-preview:free", "openrouter/arcee-ai/trinity-mini:free", "openrouter/openrouter/free", "openrouter/google/gemma-3-27b-it:free", "openrouter/meta-llama/llama-3.3-70b-instruct:free", "openrouter/mistralai/mistral-small-3.1-24b-instruct:free", "openrouter/nvidia/nemotron-3-nano-30b-a3b:free", "openrouter/nvidia/nemotron-nano-12b-v2-vl:free", "openrouter/nvidia/nemotron-nano-9b-v2:free", "openrouter/openai/gpt-oss-120b:free", "openrouter/openai/gpt-oss-20b:free", "openrouter/qwen/qwen3-4b:free", "openrouter/qwen/qwen3-coder:free", "openrouter/qwen/qwen3-next-80b-a3b-instruct:free", "openrouter/stepfun/step-3.5-flash:free", "openrouter/upstage/solar-pro-3:free", "openrouter/z-ai/glm-4.5-air:free", "zai/glm-4.5-air", "openrouter/auto", "opencode/glm-5-free", "opencode/minimax-m2.5-free", "opencode/trinity-large-preview-free"]
+      },
+      "models": {
+        "zai/glm-4.7-flash": {
+          "alias": "GLM-Flash"
+        },        "zai/glm-4.5-air": {
+          "alias": "GLM"
+        },        "zai/glm-4.7": {
+          "alias": "GLM-4.7"
+        },        "zai/glm-4.7-flashx": {
+          "alias": "GLM-FlashX"
+        },        "zai/glm-5": {
+          "alias": "GLM-5"
+        },        "local-new-api/gemini-2.5-pro": {
+          "alias": "LocalGemini"
+        },        "openrouter/auto": {
+          "alias": "OpenRouter"
+        }      },
+      "workspace": "/root/.openclaw/workspace",
+      "compaction": {
+        "mode": "safeguard",
+        "reserveTokensFloor": 20000,
+        "memoryFlush": {
+          "enabled": true,
+          "softThresholdTokens": 4000,
+          "systemPrompt": "Session nearing compaction. Store durable memories now.",
+          "prompt": "Write any lasting notes to memory/YYYY-MM-DD.md; reply with NO_REPLY if nothing to store."
+        }
+      },
+      "memorySearch": {
+        "provider": "gemini",
+        "experimental": {
+          "sessionMemory": true
+        },
+        "sources": ["memory", "sessions"],
+      },
+      "maxConcurrent": {{ nodejs_openclaw_agent_max_concurrent | default(4) }},
+      "subagents": {
+        "maxConcurrent": {{ nodejs_openclaw_agent_subagents_max | default(8) }}
+      }
+    }
+  },
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto"
+  },
+  "hooks": {
+    "internal": {
+      "enabled": true,
+      "entries": {
+        "boot-md": {
+          "enabled": true
+        },
+        "command-logger": {
+          "enabled": true
+        },
+        "session-memory": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "botToken": "{{ vault_openclaw_telegram_token }}",
+      "groupPolicy": "allowlist",
+      "groupAllowFrom": ["1025787916"],
+      "groups": {
+        "-1003799286353": {
+          "groupPolicy": "open",
+          "requireMention": false
+        }      },
+      "streaming": "partial"
+    }
+    ,
+    "discord": {
+      "enabled": {{ openclaw_discord_enabled | lower }},
+      "dmPolicy": "{{ nodejs_openclaw_discord_dm_policy }}",
+      "groupPolicy": "{{ openclaw_discord_group_policy }}",
+      "token": "{{ vault_openclaw_discord_token }}",
+      "allowFrom": {{ openclaw_discord_allow_from | to_json }},
+      "guilds": {
+{% for guild in openclaw_discord_guilds %}
+        "{{ guild.id }}": {
+          "slug": "{{ guild.slug }}",
+          "requireMention": {{ guild.requireMention | default(false) | lower }},
+          "users": {{ guild.users | to_json }},
+          "channels": {{ guild.channels | default({'*': {'allow': true, 'requireMention': false}}) | to_json }}
+        }{% if not loop.last %},{% endif %}
+{% endfor %}
+      }
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "{{ vault_openclaw_gateway_token }}"
+    },
+    "remote": {
+      "token": "{{ vault_openclaw_gateway_token }}"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    }
+  },
+  "skills": {
+    "install": {
+      "nodeManager": "npm"
+    }
+  },
+  "plugins": {
+    "entries": {
+      "telegram": {
+        "enabled": true
+      }
+      ,
+      "discord": {
+        "enabled": true
+      }
+    }
+  }
+}

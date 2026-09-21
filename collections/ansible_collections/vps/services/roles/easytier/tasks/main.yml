@@ -1,0 +1,97 @@
+---
+# EasyTier 角色主入口
+# 启用控制变量: auroraops_roles['services']['easytier']
+
+- name: Check Docker daemon availability for EasyTier
+  become: true
+  community.docker.docker_host_info:
+  register: easytier_docker_host_info
+  changed_when: false
+  failed_when: false
+  when: auroraops_roles['services']['easytier'] | default(true) | bool
+  tags: [deploy, services, easytier, easytier_preflight, phase3]
+
+- name: Assert Docker daemon is available for EasyTier
+  ansible.builtin.assert:
+    that:
+      - easytier_docker_host_info.can_talk_to_docker | default(false)
+    fail_msg: >-
+      EasyTier requires an installed and running Docker daemon.
+      Deploy services.docker first.
+  when: auroraops_roles['services']['easytier'] | default(true) | bool
+  tags: [deploy, services, easytier, easytier_preflight, phase3]
+
+- name: EasyTier 部署
+  when: auroraops_roles['services']['easytier'] | default(true) | bool
+  tags: [deploy, services, easytier, phase3]
+  block:
+    - name: 确保 TUN 模块已加载
+      community.general.modprobe:
+        name: tun
+        state: present
+      tags: [deploy, services, easytier, easytier_install, phase3]
+
+    - name: 创建配置目录
+      ansible.builtin.file:
+        path: "{{ easytier_config_dir }}"
+        state: directory
+        mode: "0755"
+      tags: [deploy, services, easytier, easytier_install, phase3]
+
+    - name: 生成 easytier.toml 配置文件
+      ansible.builtin.template:
+        src: easytier.toml.j2
+        dest: "{{ easytier_config_dir }}/easytier.toml"
+        mode: "0600"
+      notify: restart easytier
+      tags: [deploy, services, easytier, easytier_config, phase3]
+
+    - name: 开放防火墙端口（监听模式）
+      when:
+        - easytier_listen | bool
+        - not ansible_check_mode
+      block:
+        - name: 放行 TCP 端口
+          community.general.ufw:
+            rule: allow
+            port: "{{ easytier_listen_port_tcp }}"
+            proto: tcp
+          tags: [deploy, services, easytier, easytier_install, phase3]
+
+        - name: 放行 UDP 端口
+          community.general.ufw:
+            rule: allow
+            port: "{{ easytier_listen_port_udp }}"
+            proto: udp
+          tags: [deploy, services, easytier, easytier_install, phase3]
+
+    - name: 部署 EasyTier 容器
+      ansible.builtin.include_role:
+        name: vps.services.container_deployer
+      vars:
+        cdp_name: "easytier"
+        cdp_image: "{{ easytier_image }}"
+        cdp_network_mode: host
+        cdp_capabilities:
+          - NET_ADMIN
+          - NET_RAW
+        cdp_devices:
+          - "{{ easytier_tun_device }}:{{ easytier_tun_device }}"
+        cdp_volumes:
+          - "{{ easytier_config_dir }}/easytier.toml:/config/easytier.toml:ro"
+          - "/etc/machine-id:/etc/machine-id:ro"
+        cdp_restart_policy: unless-stopped
+        cdp_command: >-
+          -c /config/easytier.toml
+          {% if easytier_listen | bool %}-l tcp://0.0.0.0:{{ easytier_listen_port }} -l udp://0.0.0.0:{{ easytier_listen_port }}{% endif %}
+      tags: [deploy, services, easytier, easytier_install, phase3]
+
+
+- name: EasyTier 禁用时
+  when: not (auroraops_roles['services']['easytier'] | default(true) | bool)
+  tags: [deploy, services, easytier, phase3]
+  block:
+    - name: 显示禁用消息
+      ansible.builtin.debug:
+        msg: "EasyTier deployment is disabled (auroraops_roles['services']['easytier'] = false)"
+      tags: [deploy, services, easytier, phase3]

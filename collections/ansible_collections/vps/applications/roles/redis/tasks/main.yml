@@ -1,0 +1,128 @@
+- name: 角色启用检查
+  ansible.builtin.debug:
+    msg: Role redis is disabled, skipping
+  when: not (auroraops_roles['applications']['redis'] | default(true) | bool)
+  tags:
+    - deploy
+    - applications
+    - redis
+    - phase3
+
+- name: Check if Redis is installed
+  ansible.builtin.command: which redis-server
+  register: redis_check
+  changed_when: false
+  failed_when: false
+  when: auroraops_roles['applications']['redis'] | default(true) | bool
+  tags:
+    - deploy
+    - applications
+    - redis
+    - phase3
+
+- name: Set skip flag (considering force overwrite)
+  ansible.builtin.set_fact:
+    redis_installed: '{{ redis_check.rc == 0 }}'
+    redis_skip_all: '{{ redis_check.rc == 0 and not (redis_force_overwrite | default(false)
+      | bool) }}'
+  when: auroraops_roles['applications']['redis'] | default(true) | bool
+  tags:
+    - deploy
+    - applications
+    - redis
+    - phase3
+
+- name: Redis pre-installed - skip all (safe mode)
+  ansible.builtin.debug:
+    msg: Redis already installed by system, skipping all. Use FORCE=true to force
+      overwrite.
+  when:
+    - auroraops_roles['applications']['redis'] | default(true) | bool
+    - redis_skip_all | bool
+  tags:
+    - deploy
+    - applications
+    - redis
+    - phase3
+
+- name: Deploy Redis
+  when:
+    - auroraops_roles['applications']['redis'] | default(true) | bool
+    - not redis_skip_all | bool
+  tags:
+    - deploy
+    - applications
+    - redis
+    - phase3
+  block:
+    - name: Install Redis server
+      become: true
+      ansible.builtin.apt:
+        name: redis-server
+        state: present
+        update_cache: true
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+    - name: Ensure Redis user and group exist
+      ansible.builtin.user:
+        name: redis
+        state: present
+        system: true
+        home: '{{ redis_data_dir }}'
+    - name: Ensure Redis data directory exists
+      ansible.builtin.file:
+        path: '{{ redis_data_dir }}'
+        state: directory
+        owner: redis
+        group: redis
+        mode: '0755'
+    - name: Ensure Redis log directory exists
+      ansible.builtin.file:
+        path: '{{ redis_log_file | dirname }}'
+        state: directory
+        owner: redis
+        group: adm
+        mode: '0755'
+    - name: Configure Redis server
+      no_log: true
+      diff: false
+      ansible.builtin.template:
+        src: redis.conf.j2
+        dest: /etc/redis/redis.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart Redis
+    - name: Start and enable Redis service
+      ansible.builtin.service:
+        name: redis-server
+        state: started
+        enabled: true
+    - name: Allow Localhost to access Redis via UFW
+      community.general.ufw:
+        rule: allow
+        src: 127.0.0.1
+        port: '{{ redis_port | string }}'
+        proto: tcp
+    - name: Allow Docker subnets to access Redis via UFW
+      community.general.ufw:
+        rule: allow
+        src: 172.16.0.0/12
+        port: '{{ redis_port | string }}'
+        proto: tcp
+
+- name: Configure Redis logrotate independently of install safe mode
+  ansible.builtin.import_tasks: ../../../common/tasks/manage_optional_logrotate.yml
+  vars:
+    optional_logrotate_owner: Redis
+    optional_logrotate_enabled: "{{ redis_logrotate_enabled }}"
+    optional_logrotate_config_path: "{{ redis_logrotate_config_path }}"
+    optional_logrotate_legacy_paths: "{{ redis_logrotate_legacy_paths }}"
+    optional_logrotate_config: "{{ redis_logrotate_config }}"
+  when: auroraops_roles['applications']['redis'] | default(true) | bool
+  tags:
+    - deploy
+    - applications
+    - redis
+    - redis_logrotate
+    - phase3

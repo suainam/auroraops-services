@@ -1,0 +1,40 @@
+{% set ssl_cert_name = site_config.ssl_cert_name | default(nginx_sites_defaults.ssl_cert_name | default('suai.eu.org'), true) %}
+{% set backend_port = site_config.backend_port | default(30014, true) %}
+server {
+    listen 80;
+    server_name {{ item }};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name {{ item }};
+
+    ssl_certificate       /etc/letsencrypt/live/{{ ssl_cert_name }}/fullchain.pem;
+    ssl_certificate_key   /etc/letsencrypt/live/{{ ssl_cert_name }}/privkey.pem;
+
+    include /etc/nginx/conf.d/common_ssl.conf;
+    include /etc/nginx/conf.d/common_headers.conf;
+    include /etc/nginx/conf.d/common_performance.conf;
+
+    include /etc/nginx/conf.d/cfip.conf;
+    deny all;
+
+    location / {
+        proxy_pass http://127.0.0.1:{{ backend_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Accel-Buffering no;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_connect_timeout 30s;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+}

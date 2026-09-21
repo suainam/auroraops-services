@@ -1,0 +1,43 @@
+---
+# =============================================================================
+# OpenCode Antigravity Authentication (opencode_antigravity)
+# =============================================================================
+# Install and configure Antigravity OAuth plugin
+# Repository: https://github.com/NoeFabris/opencode-antigravity-auth
+#
+# Important: User MUST run `opencode auth login` manually after deployment
+# Even if antigravity-accounts.json is deployed, the plugin requires the
+# auth login flow to complete initialization.
+
+- name: Ensure .config/opencode directory exists for Antigravity
+  ansible.builtin.file:
+    path: "{{ nodejs_opencode_config_dir_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [deploy, services, nodejs, opencode_antigravity, phase3]
+
+# Display instructions
+- name: Display Antigravity authentication instructions
+  ansible.builtin.debug:
+    msg:
+      - "=========================================="
+      - "Antigravity Plugin - Manual Authentication Required"
+      - "=========================================="
+      - "Plugin installed successfully!"
+      - ""
+      - "⚠️  IMPORTANT: You MUST run the following command on the target server:"
+      - "  opencode auth login"
+      - ""
+      - "This will:"
+      - "  1. Open a browser for Google OAuth"
+      - "  2. Save credentials to ~/.config/opencode/antigravity-accounts.json"
+      - "  3. Initialize the plugin (required even if accounts file exists)"
+      - ""
+      - "After authentication, restart the service:"
+      - "  systemctl restart opencode-server"
+      - ""
+      - "For multi-account setup, run 'opencode auth login' multiple times."
+      - "=========================================="
+  tags: [deploy, services, nodejs, opencode_antigravity, phase3]

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+username="$(tr -d '\r\n' < /run/secrets/username)"
+password="$(tr -d '\r\n' < /run/secrets/password)"
+
+if [[ -z "${username}" || -z "${password}" ]]; then
+  echo "Pi Terminal credentials are missing" >&2
+  exit 1
+fi
+
+exec /usr/bin/ttyd \
+  --debug 3 \
+  --port 7681 \
+  --interface 0.0.0.0 \
+  --writable \
+  --check-origin \
+  --max-clients 1 \
+  --terminal-type xterm-256color \
+  --client-option macOptionClickForcesSelection=true \
+  --client-option altClickMovesCursor=false \
+  --client-option rightClickSelectsWord=true \
+  --client-option rendererType=canvas \
+  --cwd /workspace \
+  --credential "${username}:${password}" \
+  /usr/local/bin/start-pi

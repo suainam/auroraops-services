@@ -1,0 +1,8 @@
+---
+- name: Include result tasks
+  ansible.builtin.include_tasks: result.yml
+  tags: [verify, system, ansibletest, ansibletest_result, phase3]
+
+- name: Include status tasks
+  ansible.builtin.include_tasks: status.yml
+  tags: [verify, system, ansibletest, ansibletest_status, phase3]

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec tmux -f /home/pi/.tmux.conf \
+  new-session -A \
+  -s "{{ pi_terminal_tmux_session }}" \
+  -c /workspace \
+  omp \
+  --config /etc/omp/config.yml \
+  --approval-mode write \
+  --tools "{{ pi_terminal_omp_tools | join(',') }}"

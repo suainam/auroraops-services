@@ -1,0 +1,210 @@
+---
+- name: Inspect cloudflared rollback baseline
+  become: true
+  ansible.builtin.stat:
+    path: "{{ cloudflared_fact_path }}"
+  register: cloudflared_rollback_fact
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Read cloudflared rollback baseline
+  become: true
+  ansible.builtin.slurp:
+    path: "{{ cloudflared_fact_path }}"
+  register: cloudflared_rollback_fact_raw
+  when: cloudflared_rollback_fact.stat.exists
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Parse cloudflared rollback baseline
+  ansible.builtin.set_fact:
+    cloudflared_rollback_baseline: >-
+      {{ cloudflared_rollback_fact_raw.content | b64decode | from_json }}
+  when: cloudflared_rollback_fact.stat.exists
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Validate cloudflared rollback ownership
+  ansible.builtin.assert:
+    that:
+      - cloudflared_rollback_baseline.auroraops_managed | bool
+      - not cloudflared_rollback_baseline.preexisting | bool
+      - cloudflared_rollback_baseline.tunnel_id == cloudflared_tunnel_id
+    fail_msg: "cloudflared rollback baseline is missing or unsafe"
+  when: cloudflared_rollback_fact.stat.exists
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Inspect Tunnel DNS rollback ownership
+  become: true
+  ansible.builtin.stat:
+    path: "{{ cloudflared_dns_fact_path }}"
+  register: cloudflared_dns_rollback_stat
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Read Tunnel DNS rollback ownership
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ cloudflared_dns_fact_path }}"
+  register: cloudflared_dns_rollback_raw
+  when: cloudflared_dns_rollback_stat.stat.exists
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Resolve Tunnel DNS rollback ownership
+  ansible.builtin.set_fact:
+    cloudflared_dns_rollback: "{{ cloudflared_dns_rollback_raw.content | b64decode | from_json }}"
+  when: cloudflared_dns_rollback_stat.stat.exists
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Remove only the DNS record created by this deployment
+  community.general.cloudflare_dns:
+    zone: "{{ cloudflared_dns_rollback.zone }}"
+    record: "{{ cloudflared_dns_rollback.hostname }}"
+    type: CNAME
+    value: "{{ cloudflared_dns_rollback.target }}"
+    api_token: "{{ cloudflared_dns_api_token }}"
+    state: absent
+  delegate_to: localhost
+  become: false
+  no_log: true
+  when:
+    - cloudflared_dns_rollback_stat.stat.exists
+    - cloudflared_dns_rollback.created | bool
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Remove completed Tunnel DNS ownership baseline
+  become: true
+  ansible.builtin.file:
+    path: "{{ cloudflared_dns_fact_path }}"
+    state: absent
+  when: cloudflared_dns_rollback_stat.stat.exists
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Inspect managed cloudflared watchdog service
+  become: true
+  ansible.builtin.stat:
+    path: "{{ cloudflared_watchdog_service_path }}"
+  register: cloudflared_watchdog_service_artifact
+  when: cloudflared_rollback_fact.stat.exists
+  tags: [rollback, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Inspect managed cloudflared watchdog timer
+  become: true
+  ansible.builtin.stat:
+    path: "{{ cloudflared_watchdog_timer_path }}"
+  register: cloudflared_watchdog_timer_artifact
+  when:
+    - cloudflared_rollback_fact.stat.exists
+    - cloudflared_service_manager == 'systemd'
+  tags: [rollback, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Stop and disable managed cloudflared watchdog timer
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ cloudflared_watchdog_timer_name }}.timer"
+    enabled: false
+    state: stopped
+  when:
+    - cloudflared_rollback_fact.stat.exists
+    - cloudflared_service_manager == 'systemd'
+    - cloudflared_watchdog_timer_artifact.stat.exists | default(false)
+  tags: [rollback, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Stop and disable managed cloudflared watchdog service
+  become: true
+  ansible.builtin.service:
+    name: "{{ cloudflared_watchdog_service_name }}"
+    enabled: false
+    state: stopped
+  when:
+    - cloudflared_rollback_fact.stat.exists
+    - cloudflared_watchdog_service_artifact.stat.exists | default(false)
+  tags: [rollback, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Stop and disable managed cloudflared service
+  become: true
+  ansible.builtin.service:
+    name: "{{ cloudflared_service_name }}"
+    enabled: false
+    state: stopped
+  when: cloudflared_rollback_fact.stat.exists
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Remove managed cloudflared service and credentials
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ cloudflared_service_path }}"
+    - "{{ cloudflared_config_path }}"
+    - "{{ cloudflared_credentials_path }}"
+  when: cloudflared_rollback_fact.stat.exists
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Remove managed cloudflared watchdog script and state
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ cloudflared_watchdog_script_path }}"
+    - "{{ cloudflared_watchdog_state_dir }}"
+  when: cloudflared_rollback_fact.stat.exists
+  tags: [rollback, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Remove managed systemd watchdog units
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ cloudflared_watchdog_service_path }}"
+    - "{{ cloudflared_watchdog_timer_path }}"
+  when:
+    - cloudflared_rollback_fact.stat.exists
+    - cloudflared_service_manager == 'systemd'
+  tags: [rollback, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Remove managed OpenRC watchdog service
+  become: true
+  ansible.builtin.file:
+    path: "/etc/init.d/{{ cloudflared_watchdog_service_name }}"
+    state: absent
+  when:
+    - cloudflared_rollback_fact.stat.exists
+    - cloudflared_service_manager == 'openrc'
+  tags: [rollback, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Remove managed cloudflared package (Debian)
+  become: true
+  ansible.builtin.apt:
+    name: cloudflared
+    state: absent
+  when:
+    - cloudflared_rollback_fact.stat.exists
+    - ansible_os_family == 'Debian'
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Remove managed cloudflared binary (Alpine)
+  become: true
+  ansible.builtin.file:
+    path: "{{ cloudflared_binary_path }}"
+    state: absent
+  when:
+    - cloudflared_rollback_fact.stat.exists
+    - ansible_os_family == 'Alpine'
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Remove cloudflared rollback baseline
+  become: true
+  ansible.builtin.file:
+    path: "{{ cloudflared_fact_path }}"
+    state: absent
+  when: cloudflared_rollback_fact.stat.exists
+  tags: [rollback, services, cloudflared, phase4]
+
+- name: Reload systemd after cloudflared rollback
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when:
+    - cloudflared_rollback_fact.stat.exists
+    - cloudflared_service_manager == 'systemd'
+  tags: [rollback, services, cloudflared, phase4]

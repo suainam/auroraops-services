@@ -1,0 +1,20 @@
+---
+# handlers file for vps.applications.application_timer
+
+- name: "[Application Timer] Reload systemd and apply timer change: {{ application_timer_name }}"
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ application_timer_name }}.timer"
+    daemon_reload: true
+    enabled: "{{ application_timer_enabled | bool }}"
+    state: >-
+      {{ 'restarted'
+         if (application_timer_enabled | bool)
+         and application_timer_state == 'started'
+         else application_timer_state }}
+  when: not ansible_check_mode
+  tags:
+    - phase3
+    - applications
+    - application_timer
+    - handler

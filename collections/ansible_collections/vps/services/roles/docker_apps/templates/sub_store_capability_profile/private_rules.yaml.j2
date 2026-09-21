@@ -1,0 +1,3 @@
+{% for rule in sub_store_capability_private_rules | default([]) %}
+  - {{ rule }}
+{% endfor %}

@@ -1,0 +1,69 @@
+---
+- name: Check PostgreSQL Python interpreter
+  become: true
+  ansible.builtin.stat:
+    path: "{{ ansible_python_interpreter | default('/usr/bin/python3') }}"
+  register: postgresql_python_interpreter_stat
+  tags:
+    - deploy
+    - verify
+    - rollback
+    - applications
+    - postgresql
+    - postgresql_preflight
+    - phase4
+
+- name: Assert PostgreSQL Python interpreter is available
+  ansible.builtin.assert:
+    that:
+      - postgresql_python_interpreter_stat.stat.exists | default(false)
+      - postgresql_python_interpreter_stat.stat.executable | default(false)
+    fail_msg: >-
+      PostgreSQL requires the configured Ansible Python interpreter
+      {{ ansible_python_interpreter | default('/usr/bin/python3') }}.
+      Deploy system.python_environment first.
+  tags:
+    - deploy
+    - verify
+    - rollback
+    - applications
+    - postgresql
+    - postgresql_preflight
+    - phase4
+
+- name: Check psycopg2 in PostgreSQL Python interpreter
+  become: true
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_python_interpreter | default('/usr/bin/python3') }}"
+      - -c
+      - "import psycopg2; print(psycopg2.__version__)"
+  register: postgresql_psycopg2_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags:
+    - deploy
+    - verify
+    - rollback
+    - applications
+    - postgresql
+    - postgresql_preflight
+    - phase4
+
+- name: Assert psycopg2 is available for PostgreSQL modules
+  ansible.builtin.assert:
+    that:
+      - postgresql_psycopg2_check.rc == 0
+    fail_msg: >-
+      PostgreSQL modules require psycopg2 in
+      {{ ansible_python_interpreter | default('/usr/bin/python3') }}.
+      Deploy system.python_environment first.
+  tags:
+    - deploy
+    - verify
+    - rollback
+    - applications
+    - postgresql
+    - postgresql_preflight
+    - phase4

@@ -1,0 +1,16 @@
+---
+- name: Restart hysteria2-native
+  listen: restart hysteria2-native
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ hysteria2_native_service_name }}.service"
+    state: restarted
+    daemon_reload: true
+  tags: [deploy, services, hysteria2_native, phase3]
+
+- name: Reload systemd daemon
+  listen: reload systemd daemon
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  tags: [deploy, services, hysteria2_native, phase3]

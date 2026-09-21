@@ -1,0 +1,18 @@
+---
+- name: "确保目录存在: {{ backup_source_docker_dir }}"
+  become: true
+  ansible.builtin.file:
+    path: "{{ backup_source_docker_dir }}"
+    state: directory
+    mode: '0711'
+    owner: root
+    group: root
+  tags: [deploy, services, docker_apps, phase5]
+
+- name: 创建 Docker 外部网络 sweb
+  become: true
+  community.docker.docker_network:
+    name: sweb
+    state: present
+  when: (ansible_facts.pkg_mgr | default(ansible_pkg_mgr | default(''))) != 'apk' and ((docker_apps_deploy_mode | default('auto')) != 'native')
+  tags: [deploy, services, docker_apps, phase5]

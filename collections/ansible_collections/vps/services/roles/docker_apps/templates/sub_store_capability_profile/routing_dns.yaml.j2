@@ -1,0 +1,80 @@
+rules:
+{% include 'sub_store_capability_profile/private_rules.yaml.j2' %}
+{% include 'sub_store_capability_profile/rules.yaml' %}
+
+dns:
+  enable: true
+  ipv6: false
+  enhanced-mode: fake-ip
+  fake-ip-range: "{{ sub_store_capability_fake_ip_range }}"
+  fake-ip-filter-mode: blacklist
+  respect-rules: false
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  nameserver:
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
+  fallback:
+    - https://1.1.1.1/dns-query
+    - https://8.8.8.8/dns-query
+  fallback-filter:
+    geoip: true
+    geoip-code: CN
+  direct-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  proxy-server-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
+  nameserver-policy:
+    "geosite:cn":
+      - https://dns.alidns.com/dns-query
+      - https://doh.pub/dns-query
+    "+.argotunnel.com":
+      - https://dns.alidns.com/dns-query
+      - https://doh.pub/dns-query
+    "+.cftunnel.com":
+      - https://dns.alidns.com/dns-query
+      - https://doh.pub/dns-query
+    "{{ singbox_domain }}":
+      - https://dns.alidns.com/dns-query
+      - https://doh.pub/dns-query
+{% for domain in sub_store_capability_private_fake_ip_filter | default([]) %}
+    "{{ domain }}":
+      - https://dns.alidns.com/dns-query
+      - https://doh.pub/dns-query
+{% endfor %}
+  fake-ip-filter:
+    - geosite:cn
+    - +.argotunnel.com
+    - +.cftunnel.com
+    - +.suai.eu.org
+    - +.suainam.eu.org
+    - +.163.com
+    - +.netease.com
+    - +.uuremote.com
+    - "{{ singbox_domain }}"
+{% for domain in sub_store_capability_private_fake_ip_filter | default([]) %}
+    - "{{ domain }}"
+{% endfor %}
+
+tun:
+  enable: true
+  stack: mixed
+  auto-route: true
+  auto-detect-interface: true
+  route-exclude-address:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
+    - 224.0.0.0/4
+    - 60.188.233.97/32
+    - 124.160.141.98/32
+    - 183.3.205.13/32
+{% for address in sub_store_capability_private_tun_route_exclude_address | default([]) %}
+    - "{{ address }}"
+{% endfor %}

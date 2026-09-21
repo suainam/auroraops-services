@@ -1,0 +1,62 @@
+---
+- name: Check IP2Free systemd units
+  become: true
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop:
+    - { name: "ip2free-agent.timer", path: "/etc/systemd/system/ip2free-agent.timer" }
+    - { name: "ip2free-health.timer", path: "/etc/systemd/system/ip2free-health.timer" }
+    - { name: "ip2free-agent.service", path: "/etc/systemd/system/ip2free-agent.service" }
+    - { name: "ip2free-health.service", path: "/etc/systemd/system/ip2free-health.service" }
+  register: ip2free_gateway__ip2free_units
+  tags: [rollback, services, ip2free_gateway, ip2free_gateway_config, phase5]
+
+- name: Stop and disable IP2Free timers
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ item.item.name }}"
+    state: stopped
+    enabled: false
+    daemon_reload: true
+  loop: "{{ ip2free_gateway__ip2free_units.results }}"
+  when:
+    - item.stat.exists
+    - item.item.name.endswith('.timer')
+  failed_when: false
+  tags: [rollback, services, ip2free_gateway, ip2free_gateway_config, phase5]
+
+- name: Stop IP2Free services
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ item.item.name }}"
+    state: stopped
+    daemon_reload: true
+  loop: "{{ ip2free_gateway__ip2free_units.results }}"
+  when:
+    - item.stat.exists
+    - item.item.name.endswith('.service')
+  failed_when: false
+  tags: [rollback, services, ip2free_gateway, ip2free_gateway_config, phase5]
+
+- name: Remove IP2Free systemd units
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/ip2free-agent.service
+    - /etc/systemd/system/ip2free-agent.timer
+    - /etc/systemd/system/ip2free-health.service
+    - /etc/systemd/system/ip2free-health.timer
+  tags: [rollback, services, ip2free_gateway, ip2free_gateway_config, phase5]
+
+- name: Preserve IP2Free working data during rollback
+  ansible.builtin.debug:
+    msg: "Preserved {{ ip2free_gateway_ip2free_dir }} including config.json, nodes.json, and last-good outputs"
+  tags: [rollback, services, ip2free_gateway, ip2free_gateway_install, phase5]
+
+- name: Reload systemd after removing IP2Free units
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  tags: [rollback, services, ip2free_gateway, ip2free_gateway_config, phase5]

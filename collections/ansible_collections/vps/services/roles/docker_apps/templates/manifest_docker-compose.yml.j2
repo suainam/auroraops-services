@@ -1,0 +1,54 @@
+name: mnfst
+
+services:
+  manifest:
+    container_name: manifest
+    image: {{ manifest_image }}
+    restart: always
+    networks:
+      - sweb
+    ports:
+      - "127.0.0.1:{{ app_port_manifest }}:{{ manifest_port }}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      PORT: "{{ manifest_port }}"
+      BIND_ADDRESS: "0.0.0.0"
+      DATABASE_URL: "postgresql://{{ manifest_pg_user }}:{{ manifest_pg_pass | urlencode }}@{{ manifest_pg_host }}:{{ manifest_pg_port | string }}/{{ manifest_pg_db }}?sslmode=disable"
+      BETTER_AUTH_SECRET: "{{ manifest_auth_secret }}"
+      BETTER_AUTH_URL: "{{ manifest_auth_url }}"
+      OLLAMA_HOST: "http://host.docker.internal:11434"
+      NODE_ENV: "production"
+      MANIFEST_MODE: "selfhosted"
+      MANIFEST_TELEMETRY_DISABLED: "1"
+      SEED_DATA: "false"
+    healthcheck:
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "const p=process.env.PORT||'2099';fetch(`http://127.0.0.1:$${p}/api/v1/health`).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 1800s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 1g
+    pids_limit: 512
+    mem_reservation: 256m
+    cpus: "1.0"
+
+networks:
+  sweb:
+    external: true

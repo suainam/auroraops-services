@@ -1,0 +1,46 @@
+---
+- name: Run Pi Terminal preflight
+  ansible.builtin.import_tasks: preflight.yml
+  when:
+    - pi_terminal_enabled | bool
+    - auroraops_roles['applications']['pi_terminal'] | default(false) | bool
+  tags: [pi_terminal_check, deploy, applications, pi_terminal, pi_terminal_preflight, phase5]
+
+- name: Deploy Pi Terminal
+  ansible.builtin.import_tasks: deploy.yml
+  when:
+    - not ansible_check_mode
+    - pi_terminal_enabled | bool
+    - auroraops_roles['applications']['pi_terminal'] | default(false) | bool
+  tags: [deploy, applications, pi_terminal, pi_terminal_deploy, phase5]
+
+- name: Inspect existing Pi Terminal container before disable
+  community.docker.docker_container_info:
+    name: "{{ pi_terminal_name }}"
+  register: pi_terminal_existing_container
+  failed_when: false
+  when:
+    - not ansible_check_mode
+    - not pi_terminal_enabled | bool
+    - auroraops_roles['applications']['pi_terminal'] | default(false) | bool
+  tags: [deploy, applications, pi_terminal, pi_terminal_stop, phase5]
+
+- name: Stop disabled Pi Terminal container
+  community.docker.docker_container:
+    name: "{{ pi_terminal_name }}"
+    state: stopped
+  when:
+    - not ansible_check_mode
+    - not pi_terminal_enabled | bool
+    - auroraops_roles['applications']['pi_terminal'] | default(false) | bool
+    - pi_terminal_existing_container.exists | default(false)
+    - pi_terminal_existing_container.container.State.Running | default(false)
+  tags: [deploy, applications, pi_terminal, pi_terminal_stop, phase5]
+
+- name: Report disabled Pi Terminal role
+  ansible.builtin.debug:
+    msg: "Pi Terminal deployment is disabled"
+  when: >-
+    not (pi_terminal_enabled | bool)
+    or not (auroraops_roles['applications']['pi_terminal'] | default(false) | bool)
+  tags: [pi_terminal_check, deploy, applications, pi_terminal, phase5]

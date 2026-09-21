@@ -1,0 +1,84 @@
+tools:
+  approvalMode: write
+  discoveryMode: "off"
+
+browser:
+  enabled: false
+
+debug:
+  enabled: false
+
+launch:
+  enabled: false
+
+eval:
+  py: false
+  js: true
+
+lsp:
+  enabled: true
+  lazy: true
+  diagnosticsOnWrite: true
+  diagnosticsOnEdit: false
+  formatOnWrite: false
+
+advisor:
+  enabled: false
+  subagents: false
+  syncBacklog: "off"
+
+memory:
+  backend: "off"
+
+autolearn:
+  enabled: false
+  autoContinue: false
+
+mcp:
+  enableProjectConfig: false
+  notifications: false
+
+task:
+  maxRecursionDepth: 1
+
+read:
+  summarize:
+    enabled: true
+    prose: false
+
+compaction:
+  enabled: true
+  strategy: snapcompact
+  midTurnEnabled: true
+  remoteEnabled: false
+  remoteStreamingV2Enabled: false
+  autoContinue: true
+
+terminal:
+  showImages: false
+
+images:
+  blockImages: true
+
+startup:
+  quiet: true
+
+tui:
+  hyperlinks: "always"
+
+skills:
+  enabled: true
+  enableSkillCommands: true
+  enablePiUser: false
+  enablePiProject: false
+  enableClaudeUser: false
+  enableClaudeProject: false
+  enableCodexUser: false
+  enableAgentsUser: true
+  enableAgentsProject: true
+
+disabledProviders:
+  - ollama
+  - llama.cpp
+  - lm-studio
+  - vllm

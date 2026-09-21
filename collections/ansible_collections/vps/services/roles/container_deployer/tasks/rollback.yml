@@ -1,0 +1,21 @@
+---
+- name: Stop and remove container
+  community.docker.docker_container:
+    name: "{{ container_deployer_name }}"
+    state: absent
+  when: not container_deployer_compose_enabled
+  tags: [rollback, services, container_deployer, phase5]
+
+- name: Stop and remove compose stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ container_deployer_base_path }}/{{ container_deployer_name }}"
+    state: absent
+  when: container_deployer_compose_enabled
+  tags: [rollback, services, container_deployer, phase5]
+
+- name: Remove compose file
+  ansible.builtin.file:
+    path: "{{ container_deployer_base_path }}/{{ container_deployer_name }}/docker-compose.yml"
+    state: absent
+  when: container_deployer_compose_enabled
+  tags: [rollback, services, container_deployer, phase5]

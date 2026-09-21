@@ -1,0 +1,175 @@
+---
+- name: Check zerotier baseline presence for rollback
+  tags: [rollback, system, zerotier, phase2]
+  become: true
+  ansible.builtin.stat:
+    path: "{{ zerotier_fact_path }}"
+  register: zerotier_fact_stat
+
+- name: Check zerotier CLI presence for rollback
+  tags: [rollback, system, zerotier, phase2]
+  become: true
+  ansible.builtin.stat:
+    path: "{{ zerotier_cli_path }}"
+  register: zerotier_cli_stat_rollback
+
+- name: Gather zerotier service facts for rollback
+  tags: [rollback, system, zerotier, phase2]
+  become: true
+  ansible.builtin.service_facts:
+
+- name: Check if UFW executable exists for rollback
+  tags: [rollback, system, zerotier, phase2]
+  become: true
+  ansible.builtin.stat:
+    path: /usr/sbin/ufw
+  register: zerotier_ufw_stat_rollback
+
+- name: No managed zerotier state to rollback
+  tags: [rollback, system, zerotier, phase2]
+  ansible.builtin.debug:
+    msg: "No zerotier baseline found, skipping rollback"
+  when:
+    - not zerotier_fact_stat.stat.exists
+    - not (zerotier_cli_stat_rollback.stat.exists | default(false) | bool)
+
+- name: Refuse zerotier rollback without baseline when package still exists
+  tags: [rollback, system, zerotier, phase2]
+  ansible.builtin.fail:
+    msg: "ZeroTier baseline is missing while managed package still exists"
+  when:
+    - not zerotier_fact_stat.stat.exists
+    - zerotier_cli_stat_rollback.stat.exists | default(false) | bool
+
+- name: Read zerotier baseline for rollback
+  tags: [rollback, system, zerotier, phase2]
+  become: true
+  ansible.builtin.slurp:
+    path: "{{ zerotier_fact_path }}"
+  register: zerotier_fact_raw
+  when: zerotier_fact_stat.stat.exists
+
+- name: Parse zerotier baseline for rollback
+  tags: [rollback, system, zerotier, phase2]
+  ansible.builtin.set_fact:
+    zerotier_baseline: "{{ zerotier_fact_raw.content | b64decode | from_json }}"
+  when: zerotier_fact_stat.stat.exists
+
+- name: Validate zerotier baseline for rollback
+  tags: [rollback, system, zerotier, phase2]
+  ansible.builtin.assert:
+    that:
+      - zerotier_baseline.auroraops_managed | default(false) | bool
+      - zerotier_baseline.version | default(0) | int >= 1
+      - zerotier_baseline.package_name == zerotier_package_name
+      - zerotier_baseline.service_name == zerotier_service_name
+      - zerotier_baseline.pre_deploy_package_installed is defined
+      - zerotier_baseline.pre_deploy_service_enabled is defined
+      - zerotier_baseline.pre_deploy_service_running is defined
+      - zerotier_baseline.pre_deploy_repo_exists is defined
+      - zerotier_baseline.pre_deploy_keyring_exists is defined
+      - zerotier_baseline.pre_deploy_moon_json_exists is defined
+      - zerotier_baseline.pre_deploy_moons_dir_exists is defined
+    fail_msg: "ZeroTier baseline content is invalid for rollback"
+  when: zerotier_fact_stat.stat.exists
+
+- name: Restore managed ZeroTier Moon state
+  tags: [rollback, system, zerotier, phase2]
+  ansible.builtin.import_tasks: moon_restore.yml
+  when:
+    - zerotier_fact_stat.stat.exists
+    - zerotier_manage_moons | bool
+
+- name: Stop zerotier service before package removal
+  tags: [rollback, system, zerotier, phase2]
+  become: true
+  ansible.builtin.service:
+    name: "{{ zerotier_service_name }}"
+    enabled: false
+    state: stopped
+  failed_when: false
+  when:
+    - zerotier_fact_stat.stat.exists
+    - not (zerotier_baseline.pre_deploy_package_installed | bool)
+
+- name: Restore zerotier service state when package existed before deploy
+  tags: [rollback, system, zerotier, phase2]
+  become: true
+  ansible.builtin.service:
+    name: "{{ zerotier_service_name }}"
+    enabled: "{{ zerotier_baseline.pre_deploy_service_enabled | bool }}"
+    state: "{{ 'started' if zerotier_baseline.pre_deploy_service_running | bool else 'stopped' }}"
+  when:
+    - zerotier_fact_stat.stat.exists
+    - zerotier_baseline.pre_deploy_package_installed | bool
+
+- name: Remove zerotier moon.json when absent before deploy
+  tags: [rollback, system, zerotier, phase2]
+  become: true
+  ansible.builtin.file:
+    path: "{{ zerotier_moon_json_path }}"
+    state: absent
+  when:
+    - zerotier_fact_stat.stat.exists
+    - not (zerotier_baseline.pre_deploy_moon_json_exists | bool)
+
+- name: Remove zerotier moons.d when absent before deploy
+  tags: [rollback, system, zerotier, phase2]
+  become: true
+  ansible.builtin.file:
+    path: "{{ zerotier_moons_dir_path }}"
+    state: absent
+  when:
+    - zerotier_fact_stat.stat.exists
+    - not (zerotier_baseline.pre_deploy_moons_dir_exists | bool)
+
+- name: Remove zerotier package when absent before deploy
+  tags: [rollback, system, zerotier, phase2]
+  become: true
+  ansible.builtin.package:
+    name: "{{ zerotier_package_name }}"
+    state: absent
+  when:
+    - zerotier_fact_stat.stat.exists
+    - not (zerotier_baseline.pre_deploy_package_installed | bool)
+
+- name: Remove zerotier repo when absent before deploy
+  tags: [rollback, system, zerotier, phase2]
+  become: true
+  ansible.builtin.file:
+    path: "{{ zerotier_repo_path }}"
+    state: absent
+  when:
+    - zerotier_fact_stat.stat.exists
+    - not (zerotier_baseline.pre_deploy_repo_exists | bool)
+
+- name: Remove zerotier keyring when absent before deploy
+  tags: [rollback, system, zerotier, phase2]
+  become: true
+  ansible.builtin.file:
+    path: "{{ zerotier_keyring_path }}"
+    state: absent
+  when:
+    - zerotier_fact_stat.stat.exists
+    - not (zerotier_baseline.pre_deploy_keyring_exists | bool)
+
+- name: Remove ZeroTier port allowance from UFW on rollback
+  become: true
+  community.general.ufw:
+    rule: allow
+    port: "{{ zerotier_port | string }}"
+    proto: udp
+    delete: true
+  when:
+    - zerotier_fact_stat.stat.exists
+    - not (zerotier_baseline.pre_deploy_package_installed | bool)
+    - zerotier_ufw_stat_rollback.stat.exists | default(false) | bool
+  tags: [rollback, system, zerotier, phase2]
+
+- name: Remove zerotier baseline after successful rollback
+  tags: [rollback, system, zerotier, phase2]
+  become: true
+  ansible.builtin.file:
+    path: "{{ zerotier_fact_path }}"
+    state: absent
+  when: zerotier_fact_stat.stat.exists

@@ -1,0 +1,25 @@
+user {{ nginx_user }};
+worker_processes auto;
+pid {{ nginx_pid_path }};
+{% if nginx_module_include | default('') | length > 0 %}
+include {{ nginx_module_include }};
+{% endif %}
+
+events {
+    worker_connections {{ 1024 * (performance.hardware.cpu_cores | default(2) | int) }};
+    multi_accept on;
+}
+
+http {
+    ##
+    # MIME Types
+    ##
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    ##
+    # Virtual Host Configs
+    ##
+    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
+}

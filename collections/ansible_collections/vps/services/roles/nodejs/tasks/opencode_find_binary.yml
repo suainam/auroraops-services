@@ -1,0 +1,68 @@
+---
+# =============================================================================
+# Find OpenCode Binary Location
+# =============================================================================
+
+- name: "[opencode-debug] Find opencode binary in npm global"
+  ansible.builtin.command: npm root -g
+  register: nodejs_npm_global_root
+  changed_when: false
+  tags: [deploy, services, nodejs, opencode_find_binary, phase3]
+
+- name: "[opencode-debug] Display npm global root"
+  ansible.builtin.debug:
+    msg: "npm global root: {{ nodejs_npm_global_root.stdout }}"
+  tags: [deploy, services, nodejs, opencode_find_binary, phase3]
+
+- name: "[opencode-debug] Find opencode executable"
+  ansible.builtin.command: which opencode
+  register: nodejs_opencode_which
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, nodejs, opencode_find_binary, phase3]
+
+- name: "[opencode-debug] Display which result"
+  ansible.builtin.debug:
+    msg: "which opencode: {{ nodejs_opencode_which.stdout if nodejs_opencode_which.rc == 0 else 'NOT FOUND' }}"
+  tags: [deploy, services, nodejs, opencode_find_binary, phase3]
+
+- name: "[opencode-debug] Get npm prefix (global install location)"
+  ansible.builtin.command: npm prefix -g
+  register: nodejs_npm_global_prefix
+  changed_when: false
+  tags: [deploy, services, nodejs, opencode_find_binary, phase3]
+
+- name: "[opencode-debug] Display npm global prefix"
+  ansible.builtin.debug:
+    msg: "npm global prefix: {{ nodejs_npm_global_prefix.stdout }}"
+  tags: [deploy, services, nodejs, opencode_find_binary, phase3]
+
+- name: "[opencode-debug] Check npm global bin directory"
+  ansible.builtin.stat:
+    path: "{{ nodejs_npm_global_prefix.stdout }}/bin"
+  register: nodejs_npm_bin_stat
+  tags: [deploy, services, nodejs, opencode_find_binary, phase3]
+
+- name: "[opencode-debug] List files in npm global bin"
+  ansible.builtin.command: ls -la {{ nodejs_npm_global_prefix.stdout }}/bin
+  register: nodejs_npm_bin_files
+  changed_when: false
+  when: nodejs_npm_bin_stat.stat.exists
+  tags: [deploy, services, nodejs, opencode_find_binary, phase3]
+
+- name: "[opencode-debug] Display bin files"
+  ansible.builtin.debug:
+    msg: "{{ nodejs_npm_bin_files.stdout_lines if nodejs_npm_bin_stat.stat.exists else 'Bin directory not found' }}"
+  tags: [deploy, services, nodejs, opencode_find_binary, phase3]
+
+- name: "[opencode-debug] Check if opencode-ai package is installed"
+  ansible.builtin.command: npm list -g opencode-ai --depth=0
+  register: nodejs_opencode_package_check
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, nodejs, opencode_find_binary, phase3]
+
+- name: "[opencode-debug] Display package check"
+  ansible.builtin.debug:
+    msg: "{{ nodejs_opencode_package_check.stdout_lines }}"
+  tags: [deploy, services, nodejs, opencode_find_binary, phase3]

@@ -1,0 +1,31 @@
+{% set all_sub_nodes = (docker_apps_singbox_processed_nodes | default(singbox_nodes)) + (singbox_extra_nodes | default([])) %}
+{% set sub_scheme = singbox_subscription_scheme | default('https') %}
+{% set sub_port = singbox_subscription_port | default('') | string %}
+{% set sub_host = singbox_domain + (':' + sub_port if sub_port | length > 0 else '') %}
+{% set sub_base_url = sub_scheme + "://" + sub_host + "/" + singbox_sub_token %}
+⚡️ 自动延迟 (Sing-box) | {{ sub_base_url }}.json
+🛡️ 自动稳定 (Clash) | {{ sub_base_url }}.yaml
+{% for node in all_sub_nodes %}
+{%- set has_flag = node.name is regex('^[^\\x00-\\x7f]') -%}
+{%- set current_flag = docker_apps_country_flags[docker_apps_singbox_host_country | default('UNKNOWN')] | default('🌍') -%}
+{%- set display_name = node.name if has_flag else (current_flag + ' ' + node.name) -%}
+{%- set is_reality = node.reality | default(true) | bool -%}
+{%- set use_port = node.port if is_reality else 443 -%}
+{%- set _pbk = node.relay_public_key | default(docker_apps_singbox_reality_public_key) -%}
+{%- set _sid = node.relay_short_id | default((docker_apps_singbox_short_ids_gen.stdout_lines | default(['']))[0] | default('')) -%}
+{% if node.type == 'vless' -%}
+{% if node.transport is defined and node.transport == 'grpc' -%}
+vless://{{ node.uuid }}@{{ node.server | default(singbox_domain) }}:{{ use_port }}?encryption=none&security={{ 'reality' if is_reality else 'tls' }}&sni={{ node.sni }}&alpn=h2&fp=chrome{% if is_reality %}&pbk={{ _pbk }}&sid={{ _sid }}{% endif %}&type=grpc&serviceName={{ node.service_name }}&mode=gun#{{ display_name | urlencode }}
+{% else -%}
+vless://{{ node.uuid }}@{{ node.server | default(singbox_domain) }}:{{ use_port }}?encryption=none{% if is_reality %}&flow=xtls-rprx-vision{% endif %}&security={{ 'reality' if is_reality else 'tls' }}&sni={{ node.sni }}&fp=chrome{% if is_reality %}&pbk={{ _pbk }}&sid={{ _sid }}{% endif %}&type=tcp&headerType=none#{{ display_name | urlencode }}
+{% endif -%}
+{% elif node.type == 'hysteria2' -%}
+hysteria2://{{ node.password | urlencode }}@{{ node.server | default(singbox_domain) }}:{{ node.port }}?insecure={% if node.insecure | default(false) %}1{% else %}0{% endif %}{% if node.sni is defined %}&sni={{ node.sni }}{% endif %}{% if node.alpn is defined %}&alpn={{ node.alpn }}{% else %}&alpn=h3{% endif %}{% if node.obfs is defined %}&obfs={{ node.obfs }}&obfs-password={{ node.obfs_password | urlencode }}{% endif %}#{{ display_name | urlencode }}
+{% elif node.type == 'trojan' -%}
+trojan://{{ node.password | urlencode }}@{{ node.server | default(singbox_domain) }}:443?security=tls{% if node.sni is defined %}&sni={{ node.sni }}{% endif %}&type={{ node.transport | default('tcp') }}{% if node.path is defined %}&path={{ node.path | urlencode }}{% endif %}{% if node.host is defined %}&host={{ node.host }}{% endif %}#{{ display_name | urlencode }}
+{% elif node.type == 'anytls' -%}
+anytls://{{ node.password | urlencode }}@{{ node.server | default(singbox_domain) }}:{{ node.port }}?security=tls{% if node.sni is defined %}&sni={{ node.sni }}{% endif %}#{{ display_name | urlencode }}
+{% elif node.type == 'tuic' -%}
+tuic://{{ node.uuid }}:{{ node.password | urlencode }}@{{ node.server | default(singbox_domain) }}:{{ node.port }}?congestion_control=bbr&udp_relay_mode=native&zero_rtt_handshake=false{% if node.sni is defined %}&sni={{ node.sni }}{% endif %}#{{ display_name | urlencode }}
+{% endif %}
+{% endfor %}

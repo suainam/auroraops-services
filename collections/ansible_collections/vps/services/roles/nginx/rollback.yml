@@ -1,0 +1,23 @@
+---
+- name: 回滚 Nginx 配置
+  become: true
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: restart nginx
+
+- name: 恢复 Nginx 主配置文件备份 (如果存在)
+  ansible.builtin.copy:
+    src: /etc/nginx/nginx.conf.bak
+    dest: /etc/nginx/nginx.conf
+    remote_src: true
+    force: true
+  ignore_errors: true
+  notify: restart nginx
+
+- name: 卸载 Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: absent
+    purge: true
+  notify: restart nginx

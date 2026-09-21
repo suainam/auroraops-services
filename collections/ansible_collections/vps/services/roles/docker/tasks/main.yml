@@ -1,0 +1,50 @@
+---
+- name: Execute Docker retirement
+  ansible.builtin.import_tasks: retire.yml
+  when: docker_state | default('present') == 'absent'
+  tags:
+    - deploy
+    - services
+    - docker
+    - docker_retire
+    - phase3
+
+- name: Install Docker
+  ansible.builtin.import_tasks: install.yml
+  when: docker_state | default('present') == 'present'
+  tags:
+    - deploy
+    - services
+    - docker
+    - docker_install
+    - phase3
+
+- name: Configure Docker Daemon and Users
+  ansible.builtin.import_tasks: configure.yml
+  when: docker_state | default('present') == 'present'
+  tags:
+    - deploy
+    - services
+    - docker
+    - docker_config
+    - phase3
+
+- name: Configure Docker daemon proxy for NAS
+  ansible.builtin.import_tasks: configure_proxy.yml
+  when: docker_state | default('present') == 'present'
+  tags:
+    - deploy
+    - services
+    - docker
+    - docker_config
+    - phase3
+
+- name: Pre-pull Docker Images (Async)
+  ansible.builtin.import_tasks: prepull.yml
+  when: docker_state | default('present') == 'present'
+  tags:
+    - deploy
+    - services
+    - docker
+    - docker_prepull
+    - phase3

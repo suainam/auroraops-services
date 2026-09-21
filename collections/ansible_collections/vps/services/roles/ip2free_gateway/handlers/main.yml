@@ -1,0 +1,14 @@
+---
+- name: Restart ip2free-agent timer
+  ansible.builtin.systemd:
+    name: ip2free-agent.timer
+    state: restarted
+    daemon_reload: true
+  listen: "restart ip2free timers"
+
+- name: Restart ip2free-health timer
+  ansible.builtin.systemd:
+    name: ip2free-health.timer
+    state: restarted
+    daemon_reload: true
+  listen: "restart ip2free timers"

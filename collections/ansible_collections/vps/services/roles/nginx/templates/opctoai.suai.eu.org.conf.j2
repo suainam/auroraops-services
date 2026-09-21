@@ -1,0 +1,82 @@
+{% set ssl_cert_name = site_config.ssl_cert_name | default(nginx_sites_defaults.ssl_cert_name | default('suai.eu.org'), true) %}
+{% set backend_port = site_config.backend_port | default(app_port_opcotoai_smtp | default(30016), true) %}
+server {
+    listen 80;
+    server_name {{ item }};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name {{ item }};
+
+    ssl_certificate       /etc/letsencrypt/live/{{ ssl_cert_name }}/fullchain.pem;
+    ssl_certificate_key   /etc/letsencrypt/live/{{ ssl_cert_name }}/privkey.pem;
+
+    include /etc/nginx/conf.d/common_ssl.conf;
+    include /etc/nginx/conf.d/common_headers.conf;
+    include /etc/nginx/conf.d/common_performance.conf;
+
+    include /etc/nginx/conf.d/cfip.conf;
+    deny all;
+
+    location / {
+        {% if vault_opcotoai_web_user is defined and vault_opcotoai_web_pwd is defined and vault_opcotoai_web_user | length > 0 %}
+        auth_basic "Restricted Area";
+        auth_basic_user_file /etc/nginx/.htpasswd_opctoai;
+        {% endif %}
+        proxy_pass http://127.0.0.1:{{ backend_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Accel-Buffering no;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_connect_timeout 30s;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+
+{% if grok_register_nginx_route_enabled | default(false) | bool %}
+    # /grok/ — authenticated noVNC GUI entry (Issue #166)
+    # Unauthenticated requests are rejected by auth_basic before proxying.
+    # No bare VNC/noVNC port is exposed on a public interface.
+    # Redirect base path to the noVNC index to avoid websockify directory listing
+    location = /grok {
+        return 301 /grok/vnc.html;
+    }
+    location = /grok/ {
+        return 301 /grok/vnc.html;
+    }
+
+    location /grok/ {
+        {% if vault_opcotoai_web_user is defined and vault_opcotoai_web_pwd is defined and vault_opcotoai_web_user | length > 0 %}
+        auth_basic "Restricted Area";
+        auth_basic_user_file /etc/nginx/.htpasswd_opctoai;
+        {% else %}
+        # SECURITY: auth credentials not configured — /grok/ route is blocked.
+        return 403;
+        {% endif %}
+        proxy_pass http://127.0.0.1:{{ grok_register_novnc_port | default(app_port_opcotoai_grok | default(30017)) }}/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Rewrite noVNC base-path to strip /grok/ prefix when proxying to the container.
+        proxy_set_header X-Accel-Buffering no;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_connect_timeout 30s;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+{% endif %}
+}

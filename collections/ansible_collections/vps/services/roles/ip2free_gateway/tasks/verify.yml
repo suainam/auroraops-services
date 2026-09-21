@@ -1,0 +1,96 @@
+---
+- name: 验证脚本文件存在
+  ansible.builtin.stat:
+    path: "{{ ip2free_gateway_ip2free_dir }}/{{ item }}"
+  loop:
+    - ip2free_agent.py
+    - health_check.py
+    - update_outbounds.py
+  register: ip2free_gateway__ip2free_scripts
+  failed_when: false
+  tags: [verify, services, ip2free_gateway, phase5]
+
+- name: 如果脚本不存在则报错
+  ansible.builtin.fail:
+    msg: "Missing script: {{ ip2free_gateway_ip2free_dir }}/{{ item.item }}"
+  loop: "{{ ip2free_gateway__ip2free_scripts.results }}"
+  when: not item.stat.exists
+  tags: [verify, services, ip2free_gateway, phase5]
+
+- name: 验证 config.json 存在
+  ansible.builtin.stat:
+    path: "{{ ip2free_gateway_ip2free_config_file }}"
+  register: ip2free_gateway__ip2free_cfg
+  tags: [verify, services, ip2free_gateway, phase5]
+
+- name: 如果 config.json 不存在则报错
+  ansible.builtin.fail:
+    msg: "{{ ip2free_gateway_ip2free_config_file }} not found"
+  when: not ip2free_gateway__ip2free_cfg.stat.exists
+  tags: [verify, services, ip2free_gateway, phase5]
+
+- name: Gather ip2free systemd timer facts
+  ansible.builtin.service_facts:
+  register: ip2free_gateway__service_facts
+  tags: [verify, services, ip2free_gateway, phase5]
+
+- name: 验证 systemd timer 已启用
+  ansible.builtin.assert:
+    that:
+      - item in ip2free_gateway__service_facts.ansible_facts.services
+      - ip2free_gateway__service_facts.ansible_facts.services[item].status == 'enabled'
+      - ip2free_gateway__service_facts.ansible_facts.services[item].state == 'running'
+    fail_msg: "{{ item }} 未启用或未运行"
+  loop:
+    - ip2free-agent.timer
+    - ip2free-health.timer
+  tags: [verify, services, ip2free_gateway, phase5]
+
+- name: Verify agent oneshot retry ownership and last result
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - ip2free-agent.service
+      - --property=Type
+      - --property=Restart
+      - --property=Result
+  register: ip2free_gateway__ip2free_agent_properties
+  changed_when: false
+  failed_when: >-
+    ('Type=oneshot' not in ip2free_gateway__ip2free_agent_properties.stdout_lines)
+    or ('Restart=no' not in ip2free_gateway__ip2free_agent_properties.stdout_lines)
+    or (not (ip2free_gateway__ip2free_agent_properties.stdout_lines | select('in', ['Result=success', 'Result=']) | list))
+  tags: [verify, services, ip2free_gateway, phase5]
+
+- name: Check for a published last-good nodes file
+  ansible.builtin.stat:
+    path: "{{ ip2free_gateway_ip2free_dir }}/nodes.json"
+  register: ip2free_gateway__ip2free_nodes
+  failed_when: not ip2free_gateway__ip2free_nodes.stat.exists
+  tags: [verify, services, ip2free_gateway, phase5]
+
+- name: Validate last-good nodes JSON schema when present
+  ansible.builtin.command:
+    argv:
+      - "{{ ip2free_gateway_ip2free_python }}"
+      - -c
+      - >-
+        import json, pathlib;
+        p=pathlib.Path({{ (ip2free_gateway_ip2free_dir ~ '/nodes.json') | to_json }});
+        data=json.loads(p.read_text());
+        assert isinstance(data, list);
+        assert all(isinstance(n, dict) and isinstance(n.get('server'), str) and n['server']
+        and isinstance(n.get('port'), int) and 1 <= n['port'] <= 65535 for n in data)
+  changed_when: false
+  tags: [verify, services, ip2free_gateway, phase5]
+
+- name: 输出定时器状态
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        ['ip2free-agent.timer', 'ip2free-health.timer']
+        | map('extract', ip2free_gateway__service_facts.ansible_facts.services)
+        | list
+      }}
+  tags: [verify, services, ip2free_gateway, phase5]

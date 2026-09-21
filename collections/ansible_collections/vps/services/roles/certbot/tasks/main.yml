@@ -1,0 +1,39 @@
+---
+# 启用控制变量: auroraops_roles['services']['certbot'] (定义在 group_vars/all/roles.yml 和 host_vars/)
+# 默认: true (如需禁用，在 host_vars 中设置为 false)
+
+- name: 角色启用检查
+  ansible.builtin.debug:
+    msg: "Role certbot is disabled, skipping"
+  when: not (auroraops_roles['services']['certbot'] | default(true) | bool)
+  tags: [deploy, services, certbot, phase4]
+
+- name: 角色已启用，执行 Certbot 任务
+  ansible.builtin.debug:
+    msg: "Executing certbot role tasks"
+  when: auroraops_roles['services']['certbot'] | default(true) | bool
+  tags: [deploy, services, certbot, phase4]
+
+- name: Set Certbot executed fact
+  ansible.builtin.set_fact:
+    certbot_executed: true
+  tags: [deploy, services, certbot, phase4]
+
+- name: Install Certbot and Plugins
+  ansible.builtin.import_tasks: install.yml
+  when: auroraops_roles['services']['certbot'] | default(true) | bool
+  tags:
+    - deploy
+    - services
+    - certbot
+    - certbot_install
+    - phase4
+- name: Configure Certificates
+  ansible.builtin.import_tasks: certs.yml
+  when: auroraops_roles['services']['certbot'] | default(true) | bool
+  tags:
+    - deploy
+    - services
+    - certbot
+    - certbot_certs
+    - phase4

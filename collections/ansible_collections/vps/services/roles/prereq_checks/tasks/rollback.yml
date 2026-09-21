@@ -1,0 +1,12 @@
+---
+# prereq_checks does not manage persistent state, so rollback is a no-op.
+
+- name: "[prereq] Rollback is a no-op for prerequisite checks"
+  ansible.builtin.debug:
+    msg: "prereq_checks only validates dependencies; no rollback actions are required."
+  changed_when: false
+  tags:
+    - rollback
+    - services
+    - prereq_checks
+    - phase3

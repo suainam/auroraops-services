@@ -1,0 +1,52 @@
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ singbox_optimizer_subdomain }};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name {{ singbox_optimizer_subdomain }};
+
+    ssl_certificate /etc/letsencrypt/live/{{ singbox_certificate_domain }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ singbox_certificate_domain }}/privkey.pem;
+
+    # Cloudflare gRPC specific SSL settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_ciphers TLS13-AES-256-GCM-SHA384:TLS13-CHACHA20-POLY1305-SHA256:TLS13-AES-128-GCM-SHA256:EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+ECDSA+AES128:EECDH+aRSA+AES128:RSA+AES128:EECDH+ECDSA+AES256:EECDH+aRSA+AES256:RSA+AES256:!MD5;
+
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:50m;
+    ssl_session_tickets off;
+
+    # OCSP Stapling
+    ssl_stapling on;
+    ssl_stapling_verify on;
+    ssl_trusted_certificate /etc/letsencrypt/live/{{ singbox_certificate_domain }}/chain.pem;
+    resolver 8.8.8.8 8.8.4.4 valid=300s;
+    resolver_timeout 5s;
+
+    include /etc/nginx/conf.d/common_headers.conf;
+
+    # gRPC Proxy for Sing-box (Cloudflare Optimized)
+    location / {
+        client_max_body_size 0;
+        grpc_read_timeout 1h;
+        grpc_send_timeout 1h;
+        grpc_socket_keepalive on;
+        
+        # 允许所有 gRPC 请求，无论路径是什么
+        grpc_set_header Host $host;
+        grpc_set_header X-Real-IP $remote_addr;
+        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        
+        # 关键：确保 gRPC 传递时不带多余的 buffer 处理
+        grpc_buffer_size 128k;
+        
+        grpc_pass grpc://127.0.0.1:{{ app_port_singbox_grpc_cf }};
+    }
+}

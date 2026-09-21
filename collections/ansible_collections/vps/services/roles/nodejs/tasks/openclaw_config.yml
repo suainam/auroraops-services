@@ -1,0 +1,119 @@
+---
+# =============================================================================
+# OpenClaw Configuration Tasks
+# =============================================================================
+
+- name: OpenClaw Configuration
+  tags: [deploy, services, nodejs, openclaw, phase3]
+  block:
+    - name: Ensure OpenClaw configuration directory exists
+      ansible.builtin.file:
+        path: "{{ nodejs_openclaw_config_dir }}"
+        state: directory
+        owner: "{{ nodejs_openclaw_user }}"
+        group: "{{ nodejs_openclaw_user }}"
+        mode: "0700"
+      tags: [deploy, services, nodejs, openclaw, phase3]
+
+    - name: Check if openclaw.json exists on remote
+      ansible.builtin.stat:
+        path: "{{ nodejs_openclaw_config_dir }}/openclaw.json"
+      register: nodejs_openclaw_json_stat
+      tags: [deploy, services, nodejs, openclaw, phase3]
+
+    - name: Backup existing openclaw.json
+      ansible.builtin.copy:
+        src: "{{ nodejs_openclaw_config_dir }}/openclaw.json"
+        dest: "{{ nodejs_openclaw_config_dir }}/openclaw.json.bak.{{ '%Y%m%d%H%M%S' | strftime }}"
+        remote_src: true
+        mode: preserve
+      when: not ansible_check_mode and nodejs_openclaw_json_stat.stat.exists
+      tags: [deploy, services, nodejs, openclaw, phase3]
+
+    - name: Deploy OpenClaw main configuration
+      no_log: true
+      diff: false
+      ansible.builtin.template:
+        src: openclaw_config.json.j2
+        dest: "{{ nodejs_openclaw_config_dir }}/openclaw.json"
+        owner: "{{ nodejs_openclaw_user }}"
+        group: "{{ nodejs_openclaw_user }}"
+        mode: "0600"
+      tags: [deploy, services, nodejs, openclaw, phase3]
+
+    - name: Ensure OpenClaw main agent directory exists
+      ansible.builtin.file:
+        path: "{{ nodejs_openclaw_config_dir }}/agents/main/agent"
+        state: directory
+        owner: "{{ nodejs_openclaw_user }}"
+        group: "{{ nodejs_openclaw_user }}"
+        mode: "0700"
+      tags: [deploy, services, nodejs, openclaw, phase3]
+
+    - name: Ensure OpenClaw ellen sub-agent directory exists
+      ansible.builtin.file:
+        path: "{{ nodejs_openclaw_config_dir }}/agents/ellen/agent"
+        state: directory
+        owner: "{{ nodejs_openclaw_user }}"
+        group: "{{ nodejs_openclaw_user }}"
+        mode: "0700"
+      tags: [deploy, services, nodejs, openclaw, phase3]
+
+    - name: Deploy OpenClaw main agent soul
+      ansible.builtin.template:
+        src: openclaw_soul_main.md.j2
+        dest: "{{ nodejs_openclaw_config_dir }}/agents/main/agent/soul.md"
+        owner: "{{ nodejs_openclaw_user }}"
+        group: "{{ nodejs_openclaw_user }}"
+        mode: "0600"
+      tags: [deploy, services, nodejs, openclaw, phase3]
+
+    - name: Deploy OpenClaw ellen sub-agent soul
+      ansible.builtin.template:
+        src: openclaw_soul_ellen.md.j2
+        dest: "{{ nodejs_openclaw_config_dir }}/agents/ellen/agent/soul.md"
+        owner: "{{ nodejs_openclaw_user }}"
+        group: "{{ nodejs_openclaw_user }}"
+        mode: "0600"
+      tags: [deploy, services, nodejs, openclaw, phase3]
+
+    - name: Deploy OpenClaw auth profiles
+      ansible.builtin.template:
+        src: openclaw_auth_profiles.json.j2
+        dest: "{{ nodejs_openclaw_config_dir }}/agents/main/agent/auth-profiles.json"
+        owner: "{{ nodejs_openclaw_user }}"
+        group: "{{ nodejs_openclaw_user }}"
+        mode: "0600"
+      tags: [deploy, services, nodejs, openclaw, phase3]
+
+    - name: Ensure credentials directory exists
+      ansible.builtin.file:
+        path: "{{ nodejs_openclaw_config_dir }}/credentials"
+        state: directory
+        owner: "{{ nodejs_openclaw_user }}"
+        group: "{{ nodejs_openclaw_user }}"
+        mode: "0700"
+      tags: [deploy, services, nodejs, openclaw, phase3]
+
+    - name: Deploy Telegram allowlist
+      ansible.builtin.copy:
+        content: "{{ lookup('template', 'openclaw_telegram_allowlist.json.j2') }}"
+        dest: "{{ nodejs_openclaw_config_dir }}/credentials/telegram-allowFrom.json"
+        owner: "{{ nodejs_openclaw_user }}"
+        group: "{{ nodejs_openclaw_user }}"
+        mode: "0600"
+      when: nodejs_openclaw_telegram_enabled | bool
+      tags: [deploy, services, nodejs, openclaw, phase3]
+
+    - name: Check if openclaw gateway is running
+      ansible.builtin.command: openclaw gateway status
+      register: nodejs_openclaw_gateway_status
+      ignore_errors: true
+      changed_when: false
+      tags: [deploy, services, nodejs, openclaw, phase3]
+
+    - name: Display gateway status
+      ansible.builtin.debug:
+        var: nodejs_openclaw_gateway_status.stdout_lines
+      when: nodejs_openclaw_gateway_status is defined and not nodejs_openclaw_gateway_status.failed
+      tags: [deploy, services, nodejs, openclaw, phase3]

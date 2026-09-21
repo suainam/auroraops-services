@@ -1,0 +1,46 @@
+---
+# EasyTier 验证任务
+
+- name: "[EasyTier] 检查容器是否运行"
+  community.docker.docker_container_info:
+    name: easytier
+  register: easytier_container_check
+  tags: [verify, services, easytier, phase3]
+
+- name: "[EasyTier] 断言容器运行状态"
+  ansible.builtin.assert:
+    that:
+      - easytier_container_check.exists
+      - easytier_container_check.container.State.Running
+    fail_msg: "EasyTier 容器未运行"
+    success_msg: "EasyTier 容器运行正常"
+  tags: [verify, services, easytier, phase3]
+
+- name: "[EasyTier] 检查配置是否正确挂载"
+  ansible.builtin.command: >
+    docker exec easytier cat /config/easytier.toml
+  register: easytier_config_check
+  changed_when: false
+  failed_when: easytier_config_check.rc != 0
+  tags: [verify, services, easytier, phase3]
+
+- name: "[EasyTier] 验证网络名称"
+  ansible.builtin.assert:
+    that:
+      - "easytier_network_name in easytier_config_check.stdout"
+    fail_msg: "配置文件中网络名称不匹配"
+    success_msg: "配置文件验证通过"
+  tags: [verify, services, easytier, phase3]
+
+- name: "[EasyTier] 检查进程状态"
+  ansible.builtin.command: >
+    docker exec easytier easytier-cli node
+  register: easytier_node_info
+  changed_when: false
+  failed_when: easytier_node_info.rc != 0
+  tags: [verify, services, easytier, phase3]
+
+- name: "[EasyTier] 显示节点信息"
+  ansible.builtin.debug:
+    var: easytier_node_info.stdout_lines
+  tags: [verify, services, easytier, phase3]

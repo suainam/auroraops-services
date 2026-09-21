@@ -1,0 +1,35 @@
+---
+# GCLI2API - 使用 container_deployer Meta 角色部署
+- name: Deploy gcli2api
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+  vars:
+    cdp_name: "gcli2api"
+    cdp_image: "{{ gcli2api_image }}"
+    cdp_pull: false
+    container_deployer_cdp_pull: false
+    cdp_dirs: ["creds"]
+    cdp_dir_owner: "{{ docker_apps_docker_user_uid }}"
+    cdp_dir_group: "{{ docker_apps_docker_user_gid }}"
+    cdp_dir_mode: "0777"
+    cdp_memory: "192m"
+    cdp_cpus: "0.5"
+    cdp_memory_reservation: "128m"
+    cdp_oom_score_adj: "-300"
+    cdp_init_enabled: true
+    cdp_init_dirs: ["creds"]
+    cdp_init_container_path: "/app"
+    cdp_networks: [{name: "sweb"}]
+    cdp_ports:
+      - "127.0.0.1:{{ docker_apps_app_port_gcli2api_api }}:7861"
+      - "127.0.0.1:{{ docker_apps_app_port_gcli2api_web }}:8080"
+    cdp_volumes:
+      - "/opt/dockers/gcli2api/creds:/app/creds"
+    cdp_user: "0:0"
+    cdp_working_dir: "/app"
+    cdp_command: "python web.py"
+    cdp_env:
+      TZ: "Asia/Shanghai"
+      PASSWORD: "{{ gcli2api_password | default('cn@h!w%8V5si*3D2') }}"
+      LOG_LEVEL: "warning"
+  tags: [deploy, services, docker_apps, gcli2api, phase5]

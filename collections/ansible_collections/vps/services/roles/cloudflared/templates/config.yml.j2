@@ -1,0 +1,16 @@
+tunnel: {{ cloudflared_tunnel_id | to_json }}
+credentials-file: {{ cloudflared_credentials_path | to_json }}
+metrics: {{ cloudflared_metrics_address | to_json }}
+ingress:
+{% if cloudflared_custom_ingresses | default([]) | length > 0 %}
+{% for ing in cloudflared_custom_ingresses %}
+  - hostname: {{ ing.hostname | to_json }}
+    service: {{ ing.service | to_json }}
+{% endfor %}
+{% else %}
+  - hostname: {{ cloudflared_drill_hostname | to_json }}
+    service: {{ cloudflared_origin_url | to_json }}
+  - hostname: {{ cloudflared_production_hostname | to_json }}
+    service: {{ cloudflared_origin_url | to_json }}
+{% endif %}
+  - service: http_status:404

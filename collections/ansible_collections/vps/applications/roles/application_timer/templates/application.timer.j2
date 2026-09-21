@@ -1,0 +1,30 @@
+[Unit]
+Description={{ application_timer_description }}
+
+[Timer]
+{% if application_timer_app_timer_on_calendar is string and application_timer_app_timer_on_calendar %}
+Unit={{ application_timer_name }}.service
+OnCalendar={{ application_timer_app_timer_on_calendar }}
+{% else %}
+{% for calendar in application_timer_app_timer_on_calendar %}
+{% if loop.first %}
+Unit={{ application_timer_name }}.service
+OnCalendar={{ calendar }}
+{% else %}
+OnCalendar={{ calendar }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if application_timer_app_timer_on_boot_sec | default('') %}
+OnBootSec={{ application_timer_app_timer_on_boot_sec }}
+{% endif %}
+{% if application_timer_accuracy %}
+AccuracySec={{ application_timer_accuracy }}
+{% endif %}
+Persistent={{ application_timer_persistent | bool }}
+{% if application_timer_randomized_delay %}
+RandomizedDelaySec={{ application_timer_randomized_delay }}
+{% endif %}
+
+[Install]
+WantedBy=timers.target

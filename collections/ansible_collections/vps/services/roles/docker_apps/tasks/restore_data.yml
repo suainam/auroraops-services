@@ -1,0 +1,22 @@
+---
+# === 0. 数据自动恢复与同步 (Deprecated) ===
+# 注意: 旧的基于 tar 的自动恢复流程已废弃
+# 请使用新的 Rustic 恢复流程: make restore-docker-apps
+
+- name: "[Legacy] Check for old backup configuration"
+  ansible.builtin.debug:
+    msg: |
+      警告: 检测到旧的自动恢复任务 (restore_data.yml).
+      该机制已废弃，请使用新的 Rustic 架构进行数据恢复:
+
+      1. 恢复所有 Docker 应用:
+         make restore-docker-apps
+
+      2. 恢复单个应用 (如 sillytavern):
+         make restore-app-sillytavern
+
+      3. 恢复数据库:
+         make restore-db
+
+      此任务将被跳过。
+  tags: [deploy, services, docker_apps, init_data, phase5]

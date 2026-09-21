@@ -1,0 +1,201 @@
+---
+- name: Resolve cloudflared verification state
+  ansible.builtin.set_fact:
+    cloudflared_role_enabled: >-
+      {{ cloudflared_enabled | bool and
+         auroraops_roles['services']['cloudflared'] | default(false) | bool }}
+  tags: [verify, services, cloudflared, phase4]
+
+- name: Gather cloudflared service facts
+  become: true
+  ansible.builtin.service_facts:
+  when: cloudflared_role_enabled
+  tags: [verify, services, cloudflared, phase4]
+
+- name: Verify cloudflared package version
+  become: true
+  ansible.builtin.command: "{{ cloudflared_binary_path }} --version"
+  register: cloudflared_version_result
+  changed_when: false
+  failed_when: cloudflared_version not in cloudflared_version_result.stdout
+  when: cloudflared_role_enabled
+  tags: [verify, services, cloudflared, cloudflared_install, phase4]
+
+- name: Assert cloudflared service is enabled and running
+  become: true
+  ansible.builtin.service:
+    name: "{{ cloudflared_service_name }}"
+    state: started
+  check_mode: true
+  register: cloudflared_service_check
+  failed_when: cloudflared_service_check.changed
+  when: cloudflared_role_enabled
+  tags: [verify, services, cloudflared, phase4]
+
+- name: Verify cloudflared connector readiness
+  ansible.builtin.uri:
+    url: "{{ cloudflared_metrics_url }}"
+    method: GET
+    status_code: 200
+    return_content: true
+  register: cloudflared_ready
+  when: cloudflared_role_enabled
+  tags: [verify, services, cloudflared, cloudflared_connector, phase4]
+
+- name: Verify cloudflared watchdog probe script
+  become: true
+  ansible.builtin.stat:
+    path: "{{ cloudflared_watchdog_script_path }}"
+  register: cloudflared_watchdog_script
+  when:
+    - cloudflared_role_enabled
+    - cloudflared_watchdog_enabled | bool
+  tags: [verify, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Assert cloudflared watchdog probe script is executable
+  ansible.builtin.assert:
+    that:
+      - cloudflared_watchdog_script.stat.exists
+      - cloudflared_watchdog_script.stat.mode == '0750'
+    fail_msg: "cloudflared watchdog probe script is missing or has unexpected permissions"
+  when:
+    - cloudflared_role_enabled
+    - cloudflared_watchdog_enabled | bool
+  tags: [verify, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Verify cloudflared watchdog systemd timer
+  become: true
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - "{{ cloudflared_watchdog_timer_name }}.timer"
+      - --property=LoadState
+      - --property=ActiveState
+      - --property=UnitFileState
+      - --property=Unit
+      - --no-pager
+  register: cloudflared_watchdog_timer_status
+  changed_when: false
+  failed_when: >-
+    cloudflared_watchdog_timer_status.rc != 0 or
+    'LoadState=loaded' not in cloudflared_watchdog_timer_status.stdout or
+    'ActiveState=active' not in cloudflared_watchdog_timer_status.stdout or
+    'UnitFileState=enabled' not in cloudflared_watchdog_timer_status.stdout or
+    ('Unit=' ~ cloudflared_watchdog_service_name ~ '.service') not in cloudflared_watchdog_timer_status.stdout
+  when:
+    - cloudflared_role_enabled
+    - cloudflared_watchdog_enabled | bool
+    - cloudflared_service_manager == 'systemd'
+  tags: [verify, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Verify cloudflared watchdog systemd service unit
+  become: true
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - "{{ cloudflared_watchdog_service_name }}.service"
+      - --property=LoadState
+      - --no-pager
+  register: cloudflared_watchdog_service_status
+  changed_when: false
+  failed_when: >-
+    cloudflared_watchdog_service_status.rc != 0 or
+    'LoadState=loaded' not in cloudflared_watchdog_service_status.stdout
+  when:
+    - cloudflared_role_enabled
+    - cloudflared_watchdog_enabled | bool
+    - cloudflared_service_manager == 'systemd'
+  tags: [verify, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Verify cloudflared watchdog OpenRC service is running
+  become: true
+  ansible.builtin.command: "rc-service {{ cloudflared_watchdog_service_name }} status"
+  register: cloudflared_watchdog_openrc_status
+  changed_when: false
+  failed_when: cloudflared_watchdog_openrc_status.rc != 0
+  when:
+    - cloudflared_role_enabled
+    - cloudflared_watchdog_enabled | bool
+    - cloudflared_service_manager == 'openrc'
+  tags: [verify, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Verify cloudflared watchdog OpenRC service is enabled
+  become: true
+  ansible.builtin.command: rc-update show default
+  register: cloudflared_watchdog_openrc_enabled
+  changed_when: false
+  failed_when: >-
+    cloudflared_watchdog_openrc_enabled.rc != 0 or
+    cloudflared_watchdog_service_name not in cloudflared_watchdog_openrc_enabled.stdout
+  when:
+    - cloudflared_role_enabled
+    - cloudflared_watchdog_enabled | bool
+    - cloudflared_service_manager == 'openrc'
+  tags: [verify, services, cloudflared, cloudflared_watchdog, phase4]
+
+- name: Check Docker daemon availability for Cloudflared backend verification
+  become: true
+  community.docker.docker_host_info:
+  register: cloudflared_docker_host_info
+  changed_when: false
+  failed_when: false
+  when:
+    - cloudflared_role_enabled
+    - cloudflared_verify_vaultwarden_backend | default(true) | bool
+  tags: [verify, services, cloudflared, cloudflared_backend, phase4]
+
+- name: Assert Docker daemon is available for Cloudflared backend verification
+  ansible.builtin.assert:
+    that:
+      - cloudflared_docker_host_info.can_talk_to_docker | default(false)
+    fail_msg: >-
+      Cloudflared backend verification requires an installed and running Docker daemon.
+      Deploy services.docker first.
+  when:
+    - cloudflared_role_enabled
+    - cloudflared_verify_vaultwarden_backend | default(true) | bool
+  tags: [verify, services, cloudflared, cloudflared_backend, phase4]
+
+- name: Inspect passive Vaultwarden container
+  become: true
+  ansible.builtin.command: docker inspect vaultwarden --format '{{ "{{" }}.State.Status{{ "}}" }}'
+  register: cloudflared_vaultwarden_state
+  changed_when: false
+  failed_when: cloudflared_vaultwarden_state.stdout not in ['created', 'exited']
+  when:
+    - cloudflared_role_enabled
+    - cloudflared_verify_vaultwarden_backend | default(true) | bool
+  tags: [verify, services, cloudflared, cloudflared_backend, phase4]
+
+- name: Confirm passive backend is not listening on 127.0.0.1:30007
+  become: true
+  ansible.builtin.command: ss -ltnH sport = :30007
+  register: cloudflared_backend_socket
+  changed_when: false
+  failed_when: cloudflared_backend_socket.stdout | trim | length > 0
+  when:
+    - cloudflared_role_enabled
+    - cloudflared_verify_vaultwarden_backend | default(true) | bool
+  tags: [verify, services, cloudflared, cloudflared_backend, phase4]
+
+- name: Verify explicitly managed Tunnel DNS record without mutation
+  community.general.cloudflare_dns:
+    zone: "{{ cloudflared_dns_zone }}"
+    record: "{{ cloudflared_dns_hostname }}"
+    type: CNAME
+    value: "{{ cloudflared_tunnel_id }}.cfargotunnel.com"
+    proxied: true
+    api_token: "{{ cloudflared_dns_api_token }}"
+    state: present
+  delegate_to: localhost
+  become: false
+  check_mode: true
+  register: cloudflared_dns_verify
+  failed_when: cloudflared_dns_verify.changed
+  no_log: true
+  when:
+    - cloudflared_role_enabled
+    - cloudflared_dns_hostname | length > 0
+  tags: [verify, services, cloudflared, phase4]

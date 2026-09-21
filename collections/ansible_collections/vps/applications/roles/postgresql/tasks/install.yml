@@ -1,0 +1,75 @@
+---
+- name: Install dependencies for PostgreSQL repository
+  become: true
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gpg
+      - gnupg2
+      - software-properties-common
+      - apt-transport-https
+    state: present
+    update_cache: true
+  tags: [deploy, applications, postgresql, install, phase4]
+
+- name: Add PostgreSQL GPG key
+  become: true
+  ansible.builtin.get_url:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    dest: /usr/share/keyrings/postgresql-keyring.asc
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [deploy, applications, postgresql, install, phase4]
+
+- name: Add PostgreSQL APT repository
+  become: true
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/usr/share/keyrings/postgresql-keyring.asc]
+      http://apt.postgresql.org/pub/repos/apt
+      {{ ansible_distribution_release }}-pgdg main
+    state: present
+    filename: postgresql
+  tags: [deploy, applications, postgresql, install, phase4]
+
+- name: Ensure PostgreSQL packages are installed
+  become: true
+  ansible.builtin.apt:
+    name:
+      - "postgresql-{{ postgresql_version }}"
+      - "postgresql-client-{{ postgresql_version }}"
+      - python3-psycopg2
+    state: present
+    update_cache: true
+  tags: [deploy, applications, postgresql, install, phase4]
+
+- name: Check whether PostgreSQL cluster exists
+  ansible.builtin.stat:
+    path: "{{ postgresql_data_directory_path }}/PG_VERSION"
+  register: postgresql_pg_cluster_exists
+  tags: [deploy, applications, postgresql, install, phase4]
+
+- name: Initialize PostgreSQL database cluster
+  become: true
+  become_user: postgres
+  ansible.builtin.command:
+    argv:
+      - pg_createcluster
+      - "{{ postgresql_version }}"
+      - main
+      - --start
+      - -d
+      - "{{ postgresql_data_directory_path }}"
+  environment:
+    TMPDIR: /tmp
+  when: not postgresql_pg_cluster_exists.stat.exists
+  changed_when: true
+  tags: [deploy, applications, postgresql, install, phase4]
+
+- name: Ensure PostgreSQL service is enabled and started
+  ansible.builtin.service:
+    name: postgresql
+    state: started
+    enabled: true
+  tags: [deploy, applications, postgresql, install, phase4]

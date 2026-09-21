@@ -1,0 +1,46 @@
+---
+pi_terminal_enabled: false
+pi_terminal_name: pi-terminal
+pi_terminal_port: "{{ app_port_pi_terminal | default(30014) }}"
+
+pi_terminal_base_path: /opt/dockers
+pi_terminal_app_dir: "{{ pi_terminal_base_path }}/{{ pi_terminal_name }}"
+pi_terminal_state_dir: /opt/pi-terminal
+pi_terminal_workspace_dir: "{{ pi_terminal_state_dir }}/workspace"
+pi_terminal_secrets_dir: "{{ pi_terminal_state_dir }}/secrets"
+pi_terminal_username_file: "{{ pi_terminal_secrets_dir }}/username"
+pi_terminal_password_file: "{{ pi_terminal_secrets_dir }}/password"
+
+pi_terminal_basic_auth_username: suai
+pi_terminal_basic_auth_password: ""
+pi_terminal_force_password: false
+
+pi_terminal_container_uid: 10001
+pi_terminal_container_gid: 10001
+pi_terminal_bun_image: oven/bun:1.3.14-slim
+pi_terminal_ttyd_image: tsl0922/ttyd:1.7.7
+pi_terminal_debian_mirror: https://deb.debian.org/debian
+pi_terminal_debian_security_mirror: https://deb.debian.org/debian-security
+pi_terminal_debian_suite: trixie
+pi_terminal_debian_security_suite: trixie-security
+pi_terminal_omp_version: 17.2.7
+pi_terminal_omp_tools:
+  - read
+  - write
+  - edit
+  - ast_edit
+  - ast_grep
+  - grep
+  - glob
+  - bash
+  - eval
+  - lsp
+  - task
+  - todo
+  - job
+  - ask
+  - web_search
+pi_terminal_tmux_session: omp
+pi_terminal_memory: 4g
+pi_terminal_cpus: "2.0"
+pi_terminal_pids_limit: 512

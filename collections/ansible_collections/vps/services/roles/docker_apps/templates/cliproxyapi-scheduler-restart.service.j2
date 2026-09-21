@@ -1,0 +1,9 @@
+[Unit]
+Description=Restart CLIProxyAPI to release accumulated memory
+Documentation=https://github.com/suainam/AuroraOps
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker restart cliproxyapi

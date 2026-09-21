@@ -1,0 +1,9 @@
+{# OpenCode 配置模板 - 支持分层配置合并 #}
+{% set final_config = nodejs_opencode_base_config.copy() %}
+
+{# 如果启用 server，添加 server 配置 #}
+{% if nodejs_opencode_server_enabled | bool %}
+{% set _ = final_config.update({'server': nodejs_opencode_server_config}) %}
+{% endif %}
+
+{{ final_config | to_nice_json }}

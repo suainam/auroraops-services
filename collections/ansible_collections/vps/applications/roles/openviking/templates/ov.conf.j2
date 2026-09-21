@@ -1,0 +1,17 @@
+{
+  "embedding": {
+    "dense": {
+      "backend": "openai",
+      "api_base": "{{ openviking_embedding_api_base }}",
+      "api_key": "{{ openviking_embedding_api_key }}",
+      "model": "{{ openviking_embedding_model }}",
+      "dimension": {{ openviking_embedding_dimension }}
+    }
+  },
+  "vlm": {
+    "backend": "openai",
+    "api_base": "{{ openviking_vlm_api_base }}",
+    "api_key": "{{ openviking_vlm_api_key }}",
+    "model": "{{ openviking_vlm_model }}"
+  }
+}

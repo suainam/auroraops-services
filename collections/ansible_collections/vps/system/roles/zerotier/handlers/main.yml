@@ -1,0 +1,23 @@
+---
+- name: Restart ZeroTier
+  become: true
+  ansible.builtin.service:
+    name: zerotier-one
+    state: restarted
+
+- name: Generate Moon file
+  become: true
+  ansible.builtin.command: zerotier-idtool genmoon moon.json
+  args:
+    chdir: /var/lib/zerotier-one
+  register: zerotier_genmoon_result
+  changed_when: zerotier_genmoon_result.rc == 0
+
+- name: Move Moon file to moons.d
+  become: true
+  ansible.builtin.shell: mv *.moon moons.d/
+  args:
+    chdir: /var/lib/zerotier-one
+  changed_when: true
+  listen: Generate Moon file
+  notify: Restart ZeroTier

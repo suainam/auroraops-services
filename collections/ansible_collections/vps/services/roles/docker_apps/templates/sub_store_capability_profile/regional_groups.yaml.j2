@@ -1,0 +1,30 @@
+# Region filters are compiled from Registry country facts by pool_sync.py.
+# These helper groups stay hidden; the user-facing automatic group owns the
+# ordered regional fallback so a healthy exit does not churn across countries.
+{% for region in [
+  {'name': '🇭🇰 港澳 · 自动优选', 'marker': '__FILTER_REGION_HK_MO__'},
+  {'name': '🇹🇼 台湾 · 自动优选', 'marker': '__FILTER_REGION_TW__'},
+  {'name': '🇯🇵 日本 · 自动优选', 'marker': '__FILTER_REGION_JP__'},
+  {'name': '🇸🇬 新加坡 · 自动优选', 'marker': '__FILTER_REGION_SG__'},
+  {'name': '🇺🇸 美国 · 自动优选', 'marker': '__FILTER_REGION_US__'},
+  {'name': '🇪🇺 欧洲 · 自动优选', 'marker': '__FILTER_REGION_EUROPE__'},
+  {'name': '🌐 其他 · 自动优选', 'marker': '__FILTER_REGION_OTHER__'}
+] %}
+  - name: "{{ region.name }}"
+    type: url-test
+    use:
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+      - source-{{ provider_id }}
+{% endif %}
+{% endfor %}
+    filter: {{ region.marker }}
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 100
+    timeout: 5000
+    max-failed-times: 5
+    lazy: true
+    hidden: true
+{% endfor %}

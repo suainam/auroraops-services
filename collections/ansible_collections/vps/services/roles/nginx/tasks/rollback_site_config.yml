@@ -1,0 +1,136 @@
+---
+- name: Merge Nginx site list for focused rollback
+  ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
+  vars:
+    merge_var_name: nginx_sites_to_deploy
+  tags: &nginx_site_rollback_tags
+    - rollback
+    - services
+    - nginx
+    - nginx_site_config
+    - phase4
+- name: Validate focused Nginx rollback target
+  ansible.builtin.assert:
+    that:
+      - >-
+        nginx_site_target | default('') | length == 0
+        or nginx_site_target in nginx_sites_to_deploy
+    fail_msg: >-
+      nginx_site_target must be empty or name one site from the selected
+      nginx_sites_to_deploy set.
+  tags: *nginx_site_rollback_tags
+
+- name: Build focused Nginx rollback list
+  ansible.builtin.set_fact:
+    nginx_sites_to_mutate: >-
+      {{
+        [nginx_site_target]
+        if nginx_site_target | default('') | length > 0
+        else nginx_sites_to_deploy
+      }}
+  tags: *nginx_site_rollback_tags
+
+
+- name: Read Nginx site lifecycle baseline for rollback
+  become: true
+  ansible.builtin.slurp:
+    path: "{{ nginx_site_baseline_fact_path }}"
+  register: nginx_site_rollback_baseline_raw
+  tags: *nginx_site_rollback_tags
+
+- name: Parse Nginx site lifecycle baseline for rollback
+  ansible.builtin.set_fact:
+    nginx_site_rollback_baseline: >-
+      {{ nginx_site_rollback_baseline_raw.content | b64decode | from_json }}
+  tags: *nginx_site_rollback_tags
+- name: Select Nginx rollback baseline scope
+  ansible.builtin.set_fact:
+    nginx_site_rollback_state: >-
+      {{
+        (
+          nginx_site_rollback_baseline.pre_deploy_state | dict2items
+          | selectattr('key', 'equalto', nginx_site_target) | list
+        )
+        if nginx_site_target | default('') | length > 0
+        else nginx_site_rollback_baseline.pre_deploy_state | dict2items
+      }}
+  tags: *nginx_site_rollback_tags
+
+
+- name: Validate Nginx site lifecycle baseline for rollback
+  ansible.builtin.assert:
+    that:
+      - nginx_site_rollback_baseline.auroraops_managed | default(false) | bool
+      - nginx_site_rollback_baseline.version | default(0) | int == 1
+      - nginx_site_rollback_baseline.pre_deploy_state is defined
+      - nginx_site_rollback_state | length > 0
+      - >-
+        (
+          nginx_site_target | default('') | length == 0
+          and nginx_site_rollback_baseline.sites | sort
+              == nginx_sites_to_deploy | sort
+        )
+        or (
+          nginx_site_target | default('') | length > 0
+          and nginx_site_baseline_allow_additive_reconcile | default(false) | bool
+          and nginx_site_target in nginx_site_rollback_baseline.sites
+        )
+    fail_msg: >-
+      Nginx site rollback baseline is missing, invalid, or bound to a
+      different site set.
+  tags: *nginx_site_rollback_tags
+
+- name: Restore pre-deploy Nginx site configurations
+  become: true
+  ansible.builtin.copy:
+    dest: "/etc/nginx/sites-available/{{ item.key }}.conf"
+    content: "{{ item.value.available_content }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ nginx_site_rollback_state }}"
+  when: item.value.available_exists | bool
+  no_log: true
+  notify: reload nginx
+  tags: *nginx_site_rollback_tags
+
+- name: Remove Nginx site configurations absent before deploy
+  become: true
+  ansible.builtin.file:
+    path: "/etc/nginx/sites-available/{{ item.key }}.conf"
+    state: absent
+  loop: "{{ nginx_site_rollback_state }}"
+  when: not (item.value.available_exists | bool)
+  no_log: true
+  notify: reload nginx
+  tags: *nginx_site_rollback_tags
+
+- name: Restore pre-deploy Nginx site links
+  become: true
+  ansible.builtin.file:
+    src: "{{ item.value.enabled_target }}"
+    dest: "/etc/nginx/sites-enabled/{{ item.key }}.conf"
+    state: link
+    force: true
+  loop: "{{ nginx_site_rollback_state }}"
+  when: item.value.enabled_exists | bool
+  no_log: true
+  notify: reload nginx
+  tags: *nginx_site_rollback_tags
+
+- name: Remove Nginx site links absent before deploy
+  become: true
+  ansible.builtin.file:
+    path: "/etc/nginx/sites-enabled/{{ item.key }}.conf"
+    state: absent
+  loop: "{{ nginx_site_rollback_state }}"
+  when: not (item.value.enabled_exists | bool)
+  no_log: true
+  notify: reload nginx
+  tags: *nginx_site_rollback_tags
+
+- name: Validate restored Nginx configuration before reload
+  become: true
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  tags: *nginx_site_rollback_tags

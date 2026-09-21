@@ -1,0 +1,19 @@
+---
+rclone_include_user_configs: true
+
+# Rclone 配置文件路径
+rclone_config_path: "/root/.config/rclone/rclone.conf"
+
+# 云端备份路径前缀（用于区分不同主机的备份位置）
+# 例如: "backup/nas" 或 "backup/ccuai"
+rclone_backup_path_prefix: ""
+
+# 代理配置（继承全局变量）
+rclone_use_proxy: "{{ proxy_enabled | default(false) }}"
+rclone_http_proxy: "{{ proxy_http | default('') }}"
+rclone_https_proxy: "{{ proxy_https | default('') }}"
+
+# 映射来自 vault.yml 的敏感变量
+rclone_onedrive_token: "{{ vault_rclone_onedrive_token }}"
+rclone_onedrive_drive_id: "{{ vault_rclone_onedrive_drive_id }}"
+rclone_gdrive_token: "{{ vault_rclone_gdrive_token }}"

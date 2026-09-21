@@ -1,0 +1,19 @@
+server {
+    listen {{ nginx_http_port }} default_server;
+    listen [::]:{{ nginx_http_port }} default_server;
+
+    root /var/www/html;
+
+    index index.html index.htm index.nginx-debian.html;
+
+    server_name _;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    # include /etc/nginx/conf.d/common_ssl.conf;
+    # include /etc/nginx/conf.d/common_proxy.conf;
+    # include /etc/nginx/conf.d/common_headers.conf;
+    # include /etc/nginx/conf.d/common_performance.conf;
+}

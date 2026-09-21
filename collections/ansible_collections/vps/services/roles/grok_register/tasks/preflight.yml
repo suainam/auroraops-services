@@ -1,0 +1,84 @@
+---
+- name: Check Docker daemon availability for Grok Register
+  become: true
+  community.docker.docker_host_info:
+  register: grok_register_docker_host_info
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, grok_register, grok_register_preflight, phase5]
+
+- name: Assert Docker daemon is available for Grok Register
+  ansible.builtin.assert:
+    that:
+      - grok_register_docker_host_info.can_talk_to_docker | default(false)
+    fail_msg: >-
+      Grok Register requires an installed and running Docker daemon.
+      Deploy services.docker first.
+  tags: [deploy, services, grok_register, grok_register_preflight, phase5]
+
+- name: Check Git client availability for Grok Register source verification
+  ansible.builtin.stat:
+    path: /usr/bin/git
+  register: grok_register_git_binary
+  tags: [deploy, services, grok_register, grok_register_preflight, phase5]
+
+- name: Assert Grok Register source and capacity inputs
+  ansible.builtin.assert:
+    that:
+      - grok_register_git_binary.stat.exists
+      - grok_register_git_binary.stat.executable
+      - grok_register_source_repo == 'https://github.com/AaronL725/grok-register.git'
+      - grok_register_source_revision is match('^[0-9a-f]{40}$')
+      - grok_register_worker_count | int == 1
+      - grok_register_register_count | int >= 1
+      - grok_register_register_count | int <= grok_register_max_register_count | int
+      - grok_register_max_register_count | int == 1
+      - grok_register_cloudflare_auth_mode == 'bearer'
+      - grok_register_cloudflare_api_base | length > 0
+      - grok_register_cloudflare_api_key | length > 0
+    fail_msg: >-
+      Grok Register requires the pinned AaronL725 source, the cc15 single-browser
+      capacity profile, and the verified bearer-authenticated Cloudflare Worker.
+  no_log: true
+  tags: [deploy, services, grok_register, grok_register_preflight, phase5]
+
+- name: Reject incompatible legacy provider inputs without upstream equivalent
+  ansible.builtin.assert:
+    that:
+      - grok_register_cloudmail_url_migration_check | length == 0
+      - grok_register_cloudmail_admin_email_migration_check | length == 0
+      - grok_register_mailnest_api_key_migration_check | length == 0
+    fail_msg: >-
+      Migration validation failed: opcotoai_grok_cloudmail_url,
+      opcotoai_grok_cloudmail_admin_email, or opcotoai_grok_mailnest_api_key
+      are set but have no confirmed upstream equivalent in AaronL725/grok-register.
+      Clear these variables or provide an explicit mapping decision before deploying.
+  tags: [deploy, services, grok_register, grok_register_preflight, phase5]
+
+- name: Check Grok Register source endpoint is reachable
+  ansible.builtin.uri:
+    url: "{{ grok_register_source_repo | regex_replace('\\.git$', '') }}"
+    method: HEAD
+    follow_redirects: all
+    status_code:
+      - 200
+      - 301
+      - 302
+    return_content: false
+  register: grok_register_source_endpoint
+  check_mode: false
+  tags: [deploy, services, grok_register, grok_register_preflight, phase5]
+
+- name: Assert Grok Register source endpoint is reachable
+  ansible.builtin.assert:
+    that:
+      - grok_register_source_endpoint.status in [200, 301, 302]
+    fail_msg: >-
+      The configured Grok Register source endpoint cannot be reached.
+      The exact immutable revision is verified after checkout during deploy.
+  tags: [deploy, services, grok_register, grok_register_preflight, phase5]
+
+- name: Probe the Cloudflare Worker without creating a mailbox
+  ansible.builtin.import_tasks: mailbox_probe.yml
+  when: grok_register_mailbox_preflight_enabled | bool
+  tags: [deploy, services, grok_register, grok_register_mailbox_preflight, phase5]

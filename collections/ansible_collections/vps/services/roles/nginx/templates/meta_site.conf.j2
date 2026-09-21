@@ -1,0 +1,184 @@
+{# Nginx Meta Site Template - Enhanced Version #}
+{# 合并默认配置和网站特定配置 #}
+{% set site_defaults = nginx_sites_defaults | default({}) %}
+{% set site_config = nginx_sites_config[item] | default({}) %}
+{% set config = site_defaults | combine(site_config) %}
+
+{# HTTP -> HTTPS 重定向 #}
+server {
+    listen {{ nginx_http_port }};
+    server_name {{ item }};
+    return 301 https://$host$request_uri;
+}
+
+{# HTTPS 配置 #}
+server {
+    listen {{ nginx_https_port }} ssl;
+    {% if config.ipv6 | default(false) %}
+    listen [::]:{{ nginx_https_port }} ssl;
+    {% endif %}
+    {% if config.http2 | default(true) %}
+    http2 on;
+    {% endif %}
+    server_name {{ item }};
+
+    {# SSL 证书 #}
+    {% set cert_name = config.ssl_cert_name | default('msuai.top') %}
+    ssl_certificate       /etc/letsencrypt/live/{{ cert_name }}/fullchain.pem;
+    ssl_certificate_key   /etc/letsencrypt/live/{{ cert_name }}/privkey.pem;
+
+    {# 通用配置 #}
+    include /etc/nginx/conf.d/common_ssl.conf;
+    include /etc/nginx/conf.d/common_headers.conf;
+    include /etc/nginx/conf.d/common_performance.conf;
+
+    {# Cloudflare IP 限制 #}
+    {% if config.cloudflare_only | default(true) %}
+    include /etc/nginx/conf.d/cfip.conf;
+    deny all;
+    {% endif %}
+
+    {# 自定义 locations（高级配置）#}
+    {% if config.locations is defined %}
+    {% for loc in config.locations %}
+    location {{ loc.match | default(loc.path) }} {
+        {# Rewrite 规则 #}
+        {% if loc.rewrite is defined %}
+        rewrite {{ loc.rewrite.pattern }} {{ loc.rewrite.replacement }} {{ loc.rewrite.flag | default('break') }};
+        {% endif %}
+        
+        {# Client 配置 #}
+        {% if loc.client_max_body_size is defined %}
+        client_max_body_size {{ loc.client_max_body_size }};
+        {% endif %}
+        
+        {# Proxy Pass #}
+        {% if loc.backend_port is defined %}
+        {% if loc.strip_prefix | default(false) %}
+        proxy_pass http://127.0.0.1:{{ loc.backend_port }}/;
+        {% else %}
+        proxy_pass http://127.0.0.1:{{ loc.backend_port }};
+        {% endif %}
+        {% endif %}
+        
+        {# WebSocket 支持 #}
+        {% if loc.websocket | default(false) or config.websocket | default(false) %}
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        {% endif %}
+        
+        {# 标准 Proxy Headers #}
+        {% if not loc.skip_proxy_headers | default(false) %}
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        {% endif %}
+        
+        {# 自定义 Proxy 配置 #}
+        {% if loc.proxy_buffering is defined %}
+        proxy_buffering {{ loc.proxy_buffering }};
+        {% endif %}
+        {% if loc.proxy_cache is defined %}
+        proxy_cache {{ loc.proxy_cache }};
+        {% endif %}
+        {% if loc.proxy_read_timeout is defined %}
+        proxy_read_timeout {{ loc.proxy_read_timeout }};
+        {% endif %}
+        {% if loc.proxy_send_timeout is defined %}
+        proxy_send_timeout {{ loc.proxy_send_timeout }};
+        {% endif %}
+        {% if loc.proxy_set_header_x_accel_buffering is defined %}
+        proxy_set_header X-Accel-Buffering {{ loc.proxy_set_header_x_accel_buffering }};
+        {% endif %}
+        
+        {# Hide Headers #}
+        {% if loc.proxy_hide_headers is defined %}
+        {% for header in loc.proxy_hide_headers %}
+        proxy_hide_header {{ header }};
+        {% endfor %}
+        {% endif %}
+        
+        {# Add Headers #}
+        {% if loc.add_headers is defined %}
+        {% for header in loc.add_headers %}
+        add_header {{ header.name }} "{{ header.value }}" {{ header.always | default('always') }};
+        {% endfor %}
+        {% endif %}
+        
+        {# 静态资源缓存 #}
+        {% if loc.static_cache | default(false) %}
+        expires {{ loc.cache_expires | default('30d') }};
+        add_header Cache-Control "{{ loc.cache_control | default('public, immutable') }}";
+        access_log off;
+        {% endif %}
+        
+        {# 包含通用 proxy 配置 #}
+        {% if loc.include_common_proxy | default(false) %}
+        include /etc/nginx/conf.d/common_proxy.conf;
+        {% endif %}
+    }
+    {% endfor %}
+    
+    {% else %}
+    {# 静态内容服务 (Camouflage) #}
+    {% if config.type == 'camouflage' %}
+    location / {
+        root /var/www/camouflage/{{ nginx_camouflage_extract_dir | default('') }};
+        index index.html index.htm;
+        try_files $uri $uri/ /index.html;
+    }
+    {% endif %}
+
+    {# OpenCode 反向代理（带 WebSocket 自动认证注入）#}
+    {% if config.type == 'opencode' %}
+    location / {
+        proxy_pass http://127.0.0.1:{{ config.backend_port | default(opencode_server_port | default(4096)) }};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        {% if opencode_server_password is defined and opencode_server_password | length > 0 %}
+        proxy_set_header Authorization $opencode_ws_auth;
+        {% endif %}
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        client_max_body_size 100M;
+    }
+    {% endif %}
+
+    {# 简单反向代理（向后兼容）#}
+    {% if config.type == 'simple_proxy' %}
+    location / {
+        proxy_pass http://127.0.0.1:{{ config.backend_port }};
+        {% if config.websocket | default(false) %}
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        {% endif %}
+        include /etc/nginx/conf.d/common_proxy.conf;
+    }
+    {% endif %}
+    
+    {# 静态资源缓存（向后兼容）#}
+    {% if config.static_cache | default(false) %}
+    location ~* \.(?:ico|css|js|gif|jpe?g|png|woff2?|svg|webp)$ {
+        proxy_pass http://127.0.0.1:{{ config.backend_port }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+    {% endif %}
+    {% endif %}
+}

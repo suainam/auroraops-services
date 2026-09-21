@@ -1,0 +1,44 @@
+# =============================================================================
+# OpenViking - Configuration Tasks
+# =============================================================================
+
+- name: Ensure temp directory exists
+  ansible.builtin.file:
+    path: "/tmp"
+    state: directory
+    mode: '1777'
+  tags: [deploy, applications, openviking, openviking_config, phase5]
+
+- name: Create .openviking config directory
+  ansible.builtin.file:
+    path: "/root/.openviking"
+    state: directory
+    owner: "{{ openviking_user }}"
+    group: "{{ openviking_user }}"
+    mode: '0755'
+  tags: [deploy, applications, openviking, openviking_config, phase5]
+
+- name: Render OpenViking configuration
+  ansible.builtin.template:
+    src: ov.conf.j2
+    dest: "/root/.openviking/ov.conf"
+    owner: "{{ openviking_user }}"
+    group: "{{ openviking_user }}"
+    mode: '0600'
+    backup: true
+  tags: [deploy, applications, openviking, openviking_config, phase5]
+
+- name: Register OpenViking as systemd service
+  ansible.builtin.include_role:
+    name: vps.applications.application_service
+  vars:
+    app_service_name: openviking
+    app_service_description: "OpenViking - AI Agent Context Database"
+    app_service_user: "{{ openviking_user }}"
+    app_service_working_directory: "{{ openviking_data_dir }}"
+    app_service_environment:
+      - "OPENVIKING_CONFIG_FILE=/root/.openviking/ov.conf"
+    app_service_exec_start: "{{ openviking_venv_path }}/bin/openviking serve --host {{ openviking_host }} --port {{ openviking_port }}"
+    app_service_enabled: true
+    app_service_state: "{{ openviking_service_state }}"
+  tags: [deploy, applications, openviking, openviking_config, phase5]

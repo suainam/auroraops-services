@@ -1,0 +1,56 @@
+services:
+  pi-terminal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUN_IMAGE: "{{ pi_terminal_bun_image }}"
+        TTYD_IMAGE: "{{ pi_terminal_ttyd_image }}"
+        DEBIAN_MIRROR: "{{ pi_terminal_debian_mirror }}"
+        DEBIAN_SECURITY_MIRROR: "{{ pi_terminal_debian_security_mirror }}"
+        DEBIAN_SUITE: "{{ pi_terminal_debian_suite }}"
+        DEBIAN_SECURITY_SUITE: "{{ pi_terminal_debian_security_suite }}"
+        OMP_VERSION: "{{ pi_terminal_omp_version }}"
+        PI_UID: "{{ pi_terminal_container_uid }}"
+        PI_GID: "{{ pi_terminal_container_gid }}"
+    image: "pi-terminal:omp-{{ pi_terminal_omp_version }}"
+    container_name: "{{ pi_terminal_name }}"
+    restart: unless-stopped
+    init: true
+    user: "{{ pi_terminal_container_uid }}:{{ pi_terminal_container_gid }}"
+    ports:
+      - "127.0.0.1:{{ pi_terminal_port }}:7681"
+    volumes:
+      - "{{ pi_terminal_workspace_dir }}:/workspace"
+      - "{{ pi_terminal_secrets_dir }}:/run/secrets:ro"
+      - pi_terminal_omp_home:/home/pi/.omp
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m,uid={{ pi_terminal_container_uid }},gid={{ pi_terminal_container_gid }}
+      - /home/pi/.cache:rw,noexec,nosuid,size=256m,uid={{ pi_terminal_container_uid }},gid={{ pi_terminal_container_gid }}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: {{ pi_terminal_pids_limit }}
+    mem_limit: "{{ pi_terminal_memory }}"
+    cpus: "{{ pi_terminal_cpus }}"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          status=$$(curl --silent --output /dev/null --write-out '%{http_code}'
+          http://127.0.0.1:7681/); [ "$$status" = "401" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"
+
+volumes:
+  pi_terminal_omp_home:
+    name: pi_terminal_omp_home

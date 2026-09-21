@@ -1,0 +1,37 @@
+---
+# =============================================================================
+# Prerequisite Checks Role - Default Variables
+# =============================================================================
+# 通用前置检查配置，其他角色通过 include_role 引入
+
+# -----------------------------------------------------------------------------
+# Bitwarden CLI 检查
+# 旧 prereq_* inventory 输入保留兼容，Role 内统一消费 prereq_checks_*。
+# -----------------------------------------------------------------------------
+prereq_checks_bw_enabled: "{{ prereq_bw_enabled | default(false) }}"
+prereq_checks_bw_required: "{{ prereq_bw_required | default(true) }}"
+prereq_checks_bw_session_file: >-
+  {{
+    prereq_bw_session_file
+    | default((ansible_env.HOME | default('/root')) ~ '/.bw_session')
+  }}
+
+# -----------------------------------------------------------------------------
+# Docker 检查
+# -----------------------------------------------------------------------------
+prereq_checks_docker_enabled: "{{ prereq_docker_enabled | default(false) }}"
+prereq_checks_docker_required: "{{ prereq_docker_required | default(true) }}"
+
+# -----------------------------------------------------------------------------
+# 网络检查
+# -----------------------------------------------------------------------------
+prereq_checks_network_enabled: "{{ prereq_network_enabled | default(false) }}"
+prereq_checks_network_hosts: "{{ prereq_network_hosts | default([]) }}"
+prereq_checks_network_required: "{{ prereq_network_required | default(true) }}"
+
+# -----------------------------------------------------------------------------
+# 自定义命令检查
+# -----------------------------------------------------------------------------
+prereq_checks_commands_enabled: "{{ prereq_commands_enabled | default(false) }}"
+prereq_checks_commands: "{{ prereq_commands | default([]) }}"
+prereq_checks_commands_required: "{{ prereq_commands_required | default(true) }}"

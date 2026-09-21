@@ -1,0 +1,43 @@
+---
+# =============================================================================
+# Test OpenCode Serve Command
+# =============================================================================
+
+- name: "[opencode-test] Test opencode serve command help"
+  ansible.builtin.command: /usr/bin/opencode serve --help
+  register: nodejs_opencode_serve_help
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, nodejs, opencode_test_serve, phase3]
+
+- name: "[opencode-test] Display serve help"
+  ansible.builtin.debug:
+    msg:
+      - "Return code: {{ nodejs_opencode_serve_help.rc }}"
+      - "Output: {{ nodejs_opencode_serve_help.stdout_lines }}"
+      - "Error: {{ nodejs_opencode_serve_help.stderr_lines }}"
+  tags: [deploy, services, nodejs, opencode_test_serve, phase3]
+
+- name: "[opencode-test] Check opencode version"
+  ansible.builtin.command: /usr/bin/opencode --version
+  register: nodejs_opencode_version_full
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, nodejs, opencode_test_serve, phase3]
+
+- name: "[opencode-test] Display version"
+  ansible.builtin.debug:
+    msg: "{{ nodejs_opencode_version_full.stdout }}"
+  tags: [deploy, services, nodejs, opencode_test_serve, phase3]
+
+- name: "[opencode-test] List available commands"
+  ansible.builtin.command: /usr/bin/opencode --help
+  register: nodejs_opencode_help
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, nodejs, opencode_test_serve, phase3]
+
+- name: "[opencode-test] Display help"
+  ansible.builtin.debug:
+    msg: "{{ nodejs_opencode_help.stdout_lines }}"
+  tags: [deploy, services, nodejs, opencode_test_serve, phase3]

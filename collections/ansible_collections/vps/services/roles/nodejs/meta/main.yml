@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  author: AuroraOps
+  description: Install Node.js
+  company: AuroraOps
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+  galaxy_tags:
+    - nodejs
+    - javascript
+dependencies: []

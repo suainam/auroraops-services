@@ -1,0 +1,56 @@
+---
+- name: "Docker 智能预拉取 (仅针对已启用的角色和应用)"
+  community.docker.docker_image:
+    name: "{{ item.image }}"
+    source: pull
+  # 使用 vars 定义镜像清单，方便维护
+  vars:
+    # 基础判定逻辑：所属角色启用且应用本身启用
+    is_docker_apps_enabled: "{{ auroraops_roles['services']['docker_apps'] | default(true) | bool }}"
+  loop:
+    - name: "newapi"
+      image: "{{ newapi_image }}"
+      enabled: "{{ is_docker_apps_enabled and (docker_apps_newapi_suite_enabled | default(true) | bool) }}"
+    - name: "cliproxyapi"
+      image: "{{ cliproxyapi_image }}"
+      enabled: "{{ is_docker_apps_enabled and (docker_apps_cliproxyapi_enabled | default(true) | bool) }}"
+    - name: "sillytavern"
+      image: "{{ sillytavern_image }}"
+      enabled: "{{ is_docker_apps_enabled and (docker_apps_sillytavern_enabled | default(true) | bool) }}"
+    - name: "gcli2api"
+      image: "{{ gcli2api_image }}"
+      enabled: "{{ is_docker_apps_enabled and (docker_apps_gcli2api_enabled | default(true) | bool) }}"
+    - name: "ds2api"
+      image: "{{ ds2api_image }}"
+      enabled: "{{ is_docker_apps_enabled and (docker_apps_ds2api_enabled | default(false) | bool) }}"
+    - name: "vaultwarden"
+      image: "{{ vaultwarden_image }}"
+      enabled: "{{ is_docker_apps_enabled and (docker_apps_vaultwarden_enabled | default(true) | bool) }}"
+    - name: "flare"
+      image: "{{ flare_image }}"
+      enabled: "{{ is_docker_apps_enabled and (docker_apps_flare_enabled | default(true) | bool) }}"
+    - name: "singbox"
+      image: "{{ singbox_image }}"
+      enabled: "{{ is_docker_apps_enabled and (docker_apps_singbox_enabled | default(true) | bool) }}"
+    - name: "sub_store"
+      image: "{{ sub_store_image }}"
+      enabled: "{{ is_docker_apps_enabled and (docker_apps_sub_store_enabled | default(false) | bool) }}"
+    - name: "shellcrash"
+      image: "{{ shellcrash_image }}"
+      enabled: "{{ is_docker_apps_enabled and (docker_apps_shellcrash_enabled | default(false) | bool) }}"
+    - name: "gemini_balance"
+      image: "{{ gemini_balance_image }}"
+      enabled: "{{ is_docker_apps_enabled and (docker_apps_gemini_balance_enabled | default(false) | bool) }}"
+  when: item.enabled | bool
+  async: 600
+  poll: 0
+  changed_when: false # 异步预拉取作为后台优化任务，不视为配置变更
+  register: docker_prepull_jobs
+  tags: [deploy, services, docker, docker_prepull, phase3]
+
+- name: "确认后台预拉取任务已提交"
+  ansible.builtin.debug:
+    msg: "已为启用项开启后台预拉取任务"
+  changed_when: false
+  when: (docker_prepull_jobs.results | default([])) | length > 0
+  tags: [deploy, services, docker, docker_prepull, phase3]

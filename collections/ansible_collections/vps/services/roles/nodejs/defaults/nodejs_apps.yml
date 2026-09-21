@@ -1,0 +1,24 @@
+---
+# =============================================================================
+# Node.js Apps Management
+# =============================================================================
+# 类似 docker_apps 的管理模式，通过列表控制应用的部署
+#
+# 使用方式:
+#   - nodejs_apps_global: 全局应用列表 (在 group_vars 中定义)
+#   - nodejs_apps_host: 主机特定应用 (在 host_vars 中定义)
+#   - nodejs_apps_exclude: 排除的应用 (在 host_vars 中定义)
+#   - 最终列表 = global + host - exclude
+#
+# 示例:
+#   nodejs_apps_host:
+#     - opencode    # 需要配置管理的应用
+#     - openclaw
+# =============================================================================
+
+# 全局应用列表（默认为空，由 host_vars 填充）
+nodejs_apps_global: []
+# 主机特定应用列表
+nodejs_apps_host: []
+# 排除的应用列表
+nodejs_apps_exclude: []

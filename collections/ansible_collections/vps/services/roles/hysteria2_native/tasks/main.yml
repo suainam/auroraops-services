@@ -1,0 +1,50 @@
+---
+# Role: vps.services.hysteria2_native
+# Main entrypoint
+# Control variable: auroraops_roles['services']['hysteria2_native'] or hysteria2_native_enabled
+
+- name: Deploy Hysteria2 Native client
+  when: hysteria2_native_enabled | bool
+  tags: [deploy, services, hysteria2_native, phase3]
+  block:
+    - name: Preflight and assertions
+      ansible.builtin.import_tasks: preflight.yml
+      tags: [deploy, services, hysteria2_native, hysteria2_native_preflight, phase3]
+
+    - name: Install Hysteria2 binary
+      ansible.builtin.import_tasks: install.yml
+      when: not ansible_check_mode
+      tags: [deploy, services, hysteria2_native, hysteria2_native_install, phase3]
+
+    - name: Configure Hysteria2 client and systemd service
+      ansible.builtin.import_tasks: configure.yml
+      when: not ansible_check_mode
+      tags: [deploy, services, hysteria2_native, hysteria2_native_config, phase3]
+
+    - name: Verify Hysteria2 native client
+      ansible.builtin.import_tasks: verify.yml
+      when: not ansible_check_mode
+      tags: [verify, services, hysteria2_native, hysteria2_native_verify, phase3, deploy]
+
+- name: Clean up Hysteria2 Native client when role is disabled
+  when: not (hysteria2_native_enabled | bool)
+  tags: [deploy, services, hysteria2_native, phase3]
+  block:
+    - name: Check Hysteria2 native service presence
+      ansible.builtin.systemd:
+        name: "{{ hysteria2_native_service_name }}.service"
+      register: hysteria2_native_disabled_status
+      failed_when: false
+      tags: [deploy, services, hysteria2_native, phase3]
+
+    - name: Stop and disable Hysteria2 native service when disabled
+      become: true
+      ansible.builtin.systemd:
+        name: "{{ hysteria2_native_service_name }}.service"
+        state: stopped
+        enabled: false
+      when:
+        - not ansible_check_mode | bool
+        - hysteria2_native_disabled_status.status is defined
+        - hysteria2_native_disabled_status.status.LoadState | default('') == 'loaded'
+      tags: [deploy, services, hysteria2_native, phase3]

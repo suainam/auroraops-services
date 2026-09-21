@@ -1,0 +1,24 @@
+---
+- name: Stop and remove OMP Terminal compose stack
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+    tasks_from: rollback
+  vars:
+    cdp_name: "{{ pi_terminal_name }}"
+    cdp_image: "pi-terminal:omp-{{ pi_terminal_omp_version }}"
+    cdp_base_path: "{{ pi_terminal_base_path }}"
+    cdp_compose_enabled: true
+  tags: [rollback, applications, pi_terminal, pi_terminal_rollback, phase5]
+
+- name: Remove generated OMP Terminal build files
+  ansible.builtin.file:
+    path: "{{ pi_terminal_app_dir }}"
+    state: absent
+  tags: [rollback, applications, pi_terminal, pi_terminal_rollback, phase5]
+
+- name: Report preserved OMP Terminal state
+  ansible.builtin.debug:
+    msg: >-
+      OMP Terminal container and build files were removed. Workspace, credentials,
+      pi_terminal_omp_home, and the legacy pi_terminal_home volume were preserved.
+  tags: [rollback, applications, pi_terminal, pi_terminal_rollback, phase5]

@@ -1,0 +1,15 @@
+---
+- name: Inspect Grok Register container before rollback
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ grok_register_container_name }}"
+  register: grok_register_rollback_container
+  tags: [rollback, services, grok_register, grok_register_rollback, phase5]
+
+- name: Remove Grok Register container while preserving persistent state
+  become: true
+  community.docker.docker_container:
+    name: "{{ grok_register_container_name }}"
+    state: absent
+  when: grok_register_rollback_container.exists
+  tags: [rollback, services, grok_register, grok_register_rollback, phase5]

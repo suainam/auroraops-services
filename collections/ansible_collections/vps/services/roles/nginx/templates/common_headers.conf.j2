@@ -1,0 +1,12 @@
+# common_headers.conf
+# Common HTTP headers for Nginx (Security Hardening)
+
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header X-XSS-Protection "1; mode=block" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header Referrer-Policy "no-referrer-when-downgrade" always;
+
+# Content-Security-Policy is complex and app-specific, usually set per site if needed.
+# add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+
+# HSTS is handled in common_ssl.conf usually, or here if forced for all.

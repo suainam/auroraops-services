@@ -1,0 +1,286 @@
+---
+- name: 合并待验证的 Nginx 站点列表
+  ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
+  vars:
+    merge_var_name: nginx_sites_to_deploy
+  tags: [verify, services, nginx, nginx_site_config, phase4]
+- name: Validate focused Nginx site verification target
+  ansible.builtin.assert:
+    that:
+      - >-
+        nginx_site_target | default('') | length == 0
+        or nginx_site_target in nginx_sites_to_deploy
+    fail_msg: >-
+      nginx_site_target must be empty or name one site from the selected
+      nginx_sites_to_deploy set.
+  tags: [verify, services, nginx, nginx_site_config, phase4]
+
+- name: Build focused Nginx site verification list
+  ansible.builtin.set_fact:
+    nginx_sites_to_mutate: >-
+      {{
+        [nginx_site_target]
+        if nginx_site_target | default('') | length > 0
+        else nginx_sites_to_deploy
+      }}
+  tags: [verify, services, nginx, nginx_site_config, phase4]
+
+
+- name: 验证 Nginx 软件包是否已安装
+  become: true
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['apk', 'info', '-e', 'nginx']
+        if (ansible_facts.distribution | default(ansible_distribution | default('Debian'))) == 'Alpine'
+        else ['dpkg', '-s', 'nginx']
+      }}
+  register: nginx_package_check
+  changed_when: false
+  failed_when: nginx_package_check.rc != 0
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_package
+    - phase4
+- name: 验证 Nginx 服务状态
+  become: true
+  ansible.builtin.service_facts:
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_service
+    - phase4
+  register: nginx_service_status
+- name: 检查 Nginx 服务是否运行和启用
+  become: true
+  ansible.builtin.assert:
+    that:
+      - nginx_service_status.ansible_facts.services[nginx_service_fact_key].state == 'running'
+      - nginx_service_status.ansible_facts.services[nginx_service_fact_key].status == 'enabled'
+    fail_msg: Nginx 服务未运行或未启用
+  when: (ansible_service_mgr | default('systemd')) == 'systemd'
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_service
+    - phase4
+- name: 验证 Nginx 配置语法
+  become: true
+  ansible.builtin.command: nginx -t
+  register: nginx_syntax_check
+  changed_when: false
+  failed_when: nginx_syntax_check.rc != 0
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_syntax
+    - nginx_site_config
+    - phase4
+
+- name: Verify Nginx logrotate configuration
+  ansible.builtin.import_tasks: ../../../common/tasks/verify_optional_logrotate.yml
+  vars:
+    optional_logrotate_owner: Nginx
+    optional_logrotate_enabled: "{{ nginx_logrotate_enabled }}"
+    optional_logrotate_config_path: "{{ nginx_logrotate_config_path }}"
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_logrotate
+    - phase4
+- name: 验证 Nginx 主配置文件是否存在
+  become: true
+  ansible.builtin.stat:
+    path: /etc/nginx/nginx.conf
+  register: nginx_main_conf_check
+  failed_when: not nginx_main_conf_check.stat.exists
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_main_conf
+    - phase4
+- name: 验证默认虚拟主机配置文件是否存在并已启用
+  become: true
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-available/default
+  register: nginx_default_site_available_check
+  failed_when: not nginx_default_site_available_check.stat.exists
+  when: nginx_install_default_vhost | default(true) | bool
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_default_site
+    - phase4
+- name: 验证默认虚拟主机配置文件链接是否存在
+  become: true
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/default
+  register: nginx_default_site_enabled_check
+  failed_when: not nginx_default_site_enabled_check.stat.exists or not nginx_default_site_enabled_check.stat.islnk
+  when: nginx_install_default_vhost | default(true) | bool
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_default_site
+    - phase4
+- name: 验证通用 SSL 配置是否存在
+  become: true
+  ansible.builtin.stat:
+    path: /etc/nginx/conf.d/common_ssl.conf
+  register: nginx_common_ssl_check
+  failed_when: not nginx_common_ssl_check.stat.exists
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_common_ssl
+    - phase4
+- name: 验证通用 Headers 配置是否存在
+  become: true
+  ansible.builtin.stat:
+    path: /etc/nginx/conf.d/common_headers.conf
+  register: nginx_common_headers_check
+  failed_when: not nginx_common_headers_check.stat.exists
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_common_headers
+    - phase4
+- name: 验证通用 Performance 配置是否存在
+  become: true
+  ansible.builtin.stat:
+    path: /etc/nginx/conf.d/common_performance.conf
+  register: nginx_common_performance_check
+  failed_when: not nginx_common_performance_check.stat.exists
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_common_performance
+    - phase4
+- name: 验证 Cloudflare IP 列表配置是否存在
+  become: true
+  ansible.builtin.stat:
+    path: /etc/nginx/conf.d/cfip.conf
+  register: nginx_cfip_check
+  failed_when: not nginx_cfip_check.stat.exists
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_cfip
+    - phase4
+- name: 验证 Nginx 站点配置是否存在
+  become: true
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-available/{{ item }}.conf
+  loop: "{{ nginx_sites_to_mutate }}"
+  register: nginx_site_available_checks
+  tags:
+    - verify
+    - services
+    - nginx
+    - phase4
+    - nginx_site_config
+- name: 检查 Nginx 站点配置验证结果
+  become: true
+  ansible.builtin.assert:
+    that: item.stat.exists
+    fail_msg: "站点配置不存在: {{ item.item }}"
+  loop: "{{ nginx_site_available_checks.results }}"
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_site_config
+    - nginx_site_config
+    - phase4
+- name: 检查 Nginx 站点启用链接是否存在
+  become: true
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/{{ item }}.conf
+  loop: "{{ nginx_sites_to_mutate }}"
+  register: nginx_site_enabled_checks
+  tags:
+    - verify
+    - services
+    - nginx
+    - phase4
+    - nginx_site_config
+- name: 检查 Nginx 站点链接验证结果
+  become: true
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.islnk
+    fail_msg: "站点链接不存在或不是链接: {{ item.item }}"
+  loop: "{{ nginx_site_enabled_checks.results }}"
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_site_config
+    - nginx_site_config
+    - phase4
+- name: 验证 Nginx 是否监听在 HTTP 端口
+  ansible.builtin.wait_for:
+    port: "{{ nginx_http_port }}"
+    host: 127.0.0.1
+    state: started
+    timeout: 1
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_http_port
+    - nginx_verify_port_80
+    - phase4
+- name: 验证 Nginx 是否监听在 443 端口 (如果 SSL 启用)
+  ansible.builtin.wait_for:
+    port: 443
+    host: 127.0.0.1
+    state: started
+    timeout: 1
+  register: nginx_https_listener_check
+  failed_when: false
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_port_443
+    - phase4
+
+- name: Check OpenRC Nginx service state
+  become: true
+  ansible.builtin.command: rc-service nginx status
+  register: nginx_openrc_service_status
+  changed_when: false
+  when: (ansible_service_mgr | default('systemd')) != 'systemd'
+  tags: [verify, services, nginx, nginx_verify_service, phase4]
+
+- name: Check OpenRC Nginx service enablement
+  become: true
+  ansible.builtin.command: rc-update show default
+  register: nginx_openrc_service_enabled
+  changed_when: false
+  when: (ansible_service_mgr | default('systemd')) != 'systemd'
+  tags: [verify, services, nginx, nginx_verify_service, phase4]
+
+- name: Assert OpenRC Nginx service is running and enabled
+  ansible.builtin.assert:
+    that:
+      - nginx_openrc_service_status.rc == 0
+      - "'nginx' in nginx_openrc_service_enabled.stdout"
+    fail_msg: Nginx OpenRC service is not running or enabled
+  when: (ansible_service_mgr | default('systemd')) != 'systemd'
+  tags: [verify, services, nginx, nginx_verify_service, phase4]

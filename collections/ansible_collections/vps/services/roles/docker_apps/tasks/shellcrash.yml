@@ -1,0 +1,125 @@
+---
+# ShellCrash - 使用 container_deployer Meta 角色部署
+
+- name: Check if shellcrash should be deployed
+  ansible.builtin.set_fact:
+    docker_apps_shellcrash_deploy: >-
+      {{ docker_apps_shellcrash_enabled | default(false)
+         and inventory_hostname == 'nas' }}
+  tags: [deploy, services, docker_apps, shellcrash, phase5]
+
+- name: Ensure macvlan network exists
+  become: true
+  community.docker.docker_network:
+    name: macnet
+    driver: macvlan
+    driver_options:
+      parent: "{{ docker_apps_shellcrash_parent_interface }}"
+    ipam_config:
+      - subnet: "{{ docker_apps_shellcrash_subnet }}"
+        gateway: "{{ docker_apps_shellcrash_gateway }}"
+    state: present
+  when: docker_apps_shellcrash_deploy | bool
+  tags: [deploy, services, docker_apps, shellcrash, phase5]
+
+- name: Inspect ShellCrash config source
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_apps_shellcrash_config_source }}"
+  register: docker_apps_shellcrash_config_source_stat
+  when:
+    - docker_apps_shellcrash_deploy | bool
+    - docker_apps_shellcrash_config_source | length > 0
+  tags: [deploy, services, docker_apps, shellcrash, phase5]
+
+- name: Deploy config.yaml from source
+  become: true
+  ansible.builtin.copy:
+    src: "{{ docker_apps_shellcrash_config_source }}"
+    dest: /opt/dockers/shellcrash/crashdata/config.yaml
+    mode: '0644'
+    force: false
+    remote_src: true
+  when:
+    - docker_apps_shellcrash_deploy | bool
+    - docker_apps_shellcrash_config_source_stat.stat.exists | default(false)
+  tags: [deploy, services, docker_apps, shellcrash, phase5]
+
+- name: Deploy shellcrash
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+  vars:
+    cdp_name: "shellcrash"
+    cdp_image: "{{ shellcrash_image }}"
+    cdp_dirs: ["crashdata", "yamls"]
+    cdp_compose_enabled: true
+    cdp_compose_template: "shellcrash_docker-compose.yml.j2"
+    cdp_compose_vars:
+      shellcrash_image: "{{ shellcrash_image }}"
+      shellcrash_container_ip: "{{ docker_apps_shellcrash_container_ip }}"
+  when: docker_apps_shellcrash_deploy | bool
+  tags: [deploy, services, docker_apps, shellcrash, phase5]
+
+- name: Copy config to container
+  become: true
+  community.docker.docker_container_copy_into:
+    container: shellcrash
+    path: /opt/dockers/shellcrash/crashdata/config.yaml
+    container_path: /etc/ShellCrash/yamls/config.yaml
+    mode: "0644"
+  when:
+    - docker_apps_shellcrash_deploy | bool
+    - docker_apps_shellcrash_config_source_stat.stat.exists | default(false)
+  tags: [deploy, services, docker_apps, shellcrash, phase5]
+
+- name: Ensure external-controller listens on all interfaces
+  become: true
+  community.docker.docker_container_exec:
+    container: shellcrash
+    argv:
+      - /bin/sh
+      - -c
+      - >-
+        if grep -Eq 'external-controller: ":?[0-9]*"'
+        /etc/ShellCrash/yamls/config.yaml; then
+        sed -i 's/external-controller: ":?[0-9]*"/external-controller: 0.0.0.0:9999/'
+        /etc/ShellCrash/yamls/config.yaml;
+        printf changed;
+        fi
+  register: docker_apps_shellcrash_controller_config
+  changed_when: "'changed' in docker_apps_shellcrash_controller_config.stdout"
+  when: docker_apps_shellcrash_deploy | bool
+  tags: [deploy, services, docker_apps, shellcrash, phase5]
+
+- name: Start ShellCrash service inside container
+  become: true
+  community.docker.docker_container_exec:
+    container: shellcrash
+    argv:
+      - /etc/ShellCrash/start.sh
+      - start
+  changed_when: true
+  when: docker_apps_shellcrash_deploy | bool
+  tags: [deploy, services, docker_apps, shellcrash, phase5]
+
+- name: Verify service is running
+  become: true
+  community.docker.docker_container_exec:
+    container: shellcrash
+    argv:
+      - pgrep
+      - -f
+      - CrashCore
+  register: docker_apps_shellcrash_status
+  changed_when: false
+  failed_when: false
+  when: docker_apps_shellcrash_deploy | bool
+  tags: [deploy, services, docker_apps, shellcrash, phase5]
+
+- name: Display status
+  ansible.builtin.debug:
+    msg: >-
+      ShellCrash service status:
+      {{ (docker_apps_shellcrash_status.rc == 0) | ternary('running', 'stopped') }}
+  when: docker_apps_shellcrash_deploy | bool
+  tags: [deploy, services, docker_apps, shellcrash, phase5]

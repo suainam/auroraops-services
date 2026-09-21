@@ -1,0 +1,22 @@
+---
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - container_deployer_name | length > 0
+      - container_deployer_image | length > 0
+    fail_msg: "cdp_name and cdp_image are required"
+  tags: [deploy, services, container_deployer, phase5]
+
+- name: Include preparation tasks
+  ansible.builtin.import_tasks: prepare.yml
+  tags: [deploy, services, container_deployer, phase5]
+
+- name: Deploy container
+  ansible.builtin.import_tasks: container.yml
+  when: not container_deployer_compose_enabled
+  tags: [deploy, services, container_deployer, phase5]
+
+- name: Deploy compose stack
+  ansible.builtin.import_tasks: compose.yml
+  when: container_deployer_compose_enabled
+  tags: [deploy, services, container_deployer, phase5]

@@ -1,0 +1,60 @@
+---
+- name: 验证 rclone 是否已安装 (检查版本)
+  ansible.builtin.command: rclone version
+  register: rclone_package_check
+  failed_when: rclone_package_check.rc != 0
+  changed_when: false
+  tags:
+    - verify
+    - personalization
+    - rclone
+    - rclone_verify_package
+    - phase2
+
+- name: 验证 rclone 配置目录是否存在
+  ansible.builtin.stat:
+    path: /root/.config/rclone
+  register: rclone_config_dir_check
+  failed_when: not rclone_config_dir_check.stat.exists
+  tags:
+    - verify
+    - personalization
+    - rclone
+    - rclone_verify_config_dir
+    - phase2
+
+- name: 验证 rclone 用户自定义配置目录是否存在
+  ansible.builtin.stat:
+    path: /root/.config/rclone/rclone.conf.d
+  register: rclone_user_config_dir_check
+  failed_when: not rclone_user_config_dir_check.stat.exists
+  tags:
+    - verify
+    - personalization
+    - rclone
+    - rclone_verify_user_config_dir
+    - phase2
+
+- name: 验证 rclone.conf 文件是否存在
+  ansible.builtin.stat:
+    path: /root/.config/rclone/rclone.conf
+  register: rclone_conf_file_check
+  failed_when: not rclone_conf_file_check.stat.exists
+  tags:
+    - verify
+    - personalization
+    - rclone
+    - rclone_verify_conf_file
+    - phase2
+
+- name: 验证 rclone.conf 内容 (例如，检查 [include] 部分)
+  ansible.builtin.command: grep '^\[include\]' /root/.config/rclone/rclone.conf
+  register: rclone_conf_content_check
+  changed_when: false
+  failed_when: rclone_conf_content_check.rc != 0
+  tags:
+    - verify
+    - personalization
+    - rclone
+    - rclone_verify_conf_content
+    - phase2

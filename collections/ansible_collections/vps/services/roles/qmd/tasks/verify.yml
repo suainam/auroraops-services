@@ -1,0 +1,42 @@
+---
+- name: Check bun is installed
+  ansible.builtin.command:
+    cmd: bun --version
+  register: qmd_bun_check
+  changed_when: false
+  failed_when: qmd_bun_check.rc != 0
+  tags: [verify, services, qmd, qmd_verify, phase3]
+
+- name: Check qmd services directory exists
+  ansible.builtin.stat:
+    path: "{{ qmd_services_dir }}"
+  register: qmd_services_stat
+  tags: [verify, services, qmd, qmd_verify, phase3]
+
+- name: Verify qmd soft link
+  ansible.builtin.stat:
+    path: "{{ qmd_services_dir }}"
+  register: qmd_link_stat
+  tags: [verify, services, qmd, qmd_verify, phase3]
+
+- name: Validate qmd is a symlink
+  ansible.builtin.assert:
+    that:
+      - qmd_link_stat.stat.islnk is defined
+      - qmd_link_stat.stat.islnk
+    fail_msg: "qmd_services_dir is not a soft link"
+    success_msg: "qmd soft link verified"
+  when: not ansible_check_mode|bool
+  tags: [verify, services, qmd, qmd_verify, phase3]
+
+- name: Check qmd data directory exists
+  ansible.builtin.stat:
+    path: "{{ qmd_local_dir }}"
+  register: qmd_local_stat
+  tags: [verify, services, qmd, qmd_verify, phase3]
+
+- name: Verify qmd index database
+  ansible.builtin.stat:
+    path: "{{ qmd_local_dir }}/index.sqlite"
+  register: qmd_db_stat
+  tags: [verify, services, qmd, qmd_verify, phase3]

@@ -1,0 +1,23 @@
+---
+- name: Check existing collections
+  ansible.builtin.command:
+    cmd: qmd collection list
+  register: qmd_collections_list
+  changed_when: false
+  tags: [deploy, services, qmd, qmd_collections, phase3]
+
+- name: Add qmd collections
+  ansible.builtin.command:
+    cmd: "qmd collection add {{ item.path }} --name {{ item.name }}{% if item.mask is defined %} --mask {{ item.mask }}{% endif %}"
+  loop: "{{ qmd_collections }}"
+  when: qmd_collections | length > 0
+  register: qmd_collection_add
+  changed_when: qmd_collection_add.rc != 0
+  tags: [deploy, services, qmd, qmd_collections, phase3]
+
+- name: Build qmd index
+  ansible.builtin.command:
+    cmd: qmd update
+  when: qmd_collections | length > 0
+  changed_when: false
+  tags: [deploy, services, qmd, qmd_collections, phase3]

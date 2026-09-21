@@ -1,0 +1,59 @@
+---
+# Defaults for vps.services.hysteria2_native
+# Role ID: vps.services.hysteria2_native
+# Phase: 3 (services)
+
+# Enablement control
+hysteria2_native_enabled: "{{ auroraops_roles['services']['hysteria2_native'] | default(false) }}"
+
+# Version & binary download
+hysteria2_native_version: "2.12.3"
+hysteria2_native_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else ('amd64' if ansible_architecture == 'x86_64' else ansible_architecture) }}"
+hysteria2_native_binary_filename: "hysteria-linux-{{ hysteria2_native_arch }}"
+hysteria2_native_binary_url: >-
+  https://github.com/HyNetworks/hysteria/releases/download/app%2Fv{{ hysteria2_native_version }}/{{ hysteria2_native_binary_filename }}
+hysteria2_native_checksums:
+  arm64: "sha256:c8dc653c3ba0a28d29a26b8fa52d2086f27c0927afddce95c09965e7174e78b0"
+  amd64: "sha256:8c7a68a906998b747a0db87586e364f995fbfddb95693ae6e2fdb68a6e920d3e"
+hysteria2_native_checksum: "{{ hysteria2_native_checksums[hysteria2_native_arch] | default('') }}"
+hysteria2_native_expected_sha256: "{{ hysteria2_native_checksum.split(':')[-1] if ':' in hysteria2_native_checksum else hysteria2_native_checksum }}"
+
+# Staging on Ansible controller: download on controller first to avoid remote proxy bootstrap issues
+hysteria2_native_controller_staging_dir: "{{ lookup('env', 'TMPDIR') | default('/tmp', true) }}/auroraops-hysteria2-assets"
+hysteria2_native_use_controller_staging: true
+
+# Paths & service execution
+hysteria2_native_install_dir: "/opt/hysteria2"
+hysteria2_native_dir_mode: "0750"
+hysteria2_native_binary_path: "{{ hysteria2_native_install_dir }}/hysteria2-client"
+hysteria2_native_config_path: "{{ hysteria2_native_install_dir }}/config.yaml"
+hysteria2_native_user: "root"
+hysteria2_native_group: "root"
+hysteria2_native_service_name: "hysteria2-native"
+
+# Listener configuration (loopback-only)
+# Hysteria 2.4.1+ supports single-port mixed SOCKS5 and HTTP when listen addresses match
+hysteria2_native_socks5_host: "127.0.0.1"
+hysteria2_native_socks5_port: 10808
+hysteria2_native_http_host: "127.0.0.1"
+hysteria2_native_http_port: 10808
+# Upstream connection parameters (authority variables from vault / host_vars directly)
+hysteria2_native_server: "{{ singbox_domain | default('') }}"
+hysteria2_native_server_port: "{{ app_port_singbox_hysteria | default(30051) | int }}"
+hysteria2_native_auth_password: "{{ hysteria_auth_password | default('') }}"
+hysteria2_native_sni: "bing.com"
+hysteria2_native_insecure: true
+hysteria2_native_alpn:
+  - h3
+hysteria2_native_obfs_type: "salamander"
+hysteria2_native_obfs_password: "{{ hysteria_obfs_password | default('') }}"
+
+# Bandwidth (optional; omitted by default so client uses BBR CC)
+hysteria2_native_bandwidth_up: ""
+hysteria2_native_bandwidth_down: ""
+
+# Preexisting unibox native service:
+# Unibox native service path: /home/admin/unibox/services/hysteria2
+# Preserves existing config and binary for recovery, only stops competing service during cutover.
+hysteria2_native_competing_service: "hysteria2.service"
+hysteria2_native_unibox_dir: "/home/admin/unibox/services/hysteria2"

@@ -1,0 +1,14 @@
+---
+# Canonical role-prefixed variables. Legacy app_timer_* inputs remain supported
+# so existing include_role callers do not need to change in this lint-only patch.
+
+application_timer_name: "{{ app_timer_name | default('') }}"
+application_timer_description: "{{ app_timer_description | default('Generic Application Timer') }}"
+application_timer_on_calendar: "{{ app_timer_on_calendar | default('') }}"
+application_timer_app_timer_on_calendar: "{{ application_timer_on_calendar }}"
+application_timer_app_timer_on_boot_sec: ""
+application_timer_accuracy: "{{ app_timer_accuracy | default('') }}"
+application_timer_persistent: "{{ app_timer_persistent | default(true) }}"
+application_timer_randomized_delay: "{{ app_timer_randomized_delay | default('') }}"
+application_timer_enabled: "{{ app_timer_enabled | default(true) }}"
+application_timer_state: "{{ app_timer_state | default('started') }}"

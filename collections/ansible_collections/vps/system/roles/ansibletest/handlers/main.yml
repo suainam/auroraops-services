@@ -1,0 +1,12 @@
+---
+# Handler: Build Docker test image
+- name: Build test image
+  community.docker.docker_image:
+    name: "{{ ansibletest_docker_image }}"
+    source: build
+    build:
+      path: "{{ ansibletest_source_dir }}/collections/ansible_collections/vps/system/roles/ansibletest/files"
+      dockerfile: Dockerfile.base
+  when:
+    - ansibletest_build_image | default(true) | bool
+  listen: Build test image

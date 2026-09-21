@@ -1,0 +1,36 @@
+---
+# Ansible Test Installation & Preparation
+# Installs dependencies and prepares the test environment
+
+- name: Debug ansibletest configuration
+  ansible.builtin.debug:
+    msg: |
+      ansibletest_use_docker: {{ ansibletest_use_docker }}
+      ansibletest_docker_image: {{ ansibletest_docker_image }}
+      ansibletest_build_image: {{ ansibletest_build_image | default(false) }}
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]
+
+- name: Sync AuroraOps repository
+  ansible.builtin.git:
+    repo: "{{ ansibletest_source_repo }}"
+    dest: "{{ ansibletest_source_dir }}"
+    version: "{{ ansibletest_source_version }}"
+    update: true
+    force: true
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]
+
+- name: Build Docker test image (Optional - speeds up tests significantly)
+  ansible.builtin.include_tasks: build_image.yml
+  when: ansibletest_use_docker | default(false) | bool
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]
+
+- name: Prepare ansible-test directory structure
+  ansible.builtin.shell: |
+    rm -rf {{ ansibletest_container_home }}/ansible_collections
+    mkdir -p {{ ansibletest_container_home }}/ansible_collections/vps/system/tests/integration
+    cp -r /root/AuroraOps/collections/ansible_collections/vps {{ ansibletest_container_home }}/ansible_collections/
+    cp -r /root/AuroraOps/tests/integration/targets {{ ansibletest_container_home }}/ansible_collections/vps/system/tests/integration/
+  args:
+    executable: /bin/bash
+  changed_when: true
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]

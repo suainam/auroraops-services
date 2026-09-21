@@ -1,0 +1,109 @@
+export const PreEditSecurity = async ({ project, client, $, directory, worktree }) => {
+  // --- 敏感文件匹配模式 ---
+  const dangerousPatterns = [
+    { regex: /secrets\/.*\.ya?ml$/, hint: "请使用 ansible-vault edit 管理敏感配置" },
+    { regex: /(^|\/)\.vault_pass\.txt$/, hint: "Vault 密码文件禁止直接编辑" },
+    { regex: /(^|\/)\.env$/, hint: "环境变量文件包含敏感信息，请谨慎操作" },
+    { regex: /(^|\/)\.env\.\w+$/, hint: "环境变量文件包含敏感信息，请谨慎操作" },
+    { regex: /credentials\.json$/, hint: "凭据文件禁止直接编辑" },
+    { regex: /id_rsa$/, hint: "SSH 私钥禁止直接编辑" },
+    { regex: /\.pem$/, hint: "证书/密钥文件禁止直接编辑" },
+  ];
+
+  // --- Ansible 文件审计日志模式 ---
+  const ansiblePatterns = [
+    /\/tasks\/.*\.yml$/,
+    /\/handlers\/.*\.yml$/,
+    /\/defaults\/main\.yml$/,
+    /\/vars\/main\.yml$/,
+  ];
+
+  // --- 大比例删减检测配置 ---
+  const SHRINK_THRESHOLD = 0.5; // 新内容小于原内容的 50% 时触发
+  const MIN_FILE_SIZE = 500;    // 仅对大于 500 字节的文件进行检测
+
+  return {
+    "tool.execute.before": async (input, output) => {
+      // ========== 全局逃生舱：SKIP=1 放行一切 ==========
+      const toolArgs = output.args || {};
+      const skipFlag = toolArgs.SKIP || toolArgs.skip;
+      const skipEnv = process.env.SKIP || process.env.SKIP_CHECK;
+      if (skipFlag === "1" || skipFlag === true || skipEnv === "1") {
+        return;
+      }
+
+      // ========== 1. 文件编辑安全拦截 ==========
+      if (input.tool === "edit" || input.tool === "write" || input.tool === "write_to_file" || input.tool === "replace_file_content" || input.tool === "multi_replace_file_content") {
+        const filePath = toolArgs.filePath || toolArgs.TargetFile || toolArgs.path || "";
+
+        // --- 1a. 敏感文件拦截 ---
+        for (const { regex, hint } of dangerousPatterns) {
+          if (regex.test(filePath)) {
+            throw new Error(
+              `🔒  安全拦截：检测到敏感文件编辑\n` +
+                `    文件: ${filePath}\n` +
+                `    提示: ${hint}\n\n` +
+                `如确需操作，请使用 SKIP 参数绕过此检测。`
+            );
+          }
+        }
+
+        // --- 1b. 大比例删减检测（防 Agent 误删功能） ---
+        if (toolArgs.Overwrite === true || toolArgs.Overwrite === "true") {
+          try {
+            const { stat } = await import("fs/promises");
+            const fileInfo = await stat(filePath);
+            const originalSize = fileInfo.size;
+
+            if (originalSize > MIN_FILE_SIZE) {
+              const newContent = toolArgs.CodeContent || toolArgs.content || "";
+              const newSize = Buffer.byteLength(newContent, "utf-8");
+
+              if (newSize < originalSize * SHRINK_THRESHOLD) {
+                const shrinkPercent = Math.round((1 - newSize / originalSize) * 100);
+                throw new Error(
+                  `⚠️  大幅度修改拦截：检测到文件内容缩减 ${shrinkPercent}%\n` +
+                    `    文件: ${filePath}\n` +
+                    `    原大小: ${originalSize} 字节 → 新大小: ${newSize} 字节\n\n` +
+                    `此操作极有可能导致功能丢失。建议:\n` +
+                    `  1. 使用分块修改 精准编辑\n` +
+                    `  2. 如确认是安全重构，请使用 SKIP 参数绕过此检测`
+                );
+              }
+            }
+          } catch (err) {
+            // 如果文件不存在 (ENOENT) 或其他 stat 错误，不阻断（可能是新建文件）
+            if (err.code !== "ENOENT" && err.message?.includes("大幅度修改拦截")) {
+              throw err;
+            }
+          }
+        }
+
+        // --- 1c. Ansible 文件编辑审计日志 ---
+        for (const pattern of ansiblePatterns) {
+          if (pattern.test(filePath)) {
+            await client.app.log({
+              body: {
+                service: "auroraops-security",
+                level: "info",
+                message: `[审计] 编辑 Ansible 文件: ${filePath}`,
+              },
+            });
+            break;
+          }
+        }
+      }
+
+      // ========== 2. 文件删除拦截 ==========
+      if (input.tool === "delete" || input.tool === "remove") {
+        const filePath = toolArgs.filePath || toolArgs.path || "";
+        throw new Error(
+          `🚫  文件删除拦截：Agent 不应直接删除文件\n` +
+            `    文件: ${filePath}\n\n` +
+            `建议使用 git rm 进行可回退的删除操作。\n` +
+            `如确需操作，请使用 SKIP 参数绕过此检测。`
+        );
+      }
+    },
+  };
+};

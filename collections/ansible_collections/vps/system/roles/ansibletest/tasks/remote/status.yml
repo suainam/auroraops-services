@@ -1,0 +1,27 @@
+---
+- name: Check test process status
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -af
+      - ansible-test
+  register: ansibletest_test_process
+  changed_when: false
+  failed_when: false
+
+- name: Check test result file exists
+  ansible.builtin.stat:
+    path: /tmp/ansible-test-reports
+  register: ansibletest_result_dir
+
+- name: Display test status
+  ansible.builtin.debug:
+    msg: |
+      === TEST STATUS ===
+      Process Running: {{ ansibletest_test_process.rc == 0 }}
+      Result Directory Exists: {{ ansibletest_result_dir.stat.exists }}
+
+      {% if ansibletest_test_process.rc == 0 %}
+      Running Processes:
+      {{ ansibletest_test_process.stdout }}
+      {% endif %}

@@ -1,0 +1,76 @@
+# Mihomo profile backed by the private Sub-Store proxy provider.
+
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: false
+
+# Nodes are loaded dynamically from Sub-Store.
+proxies: []
+proxy-providers:
+  aurora-substore:
+    type: http
+    url: "https://{{ singbox_domain }}/{{ sub_store_mihomo_provider_suffix }}"
+    path: ./proxy_providers/aurora-substore.yaml
+    interval: 3600
+    health-check:
+      enable: true
+      url: https://cp.cloudflare.com/generate_204
+      interval: 300
+      timeout: 5000
+      lazy: true
+      expected-status: 204
+
+proxy-groups:
+  - name: "🚀 节点选择"
+    type: select
+    proxies:
+      - "⚡️ 自动延迟"
+      - "🛡️ 自动稳定"
+      - "🌍 全部节点"
+      - DIRECT
+
+  - name: "🌍 全部节点"
+    type: select
+    use:
+      - aurora-substore
+
+  - name: "⚡️ 自动延迟"
+    type: url-test
+    use:
+      - aurora-substore
+    url: https://cp.cloudflare.com/generate_204
+    interval: 60
+    tolerance: 50
+    lazy: true
+
+  - name: "🛡️ 自动稳定"
+    type: fallback
+    use:
+      - aurora-substore
+    url: https://cp.cloudflare.com/generate_204
+    interval: 300
+    lazy: true
+
+rules:
+  - GEOIP,CN,DIRECT
+  - MATCH,🚀 节点选择
+
+dns:
+  enable: true
+  ipv6: false
+  listen: 0.0.0.0:1053
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  nameserver:
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
+  proxy-server-nameserver:
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
+  fake-ip-filter:
+    - "{{ singbox_domain }}"

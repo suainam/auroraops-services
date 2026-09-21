@@ -1,0 +1,153 @@
+---
+- name: Check vim baseline presence for rollback
+  become: true
+  ansible.builtin.stat:
+    path: "{{ vim_baseline_fact_path }}"
+  register: vim_baseline_stat
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Refuse rollback without vim baseline
+  ansible.builtin.fail:
+    msg: "Vim baseline is missing; cannot safely rollback managed vim state"
+  when: not vim_baseline_stat.stat.exists
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Read vim baseline for rollback
+  become: true
+  ansible.builtin.slurp:
+    path: "{{ vim_baseline_fact_path }}"
+  register: vim_baseline_raw
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Parse vim baseline for rollback
+  ansible.builtin.set_fact:
+    vim_baseline: "{{ vim_baseline_raw.content | b64decode | from_json }}"
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Validate vim baseline for rollback
+  ansible.builtin.assert:
+    that:
+      - vim_baseline.auroraops_managed | default(false) | bool
+      - vim_baseline.users is defined
+    fail_msg: "Vim baseline content is invalid for rollback"
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Gather primary groups for rollback users
+  become: true
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+  register: vim_rollback_user_info
+  loop: "{{ vim_baseline.users }}"
+  changed_when: false
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Restore system vimrc from backup
+  become: true
+  ansible.builtin.copy:
+    src: "{{ vim_system_vimrc_backup_path }}"
+    dest: "{{ vim_system_vimrc_path }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  when: vim_baseline.system_vimrc_existed | default(false)
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Remove managed system vimrc when it did not exist before deploy
+  become: true
+  ansible.builtin.file:
+    path: "{{ vim_system_vimrc_path }}"
+    state: absent
+  when: not (vim_baseline.system_vimrc_existed | default(false))
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Restore managed user vimrc from backup
+  become: true
+  ansible.builtin.copy:
+    src: "{{ vim_backup_root }}/{{ item.name }}.vimrc"
+    dest: "{{ item.home }}/.vimrc"
+    remote_src: true
+    owner: "{{ item.name }}"
+    group: "{{ (vim_rollback_user_info.results[loop.index0].group | default(item.name)) }}"
+    mode: "0644"
+  loop: "{{ vim_baseline.users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.vimrc_existed | default(false)
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Remove managed user vimrc when it did not exist before deploy
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.home }}/.vimrc"
+    state: absent
+  loop: "{{ vim_baseline.users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: not (item.vimrc_existed | default(false))
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Ensure user autoload directory exists before plug restore
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.home }}/.vim/autoload"
+    state: directory
+    owner: "{{ item.name }}"
+    group: "{{ (vim_rollback_user_info.results[loop.index0].group | default(item.name)) }}"
+    mode: "0755"
+  loop: "{{ vim_baseline.users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.plug_existed | default(false)
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Restore managed user plug.vim from backup
+  become: true
+  ansible.builtin.copy:
+    src: "{{ vim_backup_root }}/{{ item.name }}.plug.vim"
+    dest: "{{ item.home }}/.vim/autoload/plug.vim"
+    remote_src: true
+    owner: "{{ item.name }}"
+    group: "{{ (vim_rollback_user_info.results[loop.index0].group | default(item.name)) }}"
+    mode: "0644"
+  loop: "{{ vim_baseline.users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.plug_existed | default(false)
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Remove managed user plug.vim when it did not exist before deploy
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.home }}/.vim/autoload/plug.vim"
+    state: absent
+  loop: "{{ vim_baseline.users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: not (item.plug_existed | default(false))
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Remove managed autoload directory created by deploy
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.home }}/.vim/autoload"
+    state: absent
+  loop: "{{ vim_baseline.users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: not (item.autoload_dir_existed | default(false))
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Remove vim baseline after successful rollback
+  become: true
+  ansible.builtin.file:
+    path: "{{ vim_baseline_fact_path }}"
+    state: absent
+  tags: [rollback, personalization, vim, phase2]
+
+- name: Remove vim backup directory after successful rollback
+  become: true
+  ansible.builtin.file:
+    path: "{{ vim_backup_root }}"
+    state: absent
+  tags: [rollback, personalization, vim, phase2]

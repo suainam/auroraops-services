@@ -1,0 +1,163 @@
+# tasks/certs.yml
+---
+- name: 创建 Certbot DNS 凭证文件目录
+  become: true
+  ansible.builtin.file:
+    path: "/etc/letsencrypt"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: certbot_create_method == 'dns' and certbot_dns_plugin is defined
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: 创建 Certbot DNS 凭证文件
+  become: true
+  ansible.builtin.template:
+    src: "{{ certbot_dns_plugin }}.ini.j2"
+    dest: "{{ certbot_dns_credentials_file }}"
+    owner: root
+    group: root
+    mode: "0600" # 敏感文件，权限严格
+  when: certbot_create_method == 'dns' and certbot_dns_plugin is defined
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: 调试 - Certbot DNS 凭证文件路径
+  ansible.builtin.debug:
+    var: certbot_dns_credentials_file
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: 调试 - Certbot 管理员邮箱
+  ansible.builtin.debug:
+    var: certbot_admin_email
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: 调试 - Certbot 证书域名列表
+  ansible.builtin.debug:
+    var: certbot_certs
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: 调试 - Certbot 创建方法
+  ansible.builtin.debug:
+    var: certbot_create_method
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: 调试 - Certbot 是否创建缺失证书
+  ansible.builtin.debug:
+    var: certbot_create_if_missing
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: 终止正在运行的 certbot 进程
+  become: true
+  ansible.builtin.command:
+    argv:
+      - pkill
+      - -9
+      - -f
+      - '^(/usr/bin/)?python3 .*certbot'
+  register: certbot_process_termination
+  changed_when: certbot_process_termination.rc == 0
+  failed_when: certbot_process_termination.rc not in [0, 1]
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: Wait after terminating Certbot processes
+  ansible.builtin.pause:
+    seconds: 2
+  when: certbot_process_termination.rc == 0
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: Find residual Certbot temporary files
+  ansible.builtin.find:
+    paths: /tmp
+    patterns: certbot-log-*
+    file_type: any
+  register: certbot_residual_temp_files
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: 清理残留的 Certbot 锁文件
+  become: true
+  ansible.builtin.file:
+    path: /var/lib/letsencrypt/.certbot.lock
+    state: absent
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: Clean residual Certbot temporary files
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ certbot_residual_temp_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: Generate certificates with DNS Cloudflare plugin
+  become: true
+  ansible.builtin.command: >
+    {{ system_python_venv_path | default('/opt/aurora_venv') }}/bin/certbot certonly
+    --dns-{{ certbot_dns_plugin }}
+    --dns-{{ certbot_dns_plugin }}-credentials {{ certbot_dns_credentials_file }}
+    --email {{ certbot_admin_email }}
+    --agree-tos
+    --deploy-hook "systemctl reload nginx"
+    --non-interactive
+    --keep-until-expiring
+    --expand
+    {% for domain in item.domains %}
+    -d {{ domain }}
+    {% endfor %}
+  loop: "{{ certbot_certs }}"
+  when: certbot_create_method == 'dns' and certbot_dns_plugin == 'cloudflare'
+  register: certbot_result
+  changed_when: >-
+    certbot_result.rc == 0 and
+    'not yet due for renewal' not in certbot_result.stdout | lower
+  failed_when: certbot_result.rc != 0 and "already exists" not in certbot_result.stderr
+  environment:
+    http_proxy: "{{ certbot_proxy_http }}"
+    https_proxy: "{{ certbot_proxy_https }}"
+    HTTP_PROXY: "{{ certbot_proxy_http }}"
+    HTTPS_PROXY: "{{ certbot_proxy_https }}"
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: 部署 Certbot Systemd 服务 (pipx 独立运行需要)
+  become: true
+  ansible.builtin.template:
+    src: certbot.service.j2
+    dest: /etc/systemd/system/certbot.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: certbot_auto_renew | bool
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: 部署 Certbot Systemd 定时器
+  become: true
+  ansible.builtin.template:
+    src: certbot.timer.j2
+    dest: /etc/systemd/system/certbot.timer
+    owner: root
+    group: root
+    mode: "0644"
+  when: certbot_auto_renew | bool
+  notify: 重新加载 systemd daemon
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: 启用并启动 Certbot 定时器
+  become: true
+  ansible.builtin.systemd:
+    name: certbot.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: certbot_auto_renew | bool
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: Configure Certbot logrotate
+  ansible.builtin.import_tasks: ../../../common/tasks/manage_optional_logrotate.yml
+  vars:
+    optional_logrotate_owner: Certbot
+    optional_logrotate_enabled: "{{ certbot_logrotate_enabled }}"
+    optional_logrotate_config_path: "{{ certbot_logrotate_config_path }}"
+    optional_logrotate_config: "{{ certbot_logrotate_config }}"
+  tags: [deploy, services, certbot, certbot_logrotate, phase4]

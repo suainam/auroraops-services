@@ -1,0 +1,145 @@
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ singbox_domain }};
+    
+    # Redirect all HTTP traffic to HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name {{ singbox_domain }};
+
+    ssl_certificate /etc/letsencrypt/live/{{ docker_apps_singbox_certificate_domain }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ docker_apps_singbox_certificate_domain }}/privkey.pem;
+
+    include /etc/nginx/conf.d/common_ssl.conf;
+    include /etc/nginx/conf.d/common_headers.conf;
+    include /etc/nginx/conf.d/common_performance.conf;
+
+    # Sing-box Base64 Subscription
+    location = /{{ singbox_sub_token }} {
+        alias {{ singbox_sub_path }};
+        default_type text/plain;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="ccuai_sub"';
+        add_header Profile-Title "ccuai_sub";
+        add_header Subscription-Userinfo "upload=0; download=0; total=3298534883328; expire=4102444800";
+    }
+
+    # Sing-box YAML Profile
+    location = /{{ singbox_sub_token }}.yaml {
+        alias {{ singbox_sub_path }}.yaml;
+        default_type application/x-yaml;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="ccuai_sub"';
+        add_header Profile-Title "ccuai_sub";
+        add_header Subscription-Userinfo "upload=0; download=0; total=3298534883328; expire=4102444800";
+    }
+
+    # Sing-box JSON Profile
+    location = /{{ singbox_sub_token }}.json {
+        alias {{ singbox_sub_path }}.json;
+        default_type application/json;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="ccuai_sub"';
+        add_header Profile-Title "ccuai_sub";
+        add_header Subscription-Userinfo "upload=0; download=0; total=3298534883328; expire=4102444800";
+    }
+
+    # Complete Mihomo profile backed by the private Sub-Store provider.
+    location = /{{ sub_store_mihomo_suffix }} {
+        alias {{ sub_store_mihomo_profile_path }};
+        default_type application/x-yaml;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="ccuai_substore.yaml"';
+        add_header Profile-Title "ccuai_substore";
+        add_header Subscription-Userinfo "upload=0; download=0; total=3298534883328; expire=4102444800";
+    }
+
+    # Bare Sub-Store nodes consumed by the Mihomo proxy-provider.
+    location = /{{ sub_store_mihomo_provider_suffix }} {
+        proxy_pass http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}/download/{{ sub_store_subscription_name }}/ClashMeta?prettyYaml=true;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    # Sub-Store sing-box Profile (parallel with the native Sing-box profile)
+    location = /{{ sub_store_singbox_suffix }} {
+        proxy_pass http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}/download/{{ sub_store_subscription_name }}/sing-box;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+        proxy_hide_header Content-Disposition;
+        add_header Content-Disposition 'inline; filename="ccuai_substore.json"';
+        add_header Profile-Title "ccuai_substore";
+    }
+
+    # #221 complete Mihomo profile; five pools filter one Sub-Store aggregate.
+    location = /{{ sub_store_capability_profile_suffix }} {
+        alias {{ sub_store_capability_profile_path }};
+        default_type application/x-yaml;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="ccuai_capabilities.yaml"';
+        add_header Profile-Title "ccuai_capabilities";
+        add_header Subscription-Userinfo "upload=0; download=0; total=3298534883328; expire=4102444800";
+    }
+
+    # One aggregated provider retained for compatibility and diagnostics.
+    location = /{{ sub_store_capability_provider_suffix }} {
+        proxy_pass http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}/download/collection/{{ sub_store_capability_collection_name }}/ClashMeta?prettyYaml=true;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    # Provider-preserving sources consumed by the capability profile.
+{% set capability_providers = sub_store_capability_providers_effective | default([]) %}
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+    location = /{{ sub_store_capability_source_provider_suffix }}-{{ provider_id | urlencode }}.yaml {
+        proxy_pass http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}/download/{{ provider.name | urlencode }}/ClashMeta?prettyYaml=true;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+{% endif %}
+{% endfor %}
+
+    # HTTPS Camouflage
+    location / {
+        root /var/www/camouflage/{{ nginx_camouflage_extract_dir | default('') }};
+        index index.html index.htm;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Trojan WebSocket Proxy
+    location {{ singbox_trojan_path }} {
+        proxy_pass http://127.0.0.1:{{ app_port_singbox_trojan }};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}

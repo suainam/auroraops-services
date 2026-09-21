@@ -1,0 +1,76 @@
+---
+# =============================================================================
+# OpenCode AI Assistant Configuration and Management
+# =============================================================================
+# Main tag: opencode
+# Internal tags: opencode_install, opencode_config, opencode_project_config, opencode_ecc, opencode_server
+#
+# Force control:
+#   - opencode_force: force all opencode operations
+#   - opencode_install_force: force installation only
+#   - opencode_config_force: force configuration only
+
+- name: Check if OpenCode is installed
+  ansible.builtin.command: which opencode
+  register: nodejs_opencode_check
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, nodejs, opencode, phase3]
+
+- name: Set OpenCode skip flags
+  ansible.builtin.set_fact:
+    nodejs_opencode_installed: "{{ nodejs_opencode_check.rc == 0 }}"
+    nodejs_opencode_skip_install: "{{ nodejs_opencode_check.rc == 0 and not (opencode_install_force | default(false) | bool) }}"
+    nodejs_opencode_skip_config: >-
+      {{
+        nodejs_opencode_check.rc == 0
+        and not (
+          opencode_force | default(false) | bool
+          or opencode_config_force | default(false) | bool
+        )
+      }}
+  tags: [deploy, services, nodejs, opencode, phase3]
+
+- name: OpenCode pre-installed - skip installation (safe mode)
+  ansible.builtin.debug:
+    msg: "OpenCode already installed, skipping. Use FORCE=true or set opencode_force=true to force overwrite."
+  when:
+    - nodejs_opencode_skip_install | bool
+    - nodejs_opencode_enabled | bool
+  tags: [deploy, services, nodejs, opencode, phase3]
+
+- name: Include OpenCode installation tasks
+  ansible.builtin.include_tasks: opencode_install.yml
+  when:
+    - nodejs_opencode_enabled | bool
+    - not (nodejs_opencode_skip_install | default(false) | bool)
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+- name: Include OpenCode global configuration tasks
+  ansible.builtin.include_tasks: opencode_config.yml
+  when:
+    - nodejs_opencode_enabled | bool
+    - not (nodejs_opencode_skip_config | default(false) | bool)
+  tags: [deploy, services, nodejs, opencode_config, phase3]
+
+- name: Include OpenCode Antigravity authentication tasks
+  ansible.builtin.include_tasks: opencode_antigravity.yml
+  when:
+    - nodejs_opencode_enabled | bool
+    - nodejs_opencode_antigravity_enabled | bool
+  tags: [deploy, services, nodejs, opencode_antigravity, phase3]
+
+- name: Include OpenCode project configuration tasks
+  ansible.builtin.include_tasks: opencode_project_config.yml
+  when: nodejs_opencode_project_enabled | bool
+  tags: [deploy, services, nodejs, opencode_project_config, phase3]
+
+- name: Include OpenCode ECC integration tasks
+  ansible.builtin.include_tasks: opencode_ecc.yml
+  when: nodejs_opencode_project_enabled | bool
+  tags: [deploy, services, nodejs, opencode_ecc, phase3]
+
+- name: Include OpenCode server tasks
+  ansible.builtin.include_tasks: opencode_server.yml
+  when: nodejs_opencode_server_enabled | bool
+  tags: [deploy, services, nodejs, opencode_server, phase3]

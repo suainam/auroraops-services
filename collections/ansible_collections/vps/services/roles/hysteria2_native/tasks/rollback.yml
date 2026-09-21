@@ -1,0 +1,62 @@
+---
+# Non-destructive rollback:
+# Stops and disables hysteria2-native.service, removes service unit and AuroraOps install dir.
+# Explicitly preserves preexisting unibox service files (/home/admin/unibox/services/hysteria2).
+# Optionally re-enables and starts preexisting service if configured.
+
+- name: Check if hysteria2-native service exists
+  ansible.builtin.systemd:
+    name: "{{ hysteria2_native_service_name }}.service"
+  register: hysteria2_native_rollback_service_check
+  failed_when: false
+  tags: [rollback, services, hysteria2_native, hysteria2_native_rollback, phase3]
+
+- name: Stop and disable hysteria2-native service
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ hysteria2_native_service_name }}.service"
+    state: stopped
+    enabled: false
+  when:
+    - not ansible_check_mode | bool
+    - hysteria2_native_rollback_service_check.status is defined
+    - hysteria2_native_rollback_service_check.status.LoadState | default('') == 'loaded'
+  tags: [rollback, services, hysteria2_native, hysteria2_native_rollback, phase3]
+
+- name: Remove hysteria2-native systemd unit file
+  become: true
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ hysteria2_native_service_name }}.service"
+    state: absent
+  notify: reload systemd daemon
+  tags: [rollback, services, hysteria2_native, hysteria2_native_rollback, phase3]
+
+- name: Remove AuroraOps Hysteria2 installation directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ hysteria2_native_install_dir }}"
+    state: absent
+  tags: [rollback, services, hysteria2_native, hysteria2_native_rollback, phase3]
+
+- name: Flush handlers to ensure daemon-reload completes
+  ansible.builtin.meta: flush_handlers
+  tags: [rollback, services, hysteria2_native, hysteria2_native_rollback, phase3]
+
+- name: Check if preexisting unibox service unit exists for restoration
+  ansible.builtin.systemd:
+    name: "{{ hysteria2_native_competing_service }}"
+  register: hysteria2_native_unibox_check
+  failed_when: false
+  tags: [rollback, services, hysteria2_native, hysteria2_native_rollback, phase3]
+
+- name: Restore and start preexisting unibox service
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ hysteria2_native_competing_service }}"
+    state: started
+    enabled: true
+  when:
+    - not ansible_check_mode | bool
+    - hysteria2_native_unibox_check.status is defined
+    - hysteria2_native_unibox_check.status.LoadState | default('') == 'loaded'
+  tags: [rollback, services, hysteria2_native, hysteria2_native_rollback, phase3]

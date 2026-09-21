@@ -1,0 +1,21 @@
+#!/sbin/openrc-run
+description="Cloudflare Tunnel Daemon"
+extra_commands="checkconfig"
+description_checkconfig="Verify cloudflared configuration syntax"
+
+name="cloudflared"
+command="{{ cloudflared_binary_path }}"
+command_args="tunnel --no-autoupdate --config {{ cloudflared_config_path }} run"
+command_background="yes"
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.err"
+
+depend() {
+    need net
+    after firewall
+}
+
+checkconfig() {
+    ${command} tunnel --config {{ cloudflared_config_path }} ingress validate
+}

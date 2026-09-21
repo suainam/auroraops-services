@@ -1,0 +1,68 @@
+---
+- name: 角色启用检查
+  ansible.builtin.debug:
+    msg: Role nodejs is disabled, skipping
+  when: not (auroraops_roles['services']['nodejs'] | default(true) | bool)
+  tags:
+    - deploy
+    - services
+    - nodejs
+    - phase3
+- name: 合并 Nodejs Apps 应用列表
+  ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
+  vars:
+    merge_var_name: nodejs_apps
+  when: auroraops_roles['services']['nodejs'] | default(true) | bool
+  tags:
+    - deploy
+    - services
+    - nodejs
+    - phase3
+
+- name: Load OpenClaw defaults
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/defaults/openclaw.yml"
+  when: "'openclaw' in nodejs_apps"
+  tags:
+    - deploy
+    - services
+    - nodejs
+    - phase3
+
+- name: Install Node.js
+  ansible.builtin.import_tasks: install.yml
+  when: auroraops_roles['services']['nodejs'] | default(true) | bool
+  tags:
+    - deploy
+    - services
+    - nodejs
+    - phase3
+
+- name: Node.js Apps 应用管理
+  when: auroraops_roles['services']['nodejs'] | default(true) | bool
+  tags: [deploy, services, nodejs, phase3]
+  block:
+    - name: Include npm package management tasks
+      ansible.builtin.import_tasks: npm.yml
+      when: "'npm' in nodejs_apps"
+      tags: [deploy, services, nodejs, npm, phase3]
+
+    - name: Include Bitwarden CLI tasks
+      ansible.builtin.import_tasks: bitwarden.yml
+      when: "'bitwarden' in nodejs_apps"
+      tags: [deploy, services, nodejs, bitwarden, phase3]
+
+    - name: Include OpenCode tasks
+      ansible.builtin.import_tasks: opencode.yml
+      when: "'opencode' in nodejs_apps"
+      tags: [deploy, services, nodejs, opencode, phase3]
+
+    - name: Include Hermes tasks
+      ansible.builtin.import_tasks: hermes.yml
+      when: "'hermes' in nodejs_apps"
+      tags: [deploy, services, nodejs, hermes, phase3]
+
+    - name: Include OpenClaw tasks
+      ansible.builtin.import_tasks: openclaw.yml
+      when: "'openclaw' in nodejs_apps"
+      tags: [deploy, services, nodejs, openclaw, phase3]

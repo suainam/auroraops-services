@@ -1,0 +1,10 @@
+---
+- name: Manage PostgreSQL logrotate configuration
+  ansible.builtin.import_tasks: ../../../common/tasks/manage_optional_logrotate.yml
+  vars:
+    optional_logrotate_owner: PostgreSQL
+    optional_logrotate_enabled: "{{ postgresql_logrotate_enabled }}"
+    optional_logrotate_config_path: "{{ postgresql_logrotate_config_path }}"
+    optional_logrotate_legacy_paths: "{{ postgresql_logrotate_legacy_paths }}"
+    optional_logrotate_config: "{{ postgresql_logrotate_config }}"
+  tags: [deploy, applications, postgresql, postgresql_logrotate, phase4]

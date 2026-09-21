@@ -1,0 +1,9 @@
+# Resolution lock for the only range in upstream revision
+# 0d98ffaf897036d03598c1cbc0554af840406395. Direct upstream requirements
+# remain the source of truth; this file fixes their transitive resolution.
+DrissionPage==4.1.1.4
+DrissionGet==1.2.1
+DrissionRecord==2.0.1
+click==8.4.2
+et-xmlfile==2.0.0
+openpyxl==3.1.5

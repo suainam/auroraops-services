@@ -1,0 +1,36 @@
+# Managed by Ansible
+
+# Redis configuration file
+
+# By default Redis does not run as a daemon. Use 'yes' if you need it.
+daemonize yes
+
+# Accept connections on the specified port, default is 6379.
+port {{ redis_port }}
+
+# If you want you can bind a single interface, an IP address or multiple IP addresses.
+# bind 127.0.0.1
+bind {{ redis_bind_address }}
+
+# Require a password to authenticate before processing commands.
+# This is a good idea to set on production instances.
+requirepass {{ redis_db_admin_password }}
+
+# Specify the path where Redis will save the log file.
+logfile "{{ redis_log_file }}"
+
+# The working directory. The DB will be saved inside this folder.
+dir {{ redis_data_dir }}
+
+# RDB persistence
+save 900 1
+save 300 10
+save 60 10000
+
+# AOF persistence
+appendonly yes
+appendfilename "appendonly.aof"
+
+# Max memory
+# maxmemory <bytes>
+# maxmemory-policy noeviction

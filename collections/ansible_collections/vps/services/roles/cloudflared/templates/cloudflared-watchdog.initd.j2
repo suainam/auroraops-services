@@ -1,0 +1,15 @@
+#!/sbin/openrc-run
+description="Cloudflared readiness watchdog"
+
+name="{{ cloudflared_watchdog_service_name }}"
+command="{{ cloudflared_watchdog_script_path }}"
+command_args="--loop"
+command_background="yes"
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.err"
+
+depend() {
+    need net
+    after {{ cloudflared_service_name }}
+}

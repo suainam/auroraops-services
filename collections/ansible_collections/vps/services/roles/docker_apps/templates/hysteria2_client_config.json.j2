@@ -1,0 +1,47 @@
+{
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "0.0.0.0",
+      "listen_port": 10808
+    },
+    {
+      "type": "http",
+      "tag": "http-in",
+      "listen": "0.0.0.0",
+      "listen_port": 10809
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "hysteria2",
+      "tag": "hysteria2-out",
+      "server": "{{ docker_apps_hysteria2_client_server }}",
+      "server_port": {{ docker_apps_hysteria2_client_port }},
+      "password": "{{ docker_apps_hysteria2_client_password }}",
+      "tls": {
+        "enabled": true,
+        "server_name": "{{ docker_apps_hysteria2_client_sni }}",
+        "alpn": {{ docker_apps_hysteria2_client_alpn | to_json }},
+        "insecure": {{ docker_apps_hysteria2_client_insecure | default(true) | lower }}
+      },
+      "obfs": {
+        "type": "{{ docker_apps_hysteria2_client_obfs_type }}",
+        "password": "{{ docker_apps_hysteria2_client_obfs_password }}"
+      }
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "rules": [],
+    "final": "hysteria2-out"
+  }
+}

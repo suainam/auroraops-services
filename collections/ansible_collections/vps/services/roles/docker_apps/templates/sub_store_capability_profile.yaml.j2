@@ -1,0 +1,51 @@
+# Mihomo profile backed by existing Sub-Store sources and #220 capability facts.
+
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: false
+enable-process: true
+find-process-mode: always
+
+profile:
+  store-selected: true
+
+geox-url:
+  geoip: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"
+  geosite: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat"
+  mmdb: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb"
+  asn: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb"
+
+proxies: []
+{% set capability_providers = docker_apps_sub_store_capability_providers %}
+{% set provider_display_groups = sub_store_capability_provider_display_groups | default({}) %}
+{% set display_group_specs = [
+  {'key': 'BP', 'name': '🌐 BP'},
+  {'key': 'NAT', 'name': '🧭 NAT'},
+  {'key': 'VPS', 'name': '🖥️ VPS'},
+  {'key': 'SK', 'name': '🌸 SK'}
+] %}
+{% set provider_groups = namespace(names=[]) %}
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) %}
+{% set group_name = provider['provider-group'] | default(provider.name) %}
+{% if group_name not in provider_groups.names %}
+{% set provider_groups.names = provider_groups.names + [group_name] %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% include 'sub_store_capability_profile/proxy_providers.yaml.j2' %}
+
+proxy-groups:
+{% include 'sub_store_capability_profile/core_groups.yaml.j2' %}
+
+{% include 'sub_store_capability_profile/capability_groups.yaml.j2' %}
+
+{% include 'sub_store_capability_profile/service_groups.yaml.j2' %}
+
+{% include 'sub_store_capability_profile/regional_groups.yaml.j2' %}
+
+{% include 'sub_store_capability_profile/rule_providers.yaml.j2' %}
+
+{% include 'sub_store_capability_profile/routing_dns.yaml.j2' %}

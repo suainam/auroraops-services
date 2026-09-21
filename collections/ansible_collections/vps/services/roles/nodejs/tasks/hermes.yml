@@ -1,0 +1,24 @@
+---
+# =============================================================================
+# Hermes AI Agent Deployment
+# =============================================================================
+# 控制方式: nodejs_apps 列表包含 'hermes' 时执行
+# 安装方式: git clone + uv pip install (Python, 非 npm)
+# 仓库: https://github.com/NousResearch/hermes-agent
+
+- name: Load Hermes defaults
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/defaults/hermes.yml"
+  tags: [deploy, services, nodejs, hermes]
+
+- name: Install Hermes Agent
+  ansible.builtin.import_tasks: hermes_install.yml
+  tags: [deploy, services, nodejs, hermes, phase3]
+
+- name: Configure Hermes Agent
+  ansible.builtin.import_tasks: hermes_config.yml
+  tags: [deploy, services, nodejs, hermes, phase3]
+
+- name: Manage Hermes Gateway systemd service
+  ansible.builtin.import_tasks: hermes_gateway.yml
+  tags: [deploy, services, nodejs, hermes_gateway, phase3]

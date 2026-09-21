@@ -1,0 +1,17 @@
+---
+- name: Reload Nginx
+  become: true
+  ansible.builtin.service:
+    name: nginx
+    state: >-
+      {{ 'restarted'
+         if (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Alpine'
+         else 'reloaded' }}
+  listen: "reload nginx"
+
+- name: Restart Nginx
+  become: true
+  ansible.builtin.service:
+    name: nginx
+    state: restarted
+  listen: "restart nginx"

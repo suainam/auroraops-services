@@ -1,0 +1,920 @@
+---
+- name: Resolve effective Sub-Store providers for verification
+  ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_providers.yml
+  when: verify_docker_app_name | default('') == 'sub_store'
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Resolve capability provider catalog for verification
+  ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_capability_providers.yml
+  when: verify_docker_app_name | default('') == 'sub_store'
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: 合并 Docker Apps 容器列表
+  ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
+  vars:
+    merge_var_name: docker_apps_containers
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - phase5
+    - vertex
+- name: Determine singbox deployment mode for verification
+  ansible.builtin.set_fact:
+    docker_apps_singbox_deploy_mode: >-
+      {{
+        'native'
+        if (
+          (docker_apps_deploy_mode | default('auto')) == 'native'
+          or (ansible_facts.distribution
+              | default(ansible_distribution | default(''))) == 'Alpine'
+          or (ansible_memtotal_mb | default(1024)) < 512
+        )
+        else 'docker'
+      }}
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - singbox
+    - phase5
+
+- name: 构建容器名称映射
+  ansible.builtin.set_fact:
+    docker_apps_container_names:
+      gcli2api: gcli2api
+      sillytavern: sillytavern
+      vaultwarden: vaultwarden
+      gemini_balance: gemini-balance
+      flare: flare
+      singbox: singbox
+      sub_store: sub_store
+      cliproxyapi: cliproxyapi
+      newapi_suite: new-api
+      manifest: manifest
+      shellcrash: shellcrash
+      ds2api: ds2api
+      vertex: vertex-proxy
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - docker_apps_manifest
+    - ds2api
+    - phase5
+    - vertex
+- name: 验证 Docker 应用程序容器状态 (单个)
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ docker_apps_container_names[verify_docker_app_name] | default(verify_docker_app_name) }}"
+  register: docker_apps_container_info
+  failed_when: >-
+    (docker_apps_container_info.exists is defined and not docker_apps_container_info.exists)
+    or (docker_apps_container_info.container.State.Running is defined and docker_apps_container_info.container.State.Running
+       != ((verify_docker_app_name != 'vaultwarden') or (docker_apps_vaultwarden_state == 'started')))
+  when:
+    - verify_docker_app_name is defined
+    - verify_docker_app_name != 'opcotoai_toolkit'
+    - not (verify_docker_app_name == 'singbox' and docker_apps_singbox_deploy_mode == 'native')
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - docker_apps_manifest
+    - ds2api
+    - gcli2api
+    - sillytavern
+    - vaultwarden
+    - gemini
+    - flare
+    - singbox
+    - sub_store
+    - cliproxyapi
+    - newapi_suite
+    - manifest
+    - phase5
+    - shellcrash
+
+- name: 验证 Sing-box 原生服务状态 (Native)
+  become: true
+  ansible.builtin.service:
+    name: sing-box
+    state: started
+  check_mode: true
+  register: docker_apps_singbox_native_service_status
+  failed_when: docker_apps_singbox_native_service_status.changed
+  when:
+    - verify_docker_app_name is defined
+    - verify_docker_app_name == 'singbox'
+    - (docker_apps_singbox_deploy_mode | default('docker')) == 'native'
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - singbox
+    - phase5
+
+
+- name: Build expected container running state map
+  ansible.builtin.set_fact:
+    docker_apps_container_expected_running:
+      gcli2api: true
+      sillytavern: true
+      vaultwarden: "{{ docker_apps_vaultwarden_state == 'started' }}"
+      gemini_balance: true
+      flare: true
+      singbox: true
+      sub_store: true
+      cliproxyapi: true
+      newapi_suite: true
+      manifest: true
+      shellcrash: true
+      ds2api: true
+      vertex: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - docker_apps_manifest
+    - ds2api
+    - phase5
+    - vertex
+
+- name: Verify gcli2api is bound to loopback
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.NetworkSettings.Ports['7861/tcp'][0].HostIp == '127.0.0.1'
+      - docker_apps_container_info.container.NetworkSettings.Ports['8080/tcp'][0].HostIp == '127.0.0.1'
+    fail_msg: "gcli2api must only publish through loopback"
+  when: verify_docker_app_name | default('') == 'gcli2api'
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - gcli2api
+    - phase5
+
+- name: Verify ds2api is bound to loopback
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.NetworkSettings.Ports['5001/tcp'][0].HostIp == '127.0.0.1'
+      - docker_apps_container_info.container.NetworkSettings.Ports['5001/tcp'][0].HostPort == (docker_apps_app_port_ds2api | string)
+      - docker_apps_container_info.container.Config.Image == ds2api_image
+    fail_msg: "ds2api must use the pinned image and loopback-only port binding"
+  when: verify_docker_app_name | default('') == 'ds2api'
+  tags: [verify, services, docker_apps, ds2api, phase5]
+
+- name: Verify ds2api local health endpoint
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ docker_apps_app_port_ds2api }}/healthz"
+    method: GET
+    status_code: 200
+    return_content: false
+  when: verify_docker_app_name | default('') == 'ds2api'
+  tags: [verify, services, docker_apps, ds2api, phase5]
+
+- name: Verify ds2api local readiness endpoint
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ docker_apps_app_port_ds2api }}/readyz"
+    method: GET
+    status_code: 200
+    return_content: false
+  when: verify_docker_app_name | default('') == 'ds2api'
+  tags: [verify, services, docker_apps, ds2api, phase5]
+
+- name: Verify ds2api model list endpoint
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ docker_apps_app_port_ds2api }}/v1/models"
+    method: GET
+    status_code: 200
+    return_content: false
+  when: verify_docker_app_name | default('') == 'ds2api'
+  tags: [verify, services, docker_apps, ds2api, phase5]
+
+- name: Verify ds2api config file permissions
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_apps_ds2api_data_dir }}/config.json"
+  register: docker_apps_ds2api_config_stat
+  when: verify_docker_app_name | default('') == 'ds2api'
+  tags: [verify, services, docker_apps, ds2api, phase5]
+
+- name: Validate ds2api config file permissions
+  ansible.builtin.assert:
+    that:
+      - docker_apps_ds2api_config_stat.stat.exists
+      - docker_apps_ds2api_config_stat.stat.isreg
+      - docker_apps_ds2api_config_stat.stat.mode == '0600'
+    fail_msg: "ds2api config.json must exist as a regular file with mode 0600"
+  when: verify_docker_app_name | default('') == 'ds2api'
+  tags: [verify, services, docker_apps, ds2api, phase5]
+- name: Verify Vertex container binding and image
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.NetworkSettings.Ports['2156/tcp'][0].HostIp == '127.0.0.1'
+      - docker_apps_container_info.container.NetworkSettings.Ports['2156/tcp'][0].HostPort == (docker_apps_app_port_vertex | string)
+      - docker_apps_container_info.container.Config.Image == docker_apps_vertex_image
+    fail_msg: "Vertex must use the declared image and loopback-only port binding"
+  when: verify_docker_app_name | default('') == 'vertex'
+  tags: [verify, services, docker_apps, vertex, phase5]
+
+- name: Verify Vertex local health endpoint
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ docker_apps_app_port_vertex }}/health"
+    method: GET
+    status_code: 200
+    return_content: true
+  register: docker_apps_vertex_health
+  when: verify_docker_app_name | default('') == 'vertex'
+  tags: [verify, services, docker_apps, vertex, phase5]
+
+- name: Validate Vertex local health response
+  ansible.builtin.assert:
+    that:
+      - docker_apps_vertex_health.json.status == 'healthy'
+      - docker_apps_vertex_health.json.api_keys_loaded | int > 0
+    fail_msg: "Vertex health must report healthy with at least one loaded API key"
+  when: verify_docker_app_name | default('') == 'vertex'
+  tags: [verify, services, docker_apps, vertex, phase5]
+
+- name: Verify Vertex authenticated model endpoint
+  no_log: true
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ docker_apps_app_port_vertex }}/v1/models"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ docker_apps_vertex_api_key }}"
+    status_code: 200
+    return_content: false
+  when: verify_docker_app_name | default('') == 'vertex'
+  tags: [verify, services, docker_apps, vertex, phase5]
+
+- name: Verify Vertex persistent secret file permissions
+  become: true
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ docker_apps_vertex_config_dir }}/config.json"
+    - "{{ docker_apps_vertex_config_dir }}/api_keys.txt"
+  register: docker_apps_vertex_secret_files
+  when: verify_docker_app_name | default('') == 'vertex'
+  tags: [verify, services, docker_apps, vertex, phase5]
+
+- name: Validate Vertex persistent secret file permissions
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+      - item.stat.mode == '0600'
+    fail_msg: "Vertex config and API key files must be regular files with mode 0600"
+  loop: "{{ docker_apps_vertex_secret_files.results }}"
+  when: verify_docker_app_name | default('') == 'vertex'
+  tags: [verify, services, docker_apps, vertex, phase5]
+- name: Verify vaultwarden is bound to loopback
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.NetworkSettings.Ports['80/tcp'][0].HostIp == '127.0.0.1'
+      - "'3012/tcp' not in docker_apps_container_info.container.NetworkSettings.Ports"
+    fail_msg: "vaultwarden must only publish through loopback"
+  when: verify_docker_app_name | default('') == 'vaultwarden'
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - vaultwarden
+    - phase5
+
+- name: Load Vaultwarden compatibility matrix
+  ansible.builtin.set_fact:
+    docker_apps_vaultwarden_compatibility_matrix: >-
+      {{
+        lookup(
+          'ansible.builtin.file',
+          docker_apps_vaultwarden_compatibility_matrix_path
+        ) | from_json
+      }}
+  when:
+    - verify_docker_app_name | default('') == 'vaultwarden'
+    - docker_apps_vaultwarden_state == 'started'
+  tags: [verify, services, docker_apps, vaultwarden, phase5]
+
+- name: Resolve current Vaultwarden compatibility requirement
+  ansible.builtin.set_fact:
+    docker_apps_vaultwarden_client_track: >-
+      {{
+        docker_apps_vaultwarden_compatibility_matrix.current_client_track
+        | default('', true)
+      }}
+    docker_apps_vaultwarden_min_compatible_version: >-
+      {{
+        (
+          docker_apps_vaultwarden_compatibility_matrix.client_tracks
+          | selectattr(
+              'range',
+              'equalto',
+              docker_apps_vaultwarden_compatibility_matrix.current_client_track
+            )
+          | map(attribute='minimum_vaultwarden')
+          | list
+          | first
+        ) | default('', true)
+      }}
+  when:
+    - verify_docker_app_name | default('') == 'vaultwarden'
+    - docker_apps_vaultwarden_state == 'started'
+  tags: [verify, services, docker_apps, vaultwarden, phase5]
+
+- name: Read Vaultwarden runtime version
+  become: true
+  community.docker.docker_container_exec:
+    container: vaultwarden
+    argv: [/vaultwarden, --version]
+  register: docker_apps_vaultwarden_version_result
+  changed_when: false
+  when:
+    - verify_docker_app_name | default('') == 'vaultwarden'
+    - docker_apps_vaultwarden_state == 'started'
+  tags: [verify, services, docker_apps, vaultwarden, phase5]
+
+- name: Parse Vaultwarden runtime version
+  ansible.builtin.set_fact:
+    docker_apps_vaultwarden_runtime_version: >-
+      {{ docker_apps_vaultwarden_version_result.stdout
+         | regex_search('[0-9]+\.[0-9]+\.[0-9]+')
+         | default('', true) }}
+  when:
+    - verify_docker_app_name | default('') == 'vaultwarden'
+    - docker_apps_vaultwarden_state == 'started'
+  tags: [verify, services, docker_apps, vaultwarden, phase5]
+
+- name: Validate Vaultwarden client compatibility
+  ansible.builtin.assert:
+    that:
+      - docker_apps_vaultwarden_client_track | length > 0
+      - docker_apps_vaultwarden_min_compatible_version | length > 0
+      - >-
+        docker_apps_vaultwarden_runtime_version
+        is version(docker_apps_vaultwarden_min_compatible_version, '>=')
+      - docker_apps_container_info.container.Config.Image == vaultwarden_image
+    fail_msg: >-
+      Vaultwarden must run the declared image and at least
+      {{ docker_apps_vaultwarden_min_compatible_version }} for Bitwarden
+      {{ docker_apps_vaultwarden_client_track }} clients.
+  when:
+    - verify_docker_app_name | default('') == 'vaultwarden'
+    - docker_apps_vaultwarden_state == 'started'
+  tags: [verify, services, docker_apps, vaultwarden, phase5]
+
+- name: Verify Vaultwarden local health endpoint
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ docker_apps_app_port_vaultwarden_http }}/alive"
+    method: GET
+    status_code: 200
+    return_content: false
+  when:
+    - verify_docker_app_name | default('') == 'vaultwarden'
+    - docker_apps_vaultwarden_state == 'started'
+  tags: [verify, services, docker_apps, vaultwarden, phase5]
+
+- name: Wait for Vaultwarden Docker health status
+  become: true
+  community.docker.docker_container_info:
+    name: vaultwarden
+  register: docker_apps_vaultwarden_health_info
+  until: >-
+    docker_apps_vaultwarden_health_info.exists
+    and (
+      docker_apps_vaultwarden_health_info.container.State.Health.Status == 'healthy'
+      or docker_apps_vaultwarden_health_info.container.State.Health.Status == 'starting'
+    )
+  retries: 12
+  delay: 5
+  when:
+    - verify_docker_app_name | default('') == 'vaultwarden'
+    - docker_apps_vaultwarden_state == 'started'
+  tags: [verify, services, docker_apps, vaultwarden, phase5]
+
+- name: Inspect opcotoai gateway container
+  become: true
+  community.docker.docker_container_info:
+    name: opcotoai-toolkit-gateway-1
+  register: docker_apps_opcotoai_gateway_info
+  when: verify_docker_app_name | default('') == 'opcotoai_toolkit'
+  tags: [verify, services, docker_apps, opcotoai_toolkit, phase5]
+
+- name: Inspect opcotoai SMTP container
+  become: true
+  community.docker.docker_container_info:
+    name: opcotoai-toolkit-smtp-1
+  register: docker_apps_opcotoai_smtp_info
+  when: verify_docker_app_name | default('') == 'opcotoai_toolkit'
+  tags: [verify, services, docker_apps, opcotoai_toolkit, phase5]
+
+- name: Inspect legacy opcotoai Grok container
+  become: true
+  community.docker.docker_container_info:
+    name: opcotoai-toolkit-grok-1
+  register: docker_apps_opcotoai_legacy_grok_info
+  when: verify_docker_app_name | default('') == 'opcotoai_toolkit'
+  tags: [verify, services, docker_apps, opcotoai_toolkit, phase5]
+
+- name: Validate opcotoai SMTP-only terminal state
+  ansible.builtin.assert:
+    that:
+      - docker_apps_opcotoai_gateway_info.exists
+      - docker_apps_opcotoai_gateway_info.container.State.Running
+      - docker_apps_opcotoai_smtp_info.exists
+      - docker_apps_opcotoai_smtp_info.container.State.Running
+      - not docker_apps_opcotoai_legacy_grok_info.exists
+      - docker_apps_opcotoai_gateway_info.container.NetworkSettings.Ports['80/tcp'][0].HostIp == '127.0.0.1'
+      - docker_apps_opcotoai_gateway_info.container.NetworkSettings.Ports['80/tcp'][0].HostPort == (app_port_opcotoai_smtp | string)
+    fail_msg: >-
+      opcotoai must keep gateway and SMTP running on loopback while the legacy
+      Grok Compose service remains absent.
+  when: verify_docker_app_name | default('') == 'opcotoai_toolkit'
+  tags: [verify, services, docker_apps, opcotoai_toolkit, phase5]
+
+- name: Verify opcotoai local gateway responds
+  become: true
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_port_opcotoai_smtp }}/"
+    method: GET
+    follow_redirects: none
+    status_code: [200, 302]
+    return_content: false
+  when: verify_docker_app_name | default('') == 'opcotoai_toolkit'
+  tags: [verify, services, docker_apps, opcotoai_toolkit, phase5]
+
+- name: Verify Sub-Store is bound to loopback
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.NetworkSettings.Ports['3000/tcp'][0].HostIp == '127.0.0.1'
+    fail_msg: "Sub-Store must only publish through loopback"
+  when: verify_docker_app_name | default('') == 'sub_store'
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Verify Sub-Store backend endpoint
+  become: true
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}/api/utils/env"
+    method: GET
+    status_code: 200
+    return_content: false
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Verify public Sub-Store Mihomo subscription
+  become: true
+  ansible.builtin.uri:
+    url: "https://{{ singbox_domain }}/{{ sub_store_mihomo_suffix }}"
+    method: GET
+    status_code: 200
+    return_content: true
+  register: docker_apps_sub_store_public_mihomo
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Parse public Sub-Store Mihomo profile
+  ansible.builtin.set_fact:
+    docker_apps_sub_store_public_mihomo_payload: >-
+      {{ docker_apps_sub_store_public_mihomo.content | from_yaml }}
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Validate public Sub-Store Mihomo profile structure
+  ansible.builtin.assert:
+    that:
+      - (docker_apps_sub_store_public_mihomo_payload | type_debug) == 'dict'
+      - (docker_apps_sub_store_public_mihomo_payload['proxy-providers'] | type_debug) == 'dict'
+      - "'aurora-substore' in docker_apps_sub_store_public_mihomo_payload['proxy-providers']"
+      - (docker_apps_sub_store_public_mihomo_payload['proxy-groups'] | type_debug) == 'list'
+      - docker_apps_sub_store_public_mihomo_payload['proxy-groups'] | length >= 3
+      - (docker_apps_sub_store_public_mihomo_payload['rules'] | type_debug) == 'list'
+      - docker_apps_sub_store_public_mihomo_payload['rules'] | length >= 1
+    fail_msg: "Public Sub-Store Mihomo profile is missing providers, proxy groups, or rules"
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Verify public Sub-Store Mihomo provider
+  become: true
+  ansible.builtin.uri:
+    url: "https://{{ singbox_domain }}/{{ sub_store_mihomo_provider_suffix }}"
+    method: GET
+    status_code: 200
+    return_content: true
+  register: docker_apps_sub_store_public_mihomo_provider
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Parse public Sub-Store Mihomo provider
+  ansible.builtin.set_fact:
+    docker_apps_sub_store_public_mihomo_provider_payload: >-
+      {{ docker_apps_sub_store_public_mihomo_provider.content | from_yaml }}
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Validate public Sub-Store Mihomo provider nodes
+  ansible.builtin.assert:
+    that:
+      - (docker_apps_sub_store_public_mihomo_provider_payload | type_debug) == 'dict'
+      - (docker_apps_sub_store_public_mihomo_provider_payload['proxies'] | type_debug) == 'list'
+      - docker_apps_sub_store_public_mihomo_provider_payload['proxies'] | length > 0
+    fail_msg: "Public Sub-Store Mihomo provider contains no proxy nodes"
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Read public Sub-Store Mihomo subscription headers
+  become: true
+  ansible.builtin.command:
+    argv:
+      - curl
+      - --silent
+      - --show-error
+      - --head
+      - "https://{{ singbox_domain }}/{{ sub_store_mihomo_suffix }}"
+  register: docker_apps_sub_store_public_headers
+  changed_when: false
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Validate public Sub-Store Mihomo subscription header is unique
+  ansible.builtin.assert:
+    that:
+      - >-
+        (docker_apps_sub_store_public_headers.stdout_lines
+         | select('match', '(?i)^subscription-userinfo:')
+         | list | length) == 1
+    fail_msg: "Mihomo subscription must return exactly one Subscription-Userinfo header"
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Verify public Sub-Store sing-box subscription
+  become: true
+  ansible.builtin.uri:
+    url: "https://{{ singbox_domain }}/{{ sub_store_singbox_suffix }}"
+    method: GET
+    status_code: 200
+    return_content: true
+  register: docker_apps_sub_store_public_singbox
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Validate public Sub-Store sing-box content
+  ansible.builtin.assert:
+    that:
+      - docker_apps_sub_store_public_singbox.content | length > 100
+      - (docker_apps_sub_store_public_singbox.content | from_json | type_debug) in ['dict', 'list']
+    fail_msg: "Public Sub-Store sing-box subscription is empty or invalid"
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Verify public Sub-Store capability profile
+  become: true
+  ansible.builtin.uri:
+    url: "https://{{ singbox_domain }}/{{ sub_store_capability_profile_suffix }}"
+    method: GET
+    status_code: 200
+    return_content: true
+  register: docker_apps_sub_store_capability_profile
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_pools_enabled | bool
+  no_log: true
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Parse public Sub-Store capability profile
+  ansible.builtin.set_fact:
+    docker_apps_sub_store_capability_profile_payload: >-
+      {{ docker_apps_sub_store_capability_profile.content | from_yaml }}
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_pools_enabled | bool
+  no_log: true
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Validate public Sub-Store capability profile
+  ansible.builtin.assert:
+    that:
+      - (docker_apps_sub_store_capability_profile_payload['proxy-providers'] | type_debug) == 'dict'
+      - >-
+        docker_apps_sub_store_capability_profile_payload['proxy-providers'] | length ==
+        1 + (sub_store_external_providers_effective | default([])
+             | rejectattr('name', 'equalto', sub_store_capability_primary_provider_name)
+             | selectattr('enabled', 'equalto', true) | list | length)
+      - >-
+        docker_apps_sub_store_capability_profile_payload['proxy-providers']
+        | dict2items | map(attribute='value.url') | unique | list | length ==
+        docker_apps_sub_store_capability_profile_payload['proxy-providers'] | length
+      - >-
+        docker_apps_sub_store_capability_profile_payload['proxy-providers']
+        | dict2items | map(attribute='value.override.additional-prefix')
+        | select('string') | list | length ==
+        docker_apps_sub_store_capability_profile_payload['proxy-providers'] | length
+      - (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | type_debug) == 'list'
+      - "'🚀 默认代理' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
+      - "'🤖 AI 服务' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
+      - "'🧼 纯净节点' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
+      - "'📺 B站港澳台' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
+      - "'🛡️ 稳定优先' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
+      - "'⚡ 快速节点' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
+      - "'🌍 国际媒体' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
+      - >-
+        (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)
+        | intersect(['🇭🇰 港澳 · 自动优选', '🇹🇼 台湾 · 自动优选', '🇯🇵 日本 · 自动优选',
+                     '🇸🇬 新加坡 · 自动优选', '🇺🇸 美国 · 自动优选', '🇪🇺 欧洲 · 自动优选',
+                     '🌐 其他 · 自动优选'])
+        | length == 7
+      - >-
+        (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)
+        | intersect(['📹 YouTube', '🎬 国际流媒体', '🎵 Spotify', '✈️ Telegram',
+                     '🐙 GitHub', 'Ⓜ️ 微软服务', '🍎 苹果服务', '🐟 漏网之鱼'])
+        | length == 8
+      - (docker_apps_sub_store_capability_profile_payload['rule-providers'] | type_debug) == 'dict'
+      - docker_apps_sub_store_capability_profile_payload['rule-providers'] | length >= 10
+      - docker_apps_sub_store_capability_profile_payload['enable-process'] | bool
+      - docker_apps_sub_store_capability_profile_payload['find-process-mode'] == 'always'
+      - docker_apps_sub_store_capability_profile_payload['tun']['enable'] | bool
+      - docker_apps_sub_store_capability_profile_payload['tun']['stack'] == 'mixed'
+      - "'172.16.0.0/12' in docker_apps_sub_store_capability_profile_payload['tun']['route-exclude-address']"
+      - "'geosite:cn' in docker_apps_sub_store_capability_profile_payload['dns']['fake-ip-filter']"
+      - "'DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳台' in docker_apps_sub_store_capability_profile_payload['rules']"
+      - "'DOMAIN-SUFFIX,bilibili.com,DIRECT' in docker_apps_sub_store_capability_profile_payload['rules']"
+      - >-
+        docker_apps_sub_store_capability_profile_payload['rules'].index(
+        'RULE-SET,bilibili-hmt,📺 B站港澳台') <
+        docker_apps_sub_store_capability_profile_payload['rules'].index(
+        'RULE-SET,cn-domains,DIRECT')
+      - "'__FILTER_' not in docker_apps_sub_store_capability_profile.content"
+    fail_msg: "Capability profile must preserve Provider boundaries, user-facing groups, runtime network policy, rules, and resolved filters"
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_pools_enabled | bool
+  no_log: true
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Verify public Sub-Store capability source providers
+  become: true
+  ansible.builtin.uri:
+    url: >-
+      {{ 'https://' ~ singbox_domain ~ '/' ~ sub_store_capability_source_provider_suffix ~
+         '-' ~ ((capability_provider['provider-id'] | default(capability_provider.name)) | urlencode) ~ '.yaml' }}
+    method: GET
+    status_code: 200
+    return_content: true
+  loop: "{{ sub_store_capability_providers_effective | default([]) | selectattr('enabled', 'equalto', true) | list }}"
+  loop_control:
+    loop_var: capability_provider
+    label: "{{ capability_provider['provider-id'] | default(capability_provider.name) }}"
+  register: docker_apps_sub_store_capability_source_providers
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_pools_enabled | bool
+  no_log: true
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Validate public Sub-Store capability source provider nodes
+  ansible.builtin.assert:
+    that:
+      - (item.content | from_yaml | type_debug) == 'dict'
+      - ((item.content | from_yaml)['proxies'] | type_debug) == 'list'
+      - (item.content | from_yaml)['proxies'] | length > 0
+    fail_msg: "Capability source provider contains no proxy nodes"
+  loop: "{{ docker_apps_sub_store_capability_source_providers.results | default([]) }}"
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_pools_enabled | bool
+  no_log: true
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Verify public Sub-Store capability aggregate provider
+  become: true
+  ansible.builtin.uri:
+    url: "https://{{ singbox_domain }}/{{ sub_store_capability_provider_suffix }}"
+    method: GET
+    status_code: 200
+    return_content: true
+  register: docker_apps_sub_store_capability_provider
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_pools_enabled | bool
+  no_log: true
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Validate public Sub-Store capability aggregate provider nodes
+  ansible.builtin.assert:
+    that:
+      - (docker_apps_sub_store_capability_provider.content | from_yaml | type_debug) == 'dict'
+      - ((docker_apps_sub_store_capability_provider.content | from_yaml)['proxies'] | type_debug) == 'list'
+      - (docker_apps_sub_store_capability_provider.content | from_yaml)['proxies'] | length > 0
+    fail_msg: "Capability aggregate provider contains no proxy nodes"
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_pools_enabled | bool
+  no_log: true
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Verify Sub-Store capability pool timer is enabled
+  become: true
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-enabled
+      - sub-store-capability-pools.timer
+  register: docker_apps_sub_store_pool_timer_enabled
+  changed_when: false
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_pools_enabled | bool
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Verify Sub-Store capability pool timer is active
+  become: true
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - sub-store-capability-pools.timer
+  register: docker_apps_sub_store_pool_timer_active
+  changed_when: false
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_pools_enabled | bool
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Verify Sub-Store capability profiler timer is enabled
+  become: true
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-enabled
+      - sub-store-capability-profiler.timer
+  register: docker_apps_sub_store_profiler_timer_enabled
+  changed_when: false
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_profiler_enabled | bool
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Verify Sub-Store capability profiler timer is active
+  become: true
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - sub-store-capability-profiler.timer
+  register: docker_apps_sub_store_profiler_timer_active
+  changed_when: false
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_profiler_enabled | bool
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Verify Sub-Store capability registry state file
+  become: true
+  ansible.builtin.stat:
+    path: "{{ sub_store_capability_registry_state_path }}"
+  register: docker_apps_sub_store_registry_stat
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_profiler_enabled | bool
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Read Sub-Store capability registry state
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ sub_store_capability_registry_state_path }}"
+  register: docker_apps_sub_store_registry_raw
+  no_log: true
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_profiler_enabled | bool
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Parse Sub-Store capability registry state
+  ansible.builtin.set_fact:
+    docker_apps_sub_store_registry_payload: >-
+      {{ docker_apps_sub_store_registry_raw.content | b64decode | from_json }}
+  no_log: true
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_profiler_enabled | bool
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: Validate Sub-Store capability profiler runtime
+  ansible.builtin.assert:
+    that:
+      - docker_apps_sub_store_profiler_timer_enabled.rc == 0
+      - docker_apps_sub_store_profiler_timer_active.rc == 0
+      - docker_apps_sub_store_registry_stat.stat.exists
+      - docker_apps_sub_store_registry_stat.stat.isreg
+      - docker_apps_sub_store_registry_stat.stat.mode == '0600'
+      - (docker_apps_sub_store_registry_payload | type_debug) == 'dict'
+      - docker_apps_sub_store_registry_payload | length > 0
+      - >-
+        (docker_apps_sub_store_registry_payload | to_json)
+        is not regex('(?i)"(uuid|password|token|private_key|psk|obfs_password)"\\s*:')
+    fail_msg: "Sub-Store capability profiler timer/registry runtime validation failed"
+  no_log: true
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_profiler_enabled | bool
+  tags: [verify, services, docker_apps, sub_store, phase5]
+
+- name: 验证 Docker 应用程序容器状态 (批量)
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ docker_apps_container_names[item] }}"
+  register: docker_apps_container_info
+  failed_when: >-
+    not docker_apps_container_info.exists
+    or docker_apps_container_info.container.State.Running
+       != (docker_apps_container_expected_running[item] | bool)
+  loop: "{{ docker_apps_containers }}"
+  when: verify_docker_app_name is not defined
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - docker_apps_manifest
+    - ds2api
+    - phase5
+    - vertex

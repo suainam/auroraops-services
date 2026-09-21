@@ -1,0 +1,228 @@
+---
+- name: Validate existing Nginx capability before site mutation
+  become: true
+  ansible.builtin.command: nginx -t
+  check_mode: false
+  changed_when: false
+  tags: &nginx_site_baseline_tags
+    - deploy
+    - services
+    - nginx
+    - nginx_site_config
+    - nginx_certificate_preflight
+    - phase4
+
+- name: Check existing Nginx site lifecycle baseline
+  become: true
+  ansible.builtin.stat:
+    path: "{{ nginx_site_baseline_fact_path }}"
+  register: nginx_site_baseline_stat
+  tags: *nginx_site_baseline_tags
+
+- name: Read existing Nginx site lifecycle baseline
+  become: true
+  ansible.builtin.slurp:
+    path: "{{ nginx_site_baseline_fact_path }}"
+  register: nginx_site_baseline_raw
+  when: nginx_site_baseline_stat.stat.exists
+  tags: *nginx_site_baseline_tags
+
+- name: Parse existing Nginx site lifecycle baseline
+  ansible.builtin.set_fact:
+    nginx_site_baseline: "{{ nginx_site_baseline_raw.content | b64decode | from_json }}"
+  when: nginx_site_baseline_stat.stat.exists
+  tags: *nginx_site_baseline_tags
+
+- name: Build current Nginx certificate fingerprint
+  ansible.builtin.set_fact:
+    nginx_site_certificate_fingerprint: >-
+      {{
+        nginx_site_certificate_fingerprint | default({}) | combine({
+          item: {
+            "cert_name": (
+              nginx_sites_config[item].ssl_cert_name
+              | default(nginx_sites_defaults.ssl_cert_name | default("msuai.top"), true)
+            ),
+            "chain_checksum": (
+              nginx_site_certificate_chains.results[site_index].stat.checksum
+              | default('none')
+              if (
+                nginx_site_certificate_chains.results is defined
+                and site_index < (nginx_site_certificate_chains.results | length)
+                and nginx_site_certificate_chains.results[site_index].stat is defined
+              )
+              else 'none'
+            ),
+            "key_checksum": (
+              nginx_site_certificate_keys.results[site_index].stat.checksum
+              | default('none')
+              if (
+                nginx_site_certificate_keys.results is defined
+                and site_index < (nginx_site_certificate_keys.results | length)
+                and nginx_site_certificate_keys.results[site_index].stat is defined
+              )
+              else 'none'
+            )
+          }
+        })
+      }}
+  loop: "{{ nginx_sites_to_mutate }}"
+  loop_control:
+    index_var: site_index
+  tags: *nginx_site_baseline_tags
+- name: Validate targeted Nginx baseline reconciliation
+  ansible.builtin.assert:
+    that:
+      - nginx_site_baseline_allow_additive_reconcile | default(false) | bool
+      - nginx_site_target | default('') | length > 0
+      - nginx_site_baseline.auroraops_managed | default(false) | bool
+      - nginx_site_baseline.version | default(0) | int == 1
+      - nginx_site_target in (nginx_site_baseline.sites | default([]))
+      - nginx_site_baseline.certificate_fingerprint.get(nginx_site_target) is not none
+      - >-
+        nginx_site_baseline.certificate_fingerprint.get(nginx_site_target)
+        == nginx_site_certificate_fingerprint.get(nginx_site_target)
+      - nginx_site_baseline.pre_deploy_state.get(nginx_site_target) is not none
+    fail_msg: >-
+      Targeted Nginx reconciliation requires an explicitly authorized target
+      already recorded in the lifecycle baseline with the same certificate
+      fingerprint and recoverable pre-deploy state.
+  when:
+    - nginx_site_baseline_stat.stat.exists
+    - nginx_site_target | default('') | length > 0
+    - not (nginx_site_baseline_reseed | default(false) | bool)
+  tags: *nginx_site_baseline_tags
+
+- name: Reject targeted Nginx reconciliation without a baseline
+  ansible.builtin.assert:
+    that:
+      - nginx_site_baseline_stat.stat.exists
+    fail_msg: >-
+      A focused Nginx mutation target requires an existing lifecycle baseline;
+      run an unscoped first deploy before selecting a target.
+  when:
+    - nginx_site_target | default('') | length > 0
+    - not nginx_site_baseline_stat.stat.exists
+    - not (nginx_site_baseline_reseed | default(false) | bool)
+  tags: *nginx_site_baseline_tags
+
+- name: Reject stale Nginx site lifecycle baseline
+  ansible.builtin.assert:
+    that:
+      - nginx_site_baseline.auroraops_managed | default(false) | bool
+      - nginx_site_baseline.version | default(0) | int == 1
+      - nginx_site_baseline.sites | sort == nginx_sites_to_deploy | sort
+      - nginx_site_baseline.certificate_fingerprint == nginx_site_certificate_fingerprint
+    fail_msg: >-
+      Existing Nginx site lifecycle baseline no longer matches the selected
+      site set or certificate fingerprint. Reconcile the stale lifecycle
+      context before mutation.
+  when:
+    - nginx_site_baseline_stat.stat.exists
+    - nginx_site_target | default('') | length == 0
+    - not (nginx_site_baseline_reseed | default(false) | bool)
+  tags: *nginx_site_baseline_tags
+
+- name: Inspect pre-deploy Nginx site configurations
+  become: true
+  ansible.builtin.stat:
+    path: "/etc/nginx/sites-available/{{ item }}.conf"
+  loop: "{{ nginx_sites_to_deploy }}"
+  register: nginx_site_available_baseline_stats
+  when:
+    - not nginx_site_baseline_stat.stat.exists
+      or nginx_site_baseline_reseed | default(false) | bool
+  tags: *nginx_site_baseline_tags
+
+- name: Read pre-deploy Nginx site configurations
+  become: true
+  ansible.builtin.slurp:
+    path: "/etc/nginx/sites-available/{{ item.item }}.conf"
+  loop: "{{ nginx_site_available_baseline_stats.results | default([]) }}"
+  register: nginx_site_available_baseline_raw
+  when: item.stat.exists | default(false)
+  tags: *nginx_site_baseline_tags
+
+- name: Index pre-deploy Nginx site configuration content
+  ansible.builtin.set_fact:
+    nginx_site_available_baseline_content: >-
+      {{
+        nginx_site_available_baseline_content | default({}) | combine({
+          item.item.item: item.content | b64decode
+        })
+      }}
+  loop: "{{ nginx_site_available_baseline_raw.results | default([]) }}"
+  when: not (item.skipped | default(false))
+  tags: *nginx_site_baseline_tags
+
+- name: Inspect pre-deploy Nginx site links
+  become: true
+  ansible.builtin.stat:
+    path: "/etc/nginx/sites-enabled/{{ item }}.conf"
+    follow: false
+  loop: "{{ nginx_sites_to_deploy }}"
+  register: nginx_site_enabled_baseline_stats
+  when:
+    - not nginx_site_baseline_stat.stat.exists
+      or nginx_site_baseline_reseed | default(false) | bool
+  tags: *nginx_site_baseline_tags
+
+- name: Reject non-link files in the managed Nginx enabled-site scope
+  ansible.builtin.assert:
+    that:
+      - not (item.stat.exists | default(false)) or (item.stat.islnk | default(false))
+    fail_msg: "Managed enabled-site path is not a symlink: {{ item.item }}"
+  loop: "{{ nginx_site_enabled_baseline_stats.results | default([]) }}"
+  tags: *nginx_site_baseline_tags
+
+- name: Build pre-deploy Nginx site lifecycle state
+  ansible.builtin.set_fact:
+    nginx_site_pre_deploy_state: >-
+      {{
+        nginx_site_pre_deploy_state | default({}) | combine({
+          item: {
+            "available_exists": nginx_site_available_baseline_stats.results[site_index].stat.exists | default(false),
+            "available_content": nginx_site_available_baseline_content[item] | default(""),
+            "enabled_exists": nginx_site_enabled_baseline_stats.results[site_index].stat.exists | default(false),
+            "enabled_target": nginx_site_enabled_baseline_stats.results[site_index].stat.lnk_source | default("")
+          }
+        })
+      }}
+  loop: "{{ nginx_sites_to_deploy }}"
+  loop_control:
+    index_var: site_index
+  when:
+    - not nginx_site_baseline_stat.stat.exists
+      or nginx_site_baseline_reseed | default(false) | bool
+  tags: *nginx_site_baseline_tags
+
+- name: Ensure facts directory exists for Nginx site lifecycle baseline
+  become: true
+  ansible.builtin.file:
+    path: /etc/ansible/facts.d
+    state: directory
+    mode: "0755"
+  when:
+    - not nginx_site_baseline_stat.stat.exists
+      or nginx_site_baseline_reseed | default(false) | bool
+  tags: *nginx_site_baseline_tags
+
+- name: Persist pre-deploy Nginx site lifecycle baseline
+  become: true
+  ansible.builtin.copy:
+    dest: "{{ nginx_site_baseline_fact_path }}"
+    mode: "0600"
+    content: |
+      {{
+        {
+          "auroraops_managed": true,
+          "version": 1,
+          "sites": nginx_sites_to_deploy | sort,
+          "certificate_fingerprint": nginx_site_certificate_fingerprint,
+          "pre_deploy_state": nginx_site_pre_deploy_state
+        } | to_nice_json
+      }}
+  when:
+    - not nginx_site_baseline_stat.stat.exists
+      or nginx_site_baseline_reseed | default(false) | bool
+  tags: *nginx_site_baseline_tags

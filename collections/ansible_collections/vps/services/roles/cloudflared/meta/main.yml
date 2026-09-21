@@ -1,0 +1,7 @@
+---
+galaxy_info:
+  author: AuroraOps
+  description: Manage a remote Cloudflare Tunnel connector for disaster recovery
+  license: MIT
+  min_ansible_version: "2.17"
+dependencies: []

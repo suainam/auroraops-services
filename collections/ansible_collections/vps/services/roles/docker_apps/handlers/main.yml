@@ -1,0 +1,97 @@
+---
+- name: Reload systemd daemon
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  tags: [deploy, services, docker_apps, hysteria2_client]
+
+- name: Restart hysteria2
+  listen: restart hysteria2
+  become: true
+  community.docker.docker_container:
+    name: hysteria2
+    state: started
+    restart: true
+  tags: [deploy, services, docker_apps, hysteria2]
+
+- name: Restart sillytavern
+  listen: restart sillytavern
+  become: true
+  community.docker.docker_container:
+    name: sillytavern
+    state: started
+    restart: true
+  tags: [deploy, services, docker_apps, sillytavern]
+
+- name: Restart gcli2api
+  listen: restart gcli2api
+  become: true
+  community.docker.docker_container:
+    name: gcli2api
+    state: started
+    restart: true
+  tags: [deploy, services, docker_apps, gcli2api]
+
+- name: Restart vaultwarden
+  listen: restart vaultwarden
+  become: true
+  community.docker.docker_container:
+    name: vaultwarden
+    state: started
+    restart: true
+  tags: [deploy, services, docker_apps, vaultwarden]
+
+- name: Restart gemini-balance
+  listen: restart gemini-balance
+  become: true
+  community.docker.docker_container:
+    name: gemini-balance
+    state: started
+    restart: true
+  tags: [deploy, services, docker_apps, gemini]
+
+- name: Restart flare
+  listen: restart flare
+  become: true
+  community.docker.docker_container:
+    name: flare
+    state: started
+    restart: true
+  tags: [deploy, services, docker_apps, flare]
+
+- name: Restart singbox container
+  listen: restart singbox
+  become: true
+  community.docker.docker_container:
+    name: singbox
+    state: started
+    restart: true
+  when: (docker_apps_singbox_deploy_mode | default('docker')) == 'docker'
+  tags: [deploy, services, docker_apps, singbox]
+- name: Restart singbox native
+  listen: restart singbox
+  become: true
+  ansible.builtin.service:
+    name: sing-box
+    state: restarted
+  when: (docker_apps_singbox_deploy_mode | default('docker')) == 'native'
+  tags: [deploy, services, docker_apps, singbox]
+
+- name: Restart cliproxyapi
+  listen: restart cliproxyapi
+  become: true
+  community.docker.docker_container:
+    name: cliproxyapi
+    state: started
+    restart: true
+  tags: [deploy, services, docker_apps, cliproxyapi]
+
+- name: Restart cliproxyapi scheduler timer
+  listen: restart cliproxyapi scheduler timer
+  become: true
+  ansible.builtin.systemd:
+    name: cliproxyapi-scheduler-restart.timer
+    enabled: true
+    state: restarted
+    daemon_reload: true
+  tags: [deploy, services, docker_apps, cliproxyapi]

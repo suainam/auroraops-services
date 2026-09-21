@@ -1,0 +1,25 @@
+---
+- name: Resolve Grok Register role state
+  ansible.builtin.set_fact:
+    grok_register_role_enabled: >-
+      {{ grok_register_enabled | bool and
+         auroraops_roles['services']['grok_register'] | default(false) | bool }}
+  tags: [deploy, services, grok_register, phase5]
+
+- name: Report disabled Grok Register role
+  ansible.builtin.debug:
+    msg: "Role grok_register is disabled, skipping"
+  when: not grok_register_role_enabled
+  tags: [deploy, services, grok_register, phase5]
+
+- name: Run Grok Register preflight
+  ansible.builtin.import_tasks: preflight.yml
+  when: grok_register_role_enabled
+  tags: [deploy, services, grok_register, grok_register_preflight, phase5]
+
+- name: Apply Grok Register state
+  ansible.builtin.import_tasks: apply.yml
+  when:
+    - grok_register_role_enabled
+    - not ansible_check_mode
+  tags: [deploy, services, grok_register, grok_register_apply, phase5]

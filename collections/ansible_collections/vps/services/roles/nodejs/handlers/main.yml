@@ -1,0 +1,12 @@
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Restart hermes gateway
+  become: true
+  ansible.builtin.systemd:
+    name: hermes-gateway.service
+    daemon_reload: true
+    state: restarted
+  when: not ansible_check_mode

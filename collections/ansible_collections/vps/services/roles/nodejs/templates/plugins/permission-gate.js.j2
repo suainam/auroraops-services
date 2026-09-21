@@ -1,0 +1,70 @@
+{% raw %}
+/**
+ * AuroraOps Permission Gate Plugin
+ * 
+ * Fine-grained permission control for OpenCode operations.
+ * Auto-approves safe operations, requires user approval for dangerous ones.
+ * 
+ * Complements pre-command-check.js:
+ * - pre-command-check: BLOCKS dangerous commands (throws error)
+ * - permission-gate: APPROVES safe commands, ASKS for others
+ * 
+ * Inspired by ECC's permission.ask hook.
+ */
+export const PermissionGatePlugin = async ({ project, client, $, directory, worktree }) => {
+  const log = (level, message) =>
+    client.app.log({ body: { service: "auroraops-permission", level, message } });
+
+  return {
+    "permission.ask": async (event) => {
+      const tool = event.tool || "";
+      const cmd = String(
+        (event.args && event.args.command) || event.args || ""
+      );
+
+      log("info", `[Permission] Request: ${tool} - ${cmd.substring(0, 80)}`);
+
+      // Auto-approve: read/search tools
+      if (["read", "glob", "grep", "search", "list"].includes(tool)) {
+        return { approved: true, reason: "Read-only operation" };
+      }
+
+      // Auto-approve: safe AuroraOps commands
+      if (tool === "bash") {
+        // Dry-run and syntax checks
+        if (/^make\s+(check|check-syntax|validate)/.test(cmd)) {
+          return { approved: true, reason: "Dry-run / syntax check" };
+        }
+        if (/^ansible-playbook\s.*--check/.test(cmd)) {
+          return { approved: true, reason: "Ansible dry-run" };
+        }
+
+        // Verification commands
+        if (/^make\s+verify/.test(cmd)) {
+          return { approved: true, reason: "Verification command" };
+        }
+
+        // Linting tools
+        if (/^(ansible-lint|yamllint)/.test(cmd)) {
+          return { approved: true, reason: "Linting tool" };
+        }
+
+        // Git status / diff / log (read-only git operations)
+        if (/^git\s+(status|diff|log|show|branch)/.test(cmd)) {
+          return { approved: true, reason: "Read-only git operation" };
+        }
+
+        // Environment show
+        if (/^make\s+env_show/.test(cmd)) {
+          return { approved: true, reason: "Environment display" };
+        }
+      }
+
+      // Everything else: let user decide
+      return { approved: undefined };
+    },
+  };
+};
+
+export default PermissionGatePlugin;
+{% endraw %}

@@ -1,0 +1,42 @@
+services:
+  vertex-proxy:
+    container_name: vertex-proxy
+    image: "{{ vertex_image }}"
+    build:
+      context: "{{ vertex_source_dir }}"
+      dockerfile: Dockerfile
+    user: "{{ vertex_uid }}:{{ vertex_gid }}"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:{{ vertex_port }}:2156"
+    volumes:
+      - "{{ vertex_config_dir }}:/app/config"
+      - "{{ vertex_logs_dir }}:/app/logs"
+      - "{{ vertex_assets_dir }}:/app/assets"
+    environment:
+      VPROXY_CONFIG: /app/config/config.json
+      VPROXY_API_KEYS: /app/config/api_keys.txt
+      VPROXY_MODELS: /app/config/models.json
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          wget -q -O - http://127.0.0.1:2156/health >/dev/null 2>&1 || exit 1
+      interval: 1800s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    mem_limit: "{{ vertex_memory }}"
+    mem_reservation: "{{ vertex_memory_reservation }}"
+    cpus: "{{ vertex_cpus }}"
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"
+    networks:
+      - sweb
+
+networks:
+  sweb:
+    external: true

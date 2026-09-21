@@ -1,0 +1,7 @@
+---
+- name: Configure Docker and Backup logrotate
+  ansible.builtin.include_role:
+    name: vps.system.logrotate
+  vars:
+    logrotate_configs_to_deploy: "{{ docker_logrotate_configs }}"
+  tags: [deploy, services, docker, logrotate, phase3]

@@ -1,0 +1,29 @@
+Run a comprehensive security review of the specified AuroraOps component.
+
+## Security Review Scope
+
+Analyze the target for:
+1. **Vault Compliance** - No hardcoded secrets, all sensitive data uses `vault_*` references
+2. **Configuration Security** - Proper permissions, restrictive firewall rules, secure defaults
+3. **SSH Security** - Key permissions, authentication settings
+4. **Template Security** - No injection risks, proper escaping
+5. **Service Security** - Minimal privileges, no unnecessary exposure
+
+## Process
+
+1. Scan target files for security patterns
+2. Cross-reference with vault variables
+3. Check file permissions in tasks
+4. Verify firewall and network rules
+5. Generate structured report with severity levels
+
+## Report Format
+
+For each issue:
+- Severity: CRITICAL / HIGH / MEDIUM / LOW
+- Category: Vault / SSH / Firewall / Permissions / Template
+- Location: file:line
+- Issue: description
+- Remediation: fix with code example
+
+Target:

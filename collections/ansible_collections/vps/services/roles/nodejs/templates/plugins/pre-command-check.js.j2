@@ -1,0 +1,109 @@
+export const PreCommandCheck = async ({ project, client, $, directory, worktree }) => {
+  // --- 部署类命令（需要先 dry-run 确认） ---
+  const deploymentCommands = [
+    "make deploy",
+    "make verify",
+    "make restore",
+    "make rollback",
+  ];
+
+  // --- 高危系统级变更命令清单 ---
+  const dangerousCommandPatterns = [
+    // 文件/目录破坏性删除
+    { regex: /\brm\s+(-[^\s]*\s+)*-[^\s]*r[^\s]*\s/, label: "递归删除 (rm -r)" },
+    { regex: /\brm\s+(-[^\s]*\s+)*-[^\s]*f[^\s]*\s+\//, label: "强制删除根路径 (rm -f /)" },
+    // 磁盘破坏
+    { regex: /\bmkfs\b/, label: "格式化磁盘 (mkfs)" },
+    { regex: /\bdd\s+.*if=\/dev\/(zero|urandom)/, label: "磁盘覆写 (dd)" },
+    // 权限破坏
+    { regex: /\bchmod\s+(-[^\s]*\s+)*-[^\s]*R[^\s]*\s+777\s+\//, label: "全局权限开放 (chmod -R 777 /)" },
+    { regex: /\bchown\s+(-[^\s]*\s+)*-[^\s]*R[^\s]*\s+.*\s+\/\s*$/, label: "全局所有权变更 (chown -R /)" },
+    // 网络与防火墙
+    { regex: /\bufw\s+disable\b/, label: "禁用防火墙 (ufw disable)" },
+    { regex: /\biptables\s+(-[^\s]*\s+)*-F\b/, label: "清空防火墙规则 (iptables -F)" },
+    { regex: /\bnft\s+flush\s+ruleset\b/, label: "清空 nftables 规则" },
+    // 服务破坏（防止断开 SSH 等关键连接）
+    { regex: /\bsystemctl\s+(stop|disable)\s+(sshd|ssh|networking|NetworkManager)\b/, label: "停用关键服务" },
+    { regex: /\bservice\s+(ssh|sshd|networking)\s+stop\b/, label: "停用关键服务 (service stop)" },
+    { regex: /\bpkill\s+(-[^\s]*\s+)*sshd\b/, label: "杀死 sshd 进程" },
+    // 危险的 Git 操作
+    { regex: /\bgit\s+reset\s+--hard\b/, label: "Git 硬重置 (git reset --hard)" },
+    { regex: /\bgit\s+clean\s+(-[^\s]*\s+)*-[^\s]*f/, label: "Git 强制清理 (git clean -f)" },
+  ];
+
+  return {
+    "tool.execute.before": async (input, output) => {
+      if (input.tool === "bash") {
+        const command = output.args?.command || "";
+
+        // ========== 全局逃生舱：SKIP=1 放行一切 ==========
+        if (command.includes("SKIP=1")) {
+          return;
+        }
+
+        // ========== 1. 部署命令拦截 ==========
+        const isDeployment = deploymentCommands.some((cmd) => command.startsWith(cmd));
+
+        if (isDeployment) {
+          const dryRunVariant = command.replace(
+            /^make (deploy|verify|restore|rollback)/,
+            "make check"
+          );
+
+          throw new Error(
+            `⚠️  部署命令已拦截: ${command}\n\n` +
+              `建议先运行 dry-run 模式验证更改:\n` +
+              `  ${dryRunVariant}\n\n` +
+              `如果确认无误，可使用 SKIP=1 前缀强制执行:\n` +
+              `  SKIP=1 ${command}`
+          );
+        }
+
+        // ========== 2. Ansible Playbook 裸执行拦截 ==========
+        if (
+          command.includes("ansible-playbook") &&
+          !command.includes("--check")
+        ) {
+          throw new Error(
+            `⚠️  检测到未携带 --check 的 Ansible Playbook 执行\n\n` +
+              `建议添加 --check 参数进行 dry-run:\n` +
+              `  ${command} --check\n\n` +
+              `如果确认无误，可使用 SKIP=1 前缀强制执行:\n` +
+              `  SKIP=1 ${command}`
+          );
+        }
+
+        // ========== 3. Git Push 拦截 ==========
+        if (command.startsWith("git push")) {
+          if (command.includes("--force") || command.includes("-f")) {
+            throw new Error(
+              `⚠️  检测到 Git 强制推送 (force push)\n\n` +
+                `这将覆盖远端历史，可能导致其他协作者丢失工作。\n` +
+                `建议使用 --force-with-lease 代替 --force。\n\n` +
+                `如果确认无误，可使用 SKIP=1 前缀强制执行:\n` +
+                `  SKIP=1 ${command}`
+            );
+          }
+          throw new Error(
+            `⚠️  Git push 已拦截\n\n` +
+              `建议先运行: make validate\n\n` +
+              `如已验证，使用 SKIP=1 前缀绕过:\n` +
+              `  SKIP=1 ${command}`
+          );
+        }
+
+        // ========== 4. 高危系统级命令拦截 ==========
+        for (const { regex, label } of dangerousCommandPatterns) {
+          if (regex.test(command)) {
+            throw new Error(
+              `🚫  高危系统级命令已拦截: ${label}\n` +
+                `    命令: ${command}\n\n` +
+                `此操作具有不可逆的破坏性潜力。请仔细确认后使用 SKIP=1 前缀执行:\n` +
+                `  SKIP=1 ${command}`
+            );
+          }
+        }
+      }
+    },
+  };
+};

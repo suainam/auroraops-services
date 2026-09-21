@@ -1,0 +1,61 @@
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ singbox_domain }};
+
+    # Camouflage Fallback (from Sing-box) or direct HTTP
+    location / {
+        root /var/www/camouflage/{{ nginx_camouflage_extract_dir | default('') }};
+        index index.html index.htm;
+        try_files $uri $uri/ /index.html;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name {{ singbox_domain }};
+
+    # Reuse host certificate (wildcard covers *.suainam.eu.org)
+    ssl_certificate /etc/letsencrypt/live/msuai.top/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/msuai.top/privkey.pem;
+
+    include /etc/nginx/conf.d/common_ssl.conf;
+    include /etc/nginx/conf.d/common_headers.conf;
+    include /etc/nginx/conf.d/common_performance.conf;
+
+    # Sing-box Base64 Subscription (All protocols - for Hiddify/v2rayNG)
+    location = /{{ singbox_sub_token }} {
+        alias {{ singbox_sub_path }};
+        default_type text/plain;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="ccuai_sub"';
+        add_header Profile-Title "ccuai_sub";
+        add_header Subscription-Userinfo "upload=0; download=0; total=3298534883328; expire=4102444800";
+    }
+
+    # Sing-box YAML Profile (For sing-box/Hiddify)
+    location = /{{ singbox_sub_token }}.yaml {
+        alias {{ singbox_sub_path }}.yaml;
+        default_type application/x-yaml;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="ccuai_sub"';
+        add_header Profile-Title "ccuai_sub";
+        add_header Subscription-Userinfo "upload=0; download=0; total=3298534883328; expire=4102444800";
+    }
+
+    # Sing-box JSON Profile (For Sing-box native)
+    location = /{{ singbox_sub_token }}.json {
+        alias {{ singbox_sub_path }}.json;
+        default_type application/json;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="ccuai_sub"';
+        add_header Profile-Title "ccuai_sub";
+        add_header Subscription-Userinfo "upload=0; download=0; total=3298534883328; expire=4102444800";
+    }
+
+    location / {
+        return 404;
+    }
+}

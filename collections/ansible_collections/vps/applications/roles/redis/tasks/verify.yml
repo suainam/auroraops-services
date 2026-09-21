@@ -1,0 +1,102 @@
+---
+- name: 验证 Redis server 软件包是否已安装
+  ansible.builtin.command: dpkg -s redis-server
+  register: redis_package_check
+  changed_when: false
+  failed_when: redis_package_check.rc != 0
+  tags:
+    - verify
+    - applications
+    - redis
+    - redis_verify_install
+    - phase3
+- name: 验证 Redis 用户是否存在
+  ansible.builtin.getent:
+    database: passwd
+    key: redis
+  tags:
+    - verify
+    - applications
+    - redis
+    - redis_verify_user
+    - phase3
+- name: 验证 Redis 数据目录是否存在且权限正确
+  ansible.builtin.stat:
+    path: "{{ redis_data_dir }}"
+  register: redis_data_dir_check
+  failed_when: not redis_data_dir_check.stat.exists or redis_data_dir_check.stat.pw_name != 'redis' or redis_data_dir_check.stat.gr_name != 'redis' or
+    redis_data_dir_check.stat.mode != '0755'
+  tags:
+    - verify
+    - applications
+    - redis
+    - redis_verify_config
+    - phase3
+- name: 验证 Redis 日志目录是否存在且权限正确
+  ansible.builtin.stat:
+    path: "{{ redis_log_file | dirname }}"
+  register: redis_log_dir_check
+  failed_when: not redis_log_dir_check.stat.exists or redis_log_dir_check.stat.pw_name != 'redis' or redis_log_dir_check.stat.gr_name != 'adm' or
+    redis_log_dir_check.stat.mode != '0755'
+  tags:
+    - verify
+    - applications
+    - redis
+    - redis_verify_config
+    - phase3
+- name: 验证 Redis 配置文件内容 (例如，检查 bind 地址)
+  ansible.builtin.command: grep '^bind {{ redis_bind_address }}' /etc/redis/redis.conf
+  register: redis_conf_check
+  changed_when: false
+  failed_when: redis_conf_check.rc != 0
+  tags:
+    - verify
+    - applications
+    - redis
+    - redis_verify_config
+    - phase3
+- name: 验证 Redis 服务状态
+  ansible.builtin.service_facts:
+  tags:
+    - verify
+    - applications
+    - redis
+    - redis_verify_service
+    - phase3
+  register: redis_service_status
+- name: 检查 Redis 服务是否运行和启用
+  ansible.builtin.assert:
+    that:
+      - redis_service_status.ansible_facts.services['redis-server.service'].state == 'running'
+      - redis_service_status.ansible_facts.services['redis-server.service'].status == 'enabled'
+    fail_msg: Redis 服务未运行或未启用
+  tags:
+    - verify
+    - applications
+    - redis
+    - redis_verify_service
+    - phase3
+- name: 连接到 Redis 并发送 PING 命令
+  ansible.builtin.command: redis-cli -a {{ redis_db_admin_password }} PING
+  register: redis_ping_result
+  changed_when: false
+  failed_when: redis_ping_result.stdout != 'PONG'
+  tags:
+    - verify
+    - applications
+    - redis
+    - redis_verify_connection
+    - phase3
+
+- name: Verify Redis logrotate configuration
+  ansible.builtin.import_tasks: ../../../common/tasks/verify_optional_logrotate.yml
+  vars:
+    optional_logrotate_owner: Redis
+    optional_logrotate_enabled: "{{ redis_logrotate_enabled }}"
+    optional_logrotate_config_path: "{{ redis_logrotate_config_path }}"
+  tags:
+    - verify
+    - applications
+    - redis
+    - redis_verify_logrotate
+    - phase3

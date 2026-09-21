@@ -1,0 +1,34 @@
+---
+- name: Set postgres superuser password
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_user:
+    name: postgres
+    password: "{{ postgresql_root_password }}"
+    encrypted: true
+  when:
+    - postgresql_root_password is defined
+    - postgresql_root_password | length > 0
+  tags: [deploy, applications, postgresql, users_dbs, phase4]
+
+- name: Create application database user
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_user:
+    name: "{{ postgresql_app_db_user }}"
+    password: "{{ postgresql_db_admin_password }}"
+    encrypted: true
+    state: present
+  when:
+    - postgresql_db_admin_password is defined
+    - postgresql_db_admin_password | length > 0
+  tags: [deploy, applications, postgresql, users_dbs, phase4]
+
+- name: Create application database
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_db:
+    name: "{{ postgresql_app_db_name }}"
+    owner: "{{ postgresql_app_db_user }}"
+    state: present
+  tags: [deploy, applications, postgresql, users_dbs, phase4]

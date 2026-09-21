@@ -1,0 +1,75 @@
+---
+# =============================================================================
+# Network Connectivity Prerequisite Check
+# =============================================================================
+# 检查网络连通性
+
+- name: "[prereq:network] Check connectivity to hosts"
+  ansible.builtin.wait_for:
+    host: "{{ item.host }}"
+    port: "{{ item.port | default(443) }}"
+    timeout: "{{ item.timeout | default(5) }}"
+    state: started
+  loop: "{{ prereq_checks_network_hosts }}"
+  loop_control:
+    label: "{{ item.host }}:{{ item.port | default(443) }}"
+  register: prereq_checks__prereq_network_results
+  check_mode: false
+  failed_when: false
+  changed_when: false
+
+- name: "[prereq:network] Set connectivity facts"
+  ansible.builtin.set_fact:
+    prereq_checks_prereq_network_results: "{{ prereq_checks__prereq_network_results.results | default([]) }}"
+    prereq_checks_prereq_network_failed: >-
+      {{
+        prereq_checks__prereq_network_results.results
+        | default([])
+        | selectattr('failed', 'defined')
+        | selectattr('failed')
+        | list
+      }}
+
+- name: "[prereq:network] Set overall check result"
+  ansible.builtin.set_fact:
+    prereq_checks_prereq_network_ready: "{{ (prereq_checks_prereq_network_failed | length) == 0 }}"
+
+- name: "[prereq:network] Display status"
+  ansible.builtin.debug:
+    msg: |
+      Network Connectivity Status:
+        Hosts checked: {{ prereq_checks_network_hosts | length }}
+        Failed: {{ prereq_checks_prereq_network_failed | length }}
+        Ready: {{ prereq_checks_prereq_network_ready }}
+        {% if prereq_checks_prereq_network_failed | length > 0 %}
+        Failed hosts:
+        {% for item in prereq_checks_prereq_network_failed %}
+          - {{ item.item.host }}:{{ item.item.port | default(443) }}
+        {% endfor %}
+        {% endif %}
+
+- name: "[prereq:network] Fail if not ready and required"
+  ansible.builtin.fail:
+    msg: |
+      ============================================================
+      ERROR: Network connectivity check failed!
+      ============================================================
+
+      Failed to connect to:
+      {% for item in prereq_checks_prereq_network_failed %}
+        - {{ item.item.host }}:{{ item.item.port | default(443) }}
+      {% endfor %}
+
+      Please check your network configuration.
+      ============================================================
+  when:
+    - prereq_checks_network_required | bool
+    - not prereq_checks_prereq_network_ready
+
+- name: "[prereq:network] Warn if not ready but not required"
+  ansible.builtin.debug:
+    msg: |
+      WARNING: Some network hosts are unreachable, but check is not required.
+  when:
+    - not (prereq_checks_network_required | bool)
+    - not prereq_checks_prereq_network_ready

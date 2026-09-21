@@ -1,0 +1,23 @@
+---
+redis_version: "7"
+redis_port: 6379
+redis_bind_address: "0.0.0.0" # Allow Docker connections
+redis_app_db_user: "admin"
+redis_data_dir: "/var/lib/redis"
+redis_log_file: "/var/log/redis/redis-server.log"
+# redis_requirepass 将从 secrets/vault.yml 中的 redis_db_admin_password 获取
+
+redis_logrotate_enabled: true
+redis_logrotate_config_path: "/etc/logrotate.d/redis-server"
+redis_logrotate_legacy_paths:
+  - "/etc/logrotate.d/redis"
+redis_logrotate_config:
+  name: "redis-server"
+  log_path: "{{ redis_log_file }}"
+  rotate_count: 7
+  compress: true
+  delaycompress: true
+  missingok: true
+  notifempty: true
+  nocreate: true
+  copytruncate: true

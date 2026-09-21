@@ -1,0 +1,112 @@
+---
+- name: Check vim baseline presence
+  become: true
+  ansible.builtin.stat:
+    path: "{{ vim_baseline_fact_path }}"
+  register: vim_baseline_stat
+  tags: [verify, personalization, vim, phase2]
+
+- name: Verify vim baseline exists
+  ansible.builtin.assert:
+    that:
+      - vim_baseline_stat.stat.exists
+    fail_msg: "Vim baseline is missing; rollback preconditions are not satisfied"
+  tags: [verify, personalization, vim, phase2]
+
+- name: Validate vim package installation
+  ansible.builtin.command: dpkg -s vim
+  register: vim_package_check
+  failed_when: vim_package_check.rc != 0
+  changed_when: false
+  tags: [verify, personalization, vim, phase2]
+
+- name: Verify system vimrc disables plugin block
+  ansible.builtin.command: grep -q "call plug#begin" "{{ vim_system_vimrc_path }}"
+  register: vim_sys_vimrc_plugin_block
+  changed_when: false
+  failed_when: vim_sys_vimrc_plugin_block.rc == 0
+  tags: [verify, personalization, vim, phase2]
+
+- name: Verify system vimrc contains managed settings
+  ansible.builtin.command: grep -q "set relativenumber" "{{ vim_system_vimrc_path }}"
+  register: vim_sys_vimrc_content
+  changed_when: false
+  failed_when: vim_sys_vimrc_content.rc != 0
+  tags: [verify, personalization, vim, phase2]
+
+- name: Build verify user list
+  ansible.builtin.set_fact:
+    vim_verify_users:
+      - root
+      - "{{ admin_user }}"
+      - "{{ ansible_user | default(lookup('env', 'USER')) }}"
+  tags: [verify, personalization, vim, phase2]
+
+- name: Check verify user existence
+  ansible.builtin.shell: "id -u {{ item }} 2>/dev/null || echo not_found"
+  loop: "{{ vim_verify_users | unique }}"
+  register: vim_verify_user_checks
+  changed_when: false
+  tags: [verify, personalization, vim, phase2]
+
+- name: Build managed verify user records
+  ansible.builtin.set_fact:
+    vim_verify_user_records: []
+  tags: [verify, personalization, vim, phase2]
+
+- name: Append managed verify user records
+  ansible.builtin.set_fact:
+    vim_verify_user_records: "{{ vim_verify_user_records + [verify_user] }}"
+  vars:
+    verify_user:
+      name: "{{ item.item }}"
+      home: "{{ '/root' if item.item == 'root' else '/home/' ~ item.item }}"
+  loop: "{{ vim_verify_user_checks.results }}"
+  when: item.stdout != 'not_found'
+  tags: [verify, personalization, vim, phase2]
+
+- name: Verify managed user vimrc files exist
+  ansible.builtin.stat:
+    path: "{{ item.home }}/.vimrc"
+  loop: "{{ vim_verify_user_records }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: vim_verify_vimrc_stats
+  tags: [verify, personalization, vim, phase2]
+
+- name: Assert managed user vimrc files exist
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+    fail_msg: "Managed user vimrc is missing for {{ item.item.name }}"
+  loop: "{{ vim_verify_vimrc_stats.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  tags: [verify, personalization, vim, phase2]
+
+- name: Verify managed user vimrc contains plugin config
+  ansible.builtin.command: grep -q "Plug 'preservim/nerdtree'" "{{ item.home }}/.vimrc"
+  loop: "{{ vim_verify_user_records }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: false
+  tags: [verify, personalization, vim, phase2]
+
+- name: Verify managed user plug.vim exists
+  ansible.builtin.stat:
+    path: "{{ item.home }}/.vim/autoload/plug.vim"
+  loop: "{{ vim_verify_user_records }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: vim_verify_plug_stats
+  tags: [verify, personalization, vim, phase2]
+
+- name: Assert managed user plug.vim exists
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+    fail_msg: "Managed user plug.vim is missing for {{ item.item.name }}"
+  loop: "{{ vim_verify_plug_stats.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  tags: [verify, personalization, vim, phase2]

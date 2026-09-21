@@ -1,0 +1,67 @@
+---
+# Local Test Status Tasks
+# 检查本地测试状态
+
+- name: Check if local test container exists
+  community.docker.docker_container_info:
+    name: "{{ ansibletest_local_container_name }}"
+  register: ansibletest_container_info
+  ignore_errors: true
+  tags: [verify, system, ansibletest, ansibletest_status, phase3]
+
+- name: Display local container status
+  ansible.builtin.debug:
+    msg: |
+      Local Test Container Status:
+      - Container Name: {{ ansibletest_local_container_name }}
+      - Exists: {{ not ansibletest_container_info.failed | bool }}
+      {% if not ansibletest_container_info.failed %}
+      - State: {{ ansibletest_container_info.container.State.Status | default('unknown') }}
+      - Exit Code: {{ ansibletest_container_info.container.State.ExitCode | default('N/A') }}
+      - Started At: {{ ansibletest_container_info.container.State.StartedAt | default('N/A') }}
+      - Finished At: {{ ansibletest_container_info.container.State.FinishedAt | default('N/A') }}
+      {% endif %}
+  tags: [verify, system, ansibletest, ansibletest_status, phase3]
+
+- name: List recent test containers
+  community.docker.docker_container_info:
+    name: "{{ item }}"
+  loop:
+    - "{{ ansibletest_local_container_name }}"
+    - "auroraops-test-runner-old"
+  ignore_errors: true
+  register: ansibletest_recent_containers
+  tags: [verify, system, ansibletest, ansibletest_status, phase3]
+
+- name: Display recent test activity
+  ansible.builtin.debug:
+    msg: |
+      Recent Test Activity:
+      {% for result in ansibletest_recent_containers.results %}
+      {% if not result.failed and result.container is defined %}
+      {% set result_name = result.container.Name | default('unknown') %}
+      {% set result_status = result.container.State.Status | default('unknown') %}
+      {% set result_exit_code = result.container.State.ExitCode | default('N/A') %}
+      - {{ result_name }}: {{ result_status }} (Exit: {{ result_exit_code }})
+      {% endif %}
+      {% endfor %}
+  tags: [verify, system, ansibletest, ansibletest_status, phase3]
+
+- name: Check local Docker image
+  community.docker.docker_image_info:
+    name: "{{ ansibletest_local_image_name }}"
+  register: ansibletest_image_info
+  ignore_errors: true
+  tags: [verify, system, ansibletest, ansibletest_status, phase3]
+
+- name: Display image status
+  ansible.builtin.debug:
+    msg: |
+      Local Test Image Status:
+      - Image Name: {{ ansibletest_local_image_name }}
+      - Exists: {{ not ansibletest_image_info.failed | bool }}
+      {% if not ansibletest_image_info.failed and ansibletest_image_info.images %}
+      - Size: {{ ansibletest_image_info.images[0].Size | default('unknown') }}
+      - Created: {{ ansibletest_image_info.images[0].Created | default('unknown') }}
+      {% endif %}
+  tags: [verify, system, ansibletest, ansibletest_status, phase3]

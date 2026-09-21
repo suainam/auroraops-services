@@ -1,0 +1,11 @@
+[Unit]
+Description=IP2Free Agent daily timer
+After=network-online.target
+
+[Timer]
+OnCalendar={{ ip2free_agent_schedule }}
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

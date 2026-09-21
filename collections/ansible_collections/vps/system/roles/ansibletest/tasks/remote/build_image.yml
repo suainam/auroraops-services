@@ -1,0 +1,46 @@
+---
+# Build the remote test image with the idempotent Docker image module.
+
+- name: Debug build configuration
+  ansible.builtin.debug:
+    msg: |
+      Build Configuration:
+      - Build Image: {{ ansibletest_build_image | default(true) }}
+      - Image Name: {{ ansibletest_docker_image }}
+      - Force Rebuild: {{ ansibletest_force_rebuild | default(false) }}
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]
+
+- name: Ensure test image exists (Idempotent - builds only if missing)
+  community.docker.docker_image:
+    name: "{{ ansibletest_docker_image }}"
+    source: build
+    build:
+      path: "{{ ansibletest_source_dir }}/collections/ansible_collections/vps/system/roles/ansibletest/files"
+      dockerfile: Dockerfile.base
+    force_source: "{{ ansibletest_force_rebuild | default(false) }}"
+    force_tag: "{{ ansibletest_force_rebuild | default(false) }}"
+  when: ansibletest_build_image | default(true) | bool
+  register: ansibletest_build_result
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]
+
+- name: Display build result
+  ansible.builtin.debug:
+    msg: |
+      Build Result:
+      - Image: {{ ansibletest_docker_image }}
+      - Changed: {{ ansibletest_build_result.changed | default(false) }}
+      - Actions: {{ ansibletest_build_result.actions | default([]) }}
+      {% if ansibletest_build_result.changed | default(false) %}
+      ✅ Image built successfully
+      {% else %}
+      ⏭️  Image already exists, skipped build
+      {% endif %}
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]
+
+- name: Display skip message
+  ansible.builtin.debug:
+    msg: |
+      ⏭️  Skipping image build (ansibletest_build_image=false)
+      Using image: {{ ansibletest_docker_image }}
+  when: not (ansibletest_build_image | default(true) | bool)
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]

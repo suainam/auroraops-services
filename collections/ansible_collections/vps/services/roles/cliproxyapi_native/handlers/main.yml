@@ -1,0 +1,16 @@
+---
+- name: Restart cliproxyapi-native.service
+  become: true
+  ansible.builtin.systemd:
+    name: cliproxyapi-native.service
+    state: restarted
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Restart cliproxyapi-restart.timer
+  become: true
+  ansible.builtin.systemd:
+    name: cliproxyapi-restart.timer
+    state: restarted
+    daemon_reload: true
+  when: not ansible_check_mode

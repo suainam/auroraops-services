@@ -1,0 +1,22 @@
+---
+- name: 移除 rclone 配置目录 (示例回滚操作)
+  ansible.builtin.file:
+    path: /root/.config/rclone
+    state: absent
+  tags:
+    - rollback
+    - personalization
+    - rclone
+    - rclone_remove_config_dir
+    - phase2
+
+- name: 卸载 rclone 软件包 (示例回滚操作)
+  ansible.builtin.apt:
+    name: rclone
+    state: absent
+  tags:
+    - rollback
+    - personalization
+    - rclone
+    - rclone_uninstall_package
+    - phase2

@@ -1,0 +1,39 @@
+---
+# Gemini Balance - 使用 container_deployer Meta 角色部署
+
+- name: Ensure gemini-balance config directory exists
+  ansible.builtin.file:
+    path: "/opt/dockers/gemini-balance"
+    state: directory
+    mode: "0755"
+  tags: [deploy, services, docker_apps, gemini, phase5]
+
+- name: Copy gemini env file to remote
+  ansible.builtin.copy:
+    src: "gemini.env"
+    dest: "/opt/dockers/gemini-balance/gemini.env"
+    mode: "0644"
+  tags: [deploy, services, docker_apps, gemini, phase5]
+
+- name: Deploy gemini-balance
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+  vars:
+    cdp_name: "gemini-balance"
+    cdp_image: "{{ gemini_balance_image }}"
+    cdp_dirs: ["data"]
+    cdp_init_enabled: true
+    cdp_init_dirs: ["data"]
+    cdp_init_container_path: "/app"
+    cdp_networks: [{name: "sweb"}]
+    cdp_ports:
+      - "{{ docker_apps_app_port_gemini_balance }}:8000"
+    cdp_volumes:
+      - "/opt/dockers/gemini-balance/data:/app/data"
+    cdp_env_file: "/opt/dockers/gemini-balance/gemini.env"
+    cdp_healthcheck:
+      test: ["CMD-SHELL", "cat /proc/net/tcp | awk '{print $2}' | grep -q ':1F40'"]
+      interval: 1800s
+      timeout: 10s
+      retries: 3
+  tags: [deploy, services, docker_apps, gemini, phase5]

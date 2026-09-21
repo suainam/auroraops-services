@@ -1,0 +1,16 @@
+---
+# =============================================================================
+# Bitwarden CLI Configuration and Management
+# =============================================================================
+# Main tag: bitwarden
+# Internal tags: bitwarden_login, bitwarden_sync
+#
+# This file orchestrates Bitwarden CLI setup and vault synchronization
+
+- name: Include Bitwarden CLI login and configuration
+  ansible.builtin.import_tasks: bw_login.yml
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+- name: Include Vault to Vaultwarden synchronization
+  ansible.builtin.import_tasks: bw_sync.yml
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]

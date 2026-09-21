@@ -1,0 +1,42 @@
+---
+- name: 验证 rclone 配置
+  command: rclone listremotes
+  register: rclone_remotes
+  changed_when: false
+  tags: [rclone]
+
+- assert:
+    that:
+      - "'onedrive:' in rclone_remotes.stdout"
+      - "'gdrive:' in rclone_remotes.stdout"
+    success_msg: "✅ rclone remotes 配置正确"
+    fail_msg: "❌ rclone remotes 缺失"
+  tags: [rclone]
+
+- name: 验证 gdrive 连接
+  command: "rclone ls gdrive: --max-depth 1 --timeout=10s"
+  register: gdrive_test
+  failed_when: gdrive_test.rc != 0
+  changed_when: false
+  tags: [rclone]
+
+- assert:
+    that:
+      - gdrive_test.rc == 0
+    success_msg: "✅ gdrive 连接成功"
+    fail_msg: "❌ gdrive 连接失败: {{ gdrive_test.stderr }}"
+  tags: [rclone]
+
+- name: 验证 onedrive 连接
+  command: "rclone ls onedrive: --max-depth 1 --timeout=10s"
+  register: onedrive_test
+  failed_when: onedrive_test.rc != 0
+  changed_when: false
+  tags: [rclone]
+
+- assert:
+    that:
+      - onedrive_test.rc == 0
+    success_msg: "✅ onedrive 连接成功"
+    fail_msg: "❌ onedrive 连接失败: {{ onedrive_test.stderr }}"
+  tags: [rclone]

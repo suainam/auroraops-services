@@ -1,0 +1,71 @@
+---
+- name: Gather cloudflared platform facts
+  ansible.builtin.setup:
+    gather_subset:
+      - min
+  tags: [deploy, services, cloudflared, cloudflared_install, phase4]
+
+- name: Resolve cloudflared service manager
+  ansible.builtin.set_fact:
+    cloudflared_service_manager: >-
+      {{ 'openrc'
+         if (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Alpine'
+         else (ansible_service_mgr | default('systemd')) }}
+  tags: [deploy, services, cloudflared, cloudflared_install, phase4]
+
+- name: Validate cloudflared platform and configuration
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family in ['Debian', 'Alpine']
+      - cloudflared_service_manager in ['systemd', 'openrc']
+      - ansible_architecture in cloudflared_package_arch
+      - cloudflared_tunnel_id is match('^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+      - cloudflared_tunnel_credentials is mapping
+      - cloudflared_tunnel_credentials.AccountTag | default('') | length > 0
+      - cloudflared_tunnel_credentials.TunnelSecret | default('') | length > 0
+      - cloudflared_tunnel_credentials.TunnelID | default('') == cloudflared_tunnel_id
+      - (cloudflared_origin_url == 'http://127.0.0.1:30007' if cloudflared_verify_vaultwarden_backend | default(true) | bool else true)
+      - (cloudflared_watchdog_failure_threshold | int >= 1 if cloudflared_watchdog_enabled | bool else true)
+      - (cloudflared_watchdog_timeout_seconds | int >= 1 if cloudflared_watchdog_enabled | bool else true)
+      - (cloudflared_watchdog_loop_interval_seconds | int >= 1 if cloudflared_watchdog_enabled | bool else true)
+      - (cloudflared_watchdog_schedule | length > 0 if cloudflared_watchdog_enabled | bool else true)
+      - (cloudflared_watchdog_url is match('^https?://') if cloudflared_watchdog_enabled | bool else true)
+    fail_msg: "cloudflared requires Debian/Alpine with systemd/OpenRC, a canonical tunnel UUID, encrypted credentials, and valid watchdog settings"
+  no_log: true
+
+- name: Inspect cloudflared baseline paths
+  become: true
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop:
+    - {name: binary, path: "{{ cloudflared_binary_path }}"}
+    - {name: service, path: "{{ cloudflared_service_path }}"}
+    - {name: config, path: "{{ cloudflared_config_path }}"}
+    - {name: credentials, path: "{{ cloudflared_credentials_path }}"}
+    - {name: watchdog_script, path: "{{ cloudflared_watchdog_script_path }}"}
+    - {name: watchdog_service, path: "{{ cloudflared_watchdog_service_path }}"}
+    - {name: watchdog_timer, path: "{{ cloudflared_watchdog_timer_path }}"}
+    - {name: watchdog_state, path: "{{ cloudflared_watchdog_state_dir }}"}
+    - {name: fact, path: "{{ cloudflared_fact_path }}"}
+  register: cloudflared_baseline_paths
+
+- name: Resolve cloudflared baseline facts
+  ansible.builtin.set_fact:
+    cloudflared_preexisting: >-
+      {{ cloudflared_baseline_paths.results
+         | rejectattr('item.name', 'equalto', 'fact')
+         | selectattr('stat.exists') | list | length > 0 }}
+    cloudflared_baseline_exists: >-
+      {{ cloudflared_baseline_paths.results
+         | selectattr('item.name', 'equalto', 'fact')
+         | map(attribute='stat.exists') | first | default(false) }}
+
+- name: Refuse unmanaged cloudflared adoption
+  ansible.builtin.assert:
+    that:
+      - not cloudflared_preexisting or cloudflared_baseline_exists
+    fail_msg: "Existing unmanaged cloudflared state requires explicit migration before deployment"
+
+- name: Check explicitly managed Tunnel DNS
+  ansible.builtin.import_tasks: dns_preflight.yml
+  when: cloudflared_dns_hostname | length > 0

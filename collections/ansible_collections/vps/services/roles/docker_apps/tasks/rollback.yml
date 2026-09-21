@@ -1,0 +1,71 @@
+---
+- name: Stop and remove opcotoai Compose stack without deleting volumes
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+    tasks_from: rollback
+    apply:
+      tags:
+        - rollback
+        - services
+        - docker_apps
+        - opcotoai_toolkit
+        - phase5
+  vars:
+    cdp_name: opcotoai-toolkit
+    cdp_image: compose-only
+    cdp_compose_enabled: true
+  tags:
+    - rollback
+    - services
+    - docker_apps
+    - opcotoai_toolkit
+    - phase5
+
+- name: 停止并移除 Docker 应用程序容器 (单个)
+  become: true
+  community.docker.docker_container:
+    name: "{{ rollback_container_name }}"
+    state: absent
+  vars:
+    docker_app_rollback_name_map:
+      vertex: vertex-proxy
+    rollback_container_name: "{{ docker_app_rollback_name_map[rollback_docker_app_name] | default(rollback_docker_app_name) }}"
+  when: rollback_docker_app_name is defined
+  tags:
+    - rollback
+    - services
+    - docker_apps
+    - docker_apps_manifest
+    - ds2api
+    - gcli2api
+    - sillytavern
+    - vaultwarden
+    - gemini
+    - flare
+    - singbox
+    - sub_store
+    - cliproxyapi
+    - newapi_suite
+    - manifest
+    - shellcrash
+    - vertex
+    - phase5
+
+- name: 停止并移除 Docker 应用程序容器 (批量)
+  become: true
+  community.docker.docker_container:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - sillytavern
+    - gcli2api
+    - vaultwarden
+    - flare
+    - sub_store
+    - new-api
+    - cliproxyapi
+    - docker_apps_manifest
+    - ds2api
+    - vertex-proxy
+  when: rollback_docker_app_name is not defined
+  tags: [rollback, services, docker_apps, docker_apps_manifest, phase5]

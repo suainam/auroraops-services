@@ -1,0 +1,147 @@
+---
+- name: 加载 Nginx 默认变量
+  ansible.builtin.include_vars:
+    file: defaults/main.yml
+  tags: [nginx]
+
+- name: 检查 Nginx 包是否已安装
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+  check_mode: true
+  register: nginx_installed
+  failed_when: nginx_installed.changed
+  changed_when: false
+  tags: [nginx]
+
+- assert:
+    that:
+      - nginx_installed.changed == false
+    success_msg: "✅ Nginx 包已安装"
+    fail_msg: "❌ Nginx 包未安装"
+  tags: [nginx]
+
+- name: 检查 Nginx 服务是否正在运行
+  ansible.builtin.service_facts:
+  register: services_state
+  tags: [nginx]
+
+- assert:
+    that:
+      - services_state.ansible_facts.services.nginx.state == 'running'
+    success_msg: "✅ Nginx 服务正在运行"
+    fail_msg: "❌ Nginx 服务未运行"
+  tags: [nginx]
+
+- name: 检查 Nginx 服务是否已启用
+  ansible.builtin.command: systemctl is-enabled nginx
+  register: nginx_enabled_check
+  failed_when: nginx_enabled_check.rc != 0 or 'disabled' in nginx_enabled_check.stdout
+  changed_when: false
+  tags: [nginx]
+
+- assert:
+    that:
+      - "services_state.ansible_facts.services.nginx.state == 'running' and 'enabled' in nginx_enabled_check.stdout"
+    success_msg: "✅ Nginx 服务正在运行并已启用"
+    fail_msg: "❌ Nginx 服务未运行或未启用"
+  tags: [nginx]
+
+- name: 运行 nginx -t 检查配置语法
+  ansible.builtin.command: nginx -t
+  register: nginx_config_test
+  failed_when: nginx_config_test.rc != 0
+  changed_when: false
+  tags: [nginx]
+
+- assert:
+    that:
+      - nginx_config_test.rc == 0
+    success_msg: "✅ Nginx 配置语法正确"
+    fail_msg: "❌ Nginx 配置语法错误: {{ nginx_config_test.stderr }}"
+  tags: [nginx]
+
+- name: 检查 Nginx 是否监听 80 端口
+  ansible.builtin.wait_for:
+    port: "{{ nginx_http_port }}"
+    host: 127.0.0.1
+    timeout: 5
+    state: started
+  register: port_80_check
+  failed_when: not port_80_check.state == 'started'
+  changed_when: false
+  tags: [nginx]
+
+- assert:
+    that:
+      - port_80_check.state == 'started'
+    success_msg: "✅ Nginx 正在监听 80 端口"
+    fail_msg: "❌ Nginx 未监听 80 端口"
+  tags: [nginx]
+
+- name: 检查默认虚拟主机文件是否存在且已启用
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/default
+  register: default_site_status
+  tags: [nginx]
+
+- assert:
+    that:
+      - default_site_status.stat.exists
+      - default_site_status.stat.islnk
+      - default_site_status.stat.lnk_target == '/etc/nginx/sites-available/default'
+    success_msg: "✅ 默认虚拟主机文件存在且已启用"
+    fail_msg: "❌ 默认虚拟主机文件不存在或未启用"
+  tags: [nginx]
+
+- name: 检查所有通用配置文件是否存在于 /etc/nginx/conf.d/ 目录
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/nginx/conf.d/common_ssl.conf
+    - /etc/nginx/conf.d/common_proxy.conf
+    - /etc/nginx/conf.d/common_headers.conf
+    - /etc/nginx/conf.d/common_performance.conf
+  register: common_conf_files
+  changed_when: false
+  tags: [nginx]
+
+- name: 验证所有通用配置文件存在
+  ansible.builtin.assert:
+    that:
+      - common_conf_files.results | selectattr('stat.exists', 'equalto', true) | list | length == common_conf_files.results | list | length
+    success_msg: "✅ 所有通用配置文件存在于 /etc/nginx/conf.d/ 目录"
+    fail_msg: "❌ 缺失通用配置文件"
+  tags: [nginx]
+
+- name: 检查 Cloudflare IP 列表文件是否存在
+  ansible.builtin.stat:
+    path: /etc/nginx/conf.d/cfip.conf
+  register: cfip_conf_status
+  tags: [nginx, cfip]
+
+- assert:
+    that:
+      - cfip_conf_status.stat.exists
+    success_msg: "✅ Cloudflare IP 列表文件存在"
+    fail_msg: "❌ Cloudflare IP 列表文件不存在"
+  tags: [nginx, cfip]
+
+- name: 检查 Nginx 站点配置文件是否存在且已启用
+  ansible.builtin.stat:
+    path: "/etc/nginx/sites-enabled/{{ item }}.conf"
+  loop: "{{ nginx_sites_to_deploy }}"
+  loop_control:
+    loop_var: item
+  register: site_config_status
+  tags: [nginx, site_config]
+
+- assert:
+    that:
+      - site_config_status.results | selectattr('stat.exists', 'equalto', true) | list | length == site_config_status.results | list | length
+      - site_config_status.results | selectattr('stat.islnk', 'equalto', true) | list | length == site_config_status.results | list | length
+      - site_config_status.results | selectattr('stat.lnk_target', 'search', '/etc/nginx/sites-available/') | list | length == site_config_status.results | list
+        | length
+    success_msg: "✅ 所有 Nginx 站点配置文件存在且已启用"
+    fail_msg: "❌ 缺失或未启用 Nginx 站点配置文件"
+  tags: [nginx, site_config]

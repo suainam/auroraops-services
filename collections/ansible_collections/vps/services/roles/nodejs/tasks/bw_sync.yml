@@ -1,0 +1,293 @@
+---
+# =============================================================================
+# Vault to Vaultwarden Sync (nodejs_bw_sync)
+# =============================================================================
+# Syncs secrets from vault.yml to Vaultwarden using BATCH IMPORT
+# Usage: make deploy-services.nodejs.nodejs_bw_sync
+#
+# 性能优化:
+# - 使用 bw import bitwardenjson 批量导入 (1次API调用 vs N次)
+# - 先导出现有项目，合并后重新导入
+# - 删除操作也使用批量方式
+#
+# 设计说明:
+# - 约定优于配置: 使用 bw_sync_secrets_mapping 映射表
+# - 幂等性: 只创建不存在的项目，已存在的跳过
+# - 使用 Ansible 变量继承，vault.yml 已被自动解密
+
+# -----------------------------------------------------------------------------
+# 0. Check Mode 提示
+# -----------------------------------------------------------------------------
+- name: "[bw_sync] Check mode notice"
+  ansible.builtin.debug:
+    msg: "Running in CHECK MODE - no actual changes will be made"
+  when: ansible_check_mode
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+# -----------------------------------------------------------------------------
+# 1. 前置检查 - bw session 是否可用
+# -----------------------------------------------------------------------------
+- name: "[bw_sync] Check bw CLI availability"
+  ansible.builtin.command:
+    cmd: bw --version
+  register: nodejs__bw_sync_version
+  changed_when: false
+  failed_when: nodejs__bw_sync_version.rc != 0
+  check_mode: false
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+- name: "[bw_sync] Check bw session status"
+  ansible.builtin.shell: |
+    source {{ nodejs_bw_session_file }} && bw status --raw
+  args:
+    executable: /bin/bash
+  register: nodejs__bw_sync_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+- name: "[bw_sync] Validate bw session is unlocked"
+  ansible.builtin.assert:
+    that:
+      - nodejs__bw_sync_status.rc == 0
+      - nodejs__bw_sync_status.stdout | length > 0
+      - (nodejs__bw_sync_status.stdout | from_json).status == 'unlocked'
+    fail_msg: "Bitwarden CLI not ready. Run: make deploy-services.nodejs.nodejs_bw"
+    success_msg: "Bitwarden CLI session is valid"
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+# -----------------------------------------------------------------------------
+# 2. 获取/创建 AuroraOps 文件夹 (幂等)
+# -----------------------------------------------------------------------------
+- name: "[bw_sync] List existing folders"
+  ansible.builtin.shell: |
+    source {{ nodejs_bw_session_file }} && bw list folders --raw
+  args:
+    executable: /bin/bash
+  register: nodejs__bw_sync_folders_raw
+  changed_when: false
+  check_mode: false
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+- name: "[bw_sync] Find root folder"
+  ansible.builtin.set_fact:
+    nodejs__bw_sync_folder_id: >-
+      {{ (nodejs__bw_sync_folders_raw.stdout | from_json |
+          selectattr('name', 'equalto', bw_sync_root_folder) |
+          map(attribute='id') | list | first) | default('') }}
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+- name: "[bw_sync] Create root folder (if not exists)"
+  ansible.builtin.shell: |
+    set -o pipefail
+    source {{ nodejs_bw_session_file }} && \
+    echo '{"name":"{{ bw_sync_root_folder }}"}' | bw encode | xargs bw create folder --raw
+  args:
+    executable: /bin/bash
+  register: nodejs__bw_sync_folder_created
+  when:
+    - nodejs__bw_sync_folder_id | length == 0
+    - not ansible_check_mode
+  changed_when: nodejs__bw_sync_folder_created.rc == 0
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+- name: "[bw_sync] Update folder ID after creation"
+  ansible.builtin.set_fact:
+    nodejs__bw_sync_folder_id: "{{ (nodejs__bw_sync_folder_created.stdout | from_json).id }}"
+  when:
+    - nodejs__bw_sync_folder_id | length == 0
+    - not ansible_check_mode
+    - nodejs__bw_sync_folder_created is not skipped
+    - nodejs__bw_sync_folder_created.rc == 0
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+- name: "[bw_sync] Set placeholder folder ID for check mode"
+  ansible.builtin.set_fact:
+    nodejs__bw_sync_folder_id: "check-mode-placeholder"
+  when:
+    - ansible_check_mode
+    - nodejs__bw_sync_folder_id | length == 0
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+# -----------------------------------------------------------------------------
+# 3. 获取现有项目列表 (用于幂等性检查)
+# -----------------------------------------------------------------------------
+- name: "[bw_sync] List existing items in folder"
+  ansible.builtin.shell: |
+    source {{ nodejs_bw_session_file }} && bw list items --folderid {{ nodejs__bw_sync_folder_id }} --raw
+  args:
+    executable: /bin/bash
+  register: nodejs__bw_sync_items_raw
+  changed_when: false
+  check_mode: false
+  when: nodejs__bw_sync_folder_id != 'check-mode-placeholder'
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+- name: "[bw_sync] Parse existing item names"
+  ansible.builtin.set_fact:
+    nodejs__bw_sync_existing_items: >-
+      {{ (nodejs__bw_sync_items_raw.stdout | default('[]') | from_json | map(attribute='name') | list)
+         if nodejs__bw_sync_items_raw.stdout is defined and nodejs__bw_sync_items_raw.stdout | length > 0
+         else [] }}
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+# -----------------------------------------------------------------------------
+# 4. 构建密钥列表 (从映射表动态生成)
+# -----------------------------------------------------------------------------
+- name: "[bw_sync] Build secrets list from mapping"
+  ansible.builtin.set_fact:
+    nodejs__bw_sync_secrets: "{{ nodejs__bw_sync_secrets | default([]) + [_item_data] }}"
+  vars:
+    # 获取变量值 (使用 vars 查找)
+    _password_value: "{{ lookup('vars', item.password_var, default='') if item.password_var is defined else '' }}"
+    _username_value: >-
+      {{
+        lookup(
+          'vars',
+          item.username_var,
+          default=item.username_default | default('')
+        )
+        if item.username_var is defined
+        else item.username_default | default('')
+      }}
+    _content_value: >-
+      {{
+        item.content_template
+        if item.content_template is defined
+        else lookup('vars', item.content_var, default='')
+        if item.content_var is defined
+        else ''
+      }}
+    # 构建项目数据
+    _item_data:
+      name: "{{ bw_sync_root_folder }}/{{ item.category }}/{{ item.name }}"
+      type: "{{ item.type }}"
+      username: "{{ _username_value }}"
+      password: "{{ _password_value }}"
+      content: "{{ _content_value | trim }}"
+      category: "{{ item.category }}"
+  loop: "{{ bw_sync_secrets_mapping }}"
+  loop_control:
+    label: "{{ item.category }}/{{ item.name }}"
+  no_log: true
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+# -----------------------------------------------------------------------------
+# 5. 过滤出需要创建的项目 (幂等性核心)
+# -----------------------------------------------------------------------------
+- name: "[bw_sync] Filter Login secrets to create"
+  ansible.builtin.set_fact:
+    nodejs__bw_sync_login_to_create: >-
+      {{ nodejs__bw_sync_secrets |
+         selectattr('type', 'equalto', 'login') |
+         selectattr('password', 'defined') |
+         rejectattr('password', 'equalto', '') |
+         rejectattr('name', 'in', nodejs__bw_sync_existing_items) | list }}
+  no_log: true
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+- name: "[bw_sync] Filter Note secrets to create"
+  ansible.builtin.set_fact:
+    nodejs__bw_sync_note_to_create: >-
+      {{ nodejs__bw_sync_secrets |
+         selectattr('type', 'equalto', 'note') |
+         selectattr('content', 'defined') |
+         rejectattr('content', 'equalto', '') |
+         rejectattr('name', 'in', nodejs__bw_sync_existing_items) | list }}
+  no_log: true
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+- name: "[bw_sync] Combine secrets to create"
+  ansible.builtin.set_fact:
+    nodejs__bw_sync_to_create: "{{ nodejs__bw_sync_login_to_create + nodejs__bw_sync_note_to_create }}"
+  no_log: true
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+- name: "[bw_sync] Display sync plan"
+  ansible.builtin.debug:
+    msg:
+      - "============================================================"
+      - "Vault → Vaultwarden Sync Plan"
+      - "============================================================"
+      - "Total mapped: {{ bw_sync_secrets_mapping | length }}"
+      - "Already exist: {{ nodejs__bw_sync_existing_items | length }}"
+      - "To create: {{ nodejs__bw_sync_to_create | length }}"
+      - "Dry run: {{ nodejs_bw_sync_dry_run }}"
+      - "Check mode: {{ ansible_check_mode }}"
+      - "============================================================"
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+# -----------------------------------------------------------------------------
+# 6. 批量创建项目 (使用 bw import - 单次 API 调用)
+# -----------------------------------------------------------------------------
+- name: "[bw_sync] Generate import JSON file"
+  ansible.builtin.template:
+    src: bw_import.json.j2
+    dest: /tmp/bw_import_{{ lookup('pipe', 'date +%s') }}.json
+    mode: "0600"
+  when:
+    - nodejs__bw_sync_to_create | length > 0
+    - not nodejs_bw_sync_dry_run
+    - not ansible_check_mode
+  no_log: true
+  register: nodejs__bw_sync_import_file
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+- name: "[bw_sync] Batch import items"
+  ansible.builtin.shell: |
+    source {{ nodejs_bw_session_file }} && \
+    bw import bitwardenjson {{ nodejs__bw_sync_import_file.dest }} 2>&1
+  args:
+    executable: /bin/bash
+  when:
+    - nodejs__bw_sync_to_create | length > 0
+    - not nodejs_bw_sync_dry_run
+    - not ansible_check_mode
+    - nodejs__bw_sync_import_file.dest is defined
+  register: nodejs__bw_sync_import_result
+  changed_when: "'Imported' in nodejs__bw_sync_import_result.stdout"
+  failed_when:
+    - nodejs__bw_sync_import_result.rc != 0
+    - "'Imported' not in nodejs__bw_sync_import_result.stdout"
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+- name: "[bw_sync] Cleanup import file"
+  ansible.builtin.file:
+    path: "{{ nodejs__bw_sync_import_file.dest }}"
+    state: absent
+  when:
+    - nodejs__bw_sync_to_create | length > 0
+    - not nodejs_bw_sync_dry_run
+    - not ansible_check_mode
+    - nodejs__bw_sync_import_file.dest is defined
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+- name: "[bw_sync] Sync vault after import"
+  ansible.builtin.shell: |
+    source {{ nodejs_bw_session_file }} && bw sync
+  args:
+    executable: /bin/bash
+  when:
+    - nodejs__bw_sync_import_result is defined
+    - nodejs__bw_sync_import_result.rc | default(1) == 0
+    - "'Imported' in (nodejs__bw_sync_import_result.stdout | default(''))"
+  changed_when: false
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]
+
+# -----------------------------------------------------------------------------
+# 7. 同步结果汇总
+# -----------------------------------------------------------------------------
+- name: "[bw_sync] Display sync summary"
+  ansible.builtin.debug:
+    msg:
+      - "============================================================"
+      - "Vault → Vaultwarden Sync {{ 'CHECK MODE' if ansible_check_mode else ('DRY RUN' if nodejs_bw_sync_dry_run else 'Complete') }}"
+      - "============================================================"
+      - "Folder: {{ bw_sync_root_folder }} ({{ nodejs__bw_sync_folder_id }})"
+      - "Total mapped: {{ bw_sync_secrets_mapping | length }}"
+      - "Already existed: {{ nodejs__bw_sync_existing_items | length }}"
+      - "{{ 'Would create' if (ansible_check_mode or nodejs_bw_sync_dry_run) else 'Created' }}: {{ nodejs__bw_sync_to_create | length }}"
+      - "Method: {{ 'BATCH IMPORT (1 API call)' if nodejs__bw_sync_to_create | length > 0 else 'No changes needed' }}"
+      - "============================================================"
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_sync, phase3]

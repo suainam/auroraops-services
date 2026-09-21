@@ -1,0 +1,38 @@
+---
+# =============================================================================
+# OpenCode 项目级配置部署 (opencode_project_config)
+# =============================================================================
+# 部署 AuroraOps 项目专属配置到 /root/AuroraOps/.opencode/opencode.json
+
+- name: Load OpenCode project configuration
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/opencode_project.yml"
+  tags: [deploy, services, nodejs, opencode_project_config, phase3]
+
+- name: Ensure project directory exists
+  ansible.builtin.file:
+    path: "{{ nodejs_opencode_project_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [deploy, services, nodejs, opencode_project_config, phase3]
+
+- name: Ensure .opencode directory exists in project
+  ansible.builtin.file:
+    path: "{{ nodejs_opencode_project_dir }}/.opencode"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [deploy, services, nodejs, opencode_project_config, phase3]
+
+- name: Deploy project-level opencode.json
+  ansible.builtin.template:
+    src: opencode_project.json.j2
+    dest: "{{ nodejs_opencode_project_dir }}/.opencode/opencode.json"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  tags: [deploy, services, nodejs, opencode_project_config, phase3]

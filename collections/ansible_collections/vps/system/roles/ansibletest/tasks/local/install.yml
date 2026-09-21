@@ -1,0 +1,64 @@
+---
+# Local Test Installation Tasks
+# 构建本地 Docker 测试镜像
+
+- name: Debug local build configuration
+  ansible.builtin.debug:
+    msg: |
+      Local Build Configuration:
+      - Build Image: {{ ansibletest_build_image }}
+      - Image Name: {{ ansibletest_local_image_name }}
+      - Force Rebuild: {{ ansibletest_force_rebuild }}
+      - Project Path: {{ ansibletest_local_project_path }}
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]
+
+- name: Check if local Docker image exists
+  community.docker.docker_image_info:
+    name: "{{ ansibletest_local_image_name }}"
+  register: ansibletest_local_image_info
+  failed_when: false
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]
+
+- name: Display image status
+  ansible.builtin.debug:
+    msg: |
+      Image Status:
+      - Exists: {{ ansibletest_local_image_info.images | default([]) | length > 0 }}
+      - Image Name: {{ ansibletest_local_image_name }}
+      - Force Rebuild: {{ ansibletest_force_rebuild }}
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]
+
+- name: Build local Docker test image
+  community.docker.docker_image:
+    name: "{{ ansibletest_local_image_name }}"
+    source: build
+    build:
+      path: "{{ ansibletest_local_project_path }}"
+      dockerfile: collections/ansible_collections/vps/system/roles/ansibletest/files/Dockerfile.local
+    force_source: "{{ ansibletest_force_rebuild }}"
+    force_tag: "{{ ansibletest_force_rebuild }}"
+  when:
+    - ansibletest_build_image | bool
+    - (ansibletest_local_image_info.images | default([]) | length == 0) or (ansibletest_force_rebuild | bool)
+  register: ansibletest_build_result
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]
+
+- name: Display build result
+  ansible.builtin.debug:
+    msg: |
+      Build Result:
+      - Image: {{ ansibletest_local_image_name }}
+      - Changed: {{ ansibletest_build_result.changed | default(false) }}
+      {% if ansibletest_build_result.changed | default(false) %}
+      Image built successfully
+      {% else %}
+      Using existing image
+      {% endif %}
+  when: ansibletest_build_result is defined
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]
+
+- name: Skip build message
+  ansible.builtin.debug:
+    msg: "Skipping image build (ansibletest_build_image=false). Using existing image."
+  when: not (ansibletest_build_image | bool)
+  tags: [deploy, system, ansibletest, ansibletest_install, phase3]

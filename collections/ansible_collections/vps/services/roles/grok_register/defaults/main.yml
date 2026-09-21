@@ -1,0 +1,116 @@
+---
+# The Catalog disables this standalone Role by default; selected hosts may disable it here.
+grok_register_enabled: true
+grok_register_source_repo: "https://github.com/AaronL725/grok-register.git"
+grok_register_source_revision: "0d98ffaf897036d03598c1cbc0554af840406395"
+grok_register_runtime_image_revision: "11"
+grok_register_image: >-
+  local/grok-register:{{ grok_register_source_revision }}-{{ grok_register_runtime_image_revision }}
+grok_register_container_name: "grok-register"
+grok_register_build_dir: "/opt/grok-register/build"
+grok_register_source_dir: "{{ grok_register_build_dir }}/source"
+grok_register_data_dir: "/opt/grok-register/data"
+grok_register_runtime_dir: "/data/app"
+grok_register_browser_home: "{{ grok_register_runtime_dir }}/browser-home"
+grok_register_persistence_sentinel: ".auroraops-state-sentinel"
+
+# cc15 capacity baseline: one Chromium process and one requested registration.
+grok_register_worker_count: 1
+grok_register_register_count: 1
+grok_register_max_register_count: 1
+grok_register_memory: "900m"
+grok_register_memory_reservation: "256m"
+grok_register_cpus: "1.0"
+grok_register_shm_size: "1g"
+grok_register_force_image_rebuild: false
+
+# Canonical inputs accept the currently verified opcotoai values during migration.
+grok_register_email_provider: "{{ opcotoai_grok_email_provider | default('cloudflare') }}"
+grok_register_default_domains: "{{ opcotoai_grok_default_domains | default('suai.eu.org') }}"
+grok_register_cloudflare_api_base: >-
+  {{ grok_register_cloudflare_api_base_override
+     | default(opcotoai_grok_cloudflare_api_base
+     | default(preserved_cloudflare_api_base
+     | default(opcotoai_smtp_freemail_base | default(''))), true) }}
+grok_register_cloudflare_api_base_override: ""
+grok_register_cloudflare_api_key: >-
+  {{ grok_register_cloudflare_api_key_override
+     | default(vault_opcotoai_smtp_freemail_jwt_token
+     | default(vault_opcotoai_grok_cloudflare_api_key
+     | default(vault_opcotoai_smtp_freemail_api_key | default(''))), true) }}
+grok_register_cloudflare_api_key_override: ""
+grok_register_cloudflare_auth_mode: "{{ opcotoai_grok_cloudflare_auth_mode | default('bearer') }}"
+grok_register_cloudflare_path_domains: "{{ opcotoai_grok_cloudflare_path_domains | default('/api/domains') }}"
+grok_register_cloudflare_path_accounts: "{{ opcotoai_grok_cloudflare_path_accounts | default('/admin/new_address') }}"
+grok_register_cloudflare_path_token: "{{ opcotoai_grok_cloudflare_path_token | default('/api/token') }}"
+grok_register_cloudflare_path_messages: "{{ opcotoai_grok_cloudflare_path_messages | default('/api/mails') }}"
+grok_register_proxy: "{{ opcotoai_grok_proxy | default('') }}"
+grok_register_cpa_proxy: "{{ opcotoai_grok_cpa_proxy | default('') }}"
+grok_register_enable_nsfw: false
+grok_register_debug_mode: false
+grok_register_close_browser_on_stop: true
+grok_register_log_level: "info"
+grok_register_user_agent: >-
+  Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+  (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
+
+# --- Optional upstream providers (disabled unless credentials supplied from Vault) ---
+# DuckMail — provide vault_grok_register_duckmail_api_key to enable.
+grok_register_duckmail_enabled: >-
+  {{ vault_grok_register_duckmail_api_key | default('') | length > 0 }}
+grok_register_duckmail_api_key: "{{ vault_grok_register_duckmail_api_key | default('') }}"
+grok_register_duckmail_api_base: "https://api.duckmail.sbs"
+
+# YYDS — provide vault_grok_register_yyds_api_key to enable.
+grok_register_yyds_enabled: >-
+  {{ vault_grok_register_yyds_api_key | default('') | length > 0 }}
+grok_register_yyds_api_key: "{{ vault_grok_register_yyds_api_key | default('') }}"
+grok_register_yyds_jwt: "{{ vault_grok_register_yyds_jwt | default('') }}"
+grok_register_yyds_default_domain: ""
+
+# CloudMail — no demonstrated upstream equivalent; preflight rejects if non-empty.
+# Set to empty to disable. Non-empty value triggers a clear migration-failure assertion.
+grok_register_cloudmail_url_migration_check: "{{ opcotoai_grok_cloudmail_url | default('') }}"
+grok_register_cloudmail_admin_email_migration_check: "{{ opcotoai_grok_cloudmail_admin_email | default('') }}"
+
+# Mailnest — no demonstrated upstream equivalent; preflight rejects if non-empty.
+grok_register_mailnest_api_key_migration_check: "{{ opcotoai_grok_mailnest_api_key | default('') }}"
+
+# --- Grok2API (local and remote) ---
+# Local Grok2API: enabled when a local endpoint is supplied.
+grok_register_grok2api_local_enabled: false
+grok_register_grok2api_local_endpoint: ""
+# Remote Grok2API / CPA: mapped from opcotoai only after authenticated endpoint-contract check.
+grok_register_cpa_auto_add: "{{ opcotoai_grok_cpa_auto_add | default(true) }}"
+grok_register_cpa_export_enabled: true
+grok_register_cpa_auth_dir: "/data/cpa_auths"
+grok_register_cpa_remote_url: "{{ opcotoai_grok_cpa_remote_url | default('') }}"
+grok_register_cpa_management_key: >-
+  {{ vault_grok_register_cpa_management_key
+     | default(cliproxyapi_management_key
+     | default(vault_cliproxyapi_management_key
+     | default(vault_opcotoai_web_pwd | default(''))), true) }}
+grok_register_cpa_copy_to_hotload: false
+grok_register_cpa_hotload_dir: ""
+grok_register_cpa_base_url: "https://cli-chat-proxy.grok.com/v1"
+grok_register_cpa_headless: false
+grok_register_cpa_force_standalone: true
+# CPA remote mapping requires an authenticated endpoint-contract check before activation.
+# Set to true only after verification proves equivalence with opcotoai_grok_cpa_remote_url.
+grok_register_cpa_remote_contract_verified: false
+
+# --- Retry and diagnostics ---
+grok_register_retry_pending_enabled: true
+grok_register_retry_max_attempts: 3
+grok_register_retry_delay_seconds: 30
+
+# The only network probe in this core Role is a read-only Worker domains request.
+grok_register_mailbox_preflight_enabled: true
+
+# --- GUI/Display bridge (Issue #166) ---
+# Set to true to start Xvfb + x11vnc + noVNC inside the container.
+grok_register_gui_enabled: false
+# loopback port on the HOST that websockify will listen on inside the container.
+grok_register_novnc_port: "{{ app_port_opcotoai_grok | default(30017) }}"
+# Nginx /grok/ route: enabled when gui is enabled. Disabled independently if needed.
+grok_register_nginx_route_enabled: "{{ grok_register_gui_enabled }}"

@@ -1,0 +1,11 @@
+---
+- name: "[DailyCheckin] Reload systemd"
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: "[DailyCheckin] Restart timer"
+  become: true
+  ansible.builtin.systemd:
+    name: dailycheckin.timer
+    state: restarted

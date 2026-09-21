@@ -1,0 +1,173 @@
+---
+# =============================================================================
+# Bitwarden CLI Configuration (nodejs_bw)
+# =============================================================================
+# Authentication flow:
+# 1. API Key login (for 2FA accounts): login --apikey -> unlock with password
+# 2. Password login (for non-2FA accounts): login with password -> returns session
+#
+# Note: Using bw CLI 2024.7.2 for Vaultwarden compatibility
+
+- name: "[bw] Configure Vaultwarden server URL"
+  ansible.builtin.command:
+    cmd: bw config server {{ nodejs_bw_server_url }}
+  register: nodejs_bw_config_result
+  changed_when: "'Saved setting' in nodejs_bw_config_result.stdout"
+  failed_when: false
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+- name: "[bw] Check current login status"
+  ansible.builtin.command:
+    cmd: bw status
+  register: nodejs_bw_status
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+- name: "[bw] Parse login status"
+  ansible.builtin.set_fact:
+    nodejs_bw_current_status: "{{ (nodejs_bw_status.stdout | default('{}') | from_json).status | default('unauthenticated') }}"
+  when:
+    - nodejs_bw_status is not skipped
+    - nodejs_bw_status.rc is defined
+    - nodejs_bw_status.rc == 0
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+# API Key login (for 2FA accounts) - does NOT return session, just logs in
+- name: "[bw] Login with API Key (for 2FA accounts)"
+  ansible.builtin.shell: |
+    set -o pipefail
+    bw login --apikey
+  environment:
+    BW_CLIENTID: "{{ nodejs_bw_client_id }}"
+    BW_CLIENTSECRET: "{{ nodejs_bw_client_secret }}"
+  args:
+    executable: /bin/bash
+  register: nodejs_bw_apikey_login_result
+  changed_when: nodejs_bw_apikey_login_result.rc == 0
+  no_log: true
+  when:
+    - nodejs_bw_current_status | default('unauthenticated') == 'unauthenticated'
+    - nodejs_bw_client_id | default('') | length > 0
+    - nodejs_bw_client_secret | default('') | length > 0
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+# Password login (for non-2FA accounts) - returns session directly
+- name: "[bw] Login with password (for non-2FA accounts)"
+  ansible.builtin.shell: |
+    set -o pipefail
+    bw login {{ nodejs_bw_email }} --passwordenv BW_PASSWORD --raw
+  environment:
+    BW_PASSWORD: "{{ nodejs_bw_password }}"
+  args:
+    executable: /bin/bash
+  register: nodejs_bw_password_login_result
+  changed_when: nodejs_bw_password_login_result.rc == 0
+  no_log: true
+  when:
+    - nodejs_bw_current_status | default('unauthenticated') == 'unauthenticated'
+    - nodejs_bw_client_id | default('') | length == 0
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+- name: "[bw] Save session from password login"
+  ansible.builtin.set_fact:
+    nodejs_bw_session_key: "{{ nodejs_bw_password_login_result.stdout }}"
+  no_log: true
+  when:
+    - nodejs_bw_password_login_result is not skipped
+    - nodejs_bw_password_login_result.stdout is defined
+    - nodejs_bw_password_login_result.stdout | length > 0
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+# Re-check status after API Key login (status becomes 'locked')
+- name: "[bw] Re-check status after API Key login"
+  ansible.builtin.command:
+    cmd: bw status
+  register: nodejs_bw_status_after_apikey
+  changed_when: false
+  failed_when: false
+  when:
+    - nodejs_bw_apikey_login_result is not skipped
+    - nodejs_bw_apikey_login_result is changed
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+- name: "[bw] Update status after API Key login"
+  ansible.builtin.set_fact:
+    nodejs_bw_current_status: "{{ (nodejs_bw_status_after_apikey.stdout | from_json).status | default('unauthenticated') }}"
+  when:
+    - nodejs_bw_status_after_apikey is not skipped
+    - nodejs_bw_status_after_apikey.rc == 0
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+# Unlock vault (needed after API Key login, or if status is 'locked')
+- name: "[bw] Unlock vault and get session key"
+  ansible.builtin.shell: |
+    set -o pipefail
+    bw unlock --passwordenv BW_PASSWORD --raw
+  environment:
+    BW_PASSWORD: "{{ nodejs_bw_password }}"
+  args:
+    executable: /bin/bash
+  register: nodejs_bw_unlock_result
+  no_log: true
+  changed_when: false
+  when:
+    - nodejs_bw_current_status | default('unauthenticated') == 'locked'
+    - nodejs_bw_session_key is not defined
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+- name: "[bw] Save session from unlock"
+  ansible.builtin.set_fact:
+    nodejs_bw_session_key: "{{ nodejs_bw_unlock_result.stdout }}"
+  no_log: true
+  when:
+    - nodejs_bw_unlock_result is not skipped
+    - nodejs_bw_unlock_result.stdout is defined
+    - nodejs_bw_unlock_result.stdout | length > 0
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+- name: "[bw] Save session key to file"
+  ansible.builtin.copy:
+    content: |
+      # Bitwarden CLI session key
+      # Generated by AuroraOps nodejs role
+      # Source: bw login/unlock --raw
+      export BW_SESSION="{{ nodejs_bw_session_key }}"
+    dest: "{{ nodejs_bw_session_file }}"
+    mode: "0600"
+  no_log: true
+  when:
+    - nodejs_bw_session_key is defined
+    - nodejs_bw_session_key | length > 0
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+- name: "[bw] Add session source to .bashrc"
+  ansible.builtin.lineinfile:
+    path: "{{ lookup('env', 'HOME') }}/.bashrc"
+    line: "[ -f {{ nodejs_bw_session_file }} ] && source {{ nodejs_bw_session_file }}"
+    regexp: "source.*\\.bw_session"
+    state: present
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+- name: "[bw] Test vault access"
+  ansible.builtin.shell: |
+    set -o pipefail
+    source {{ nodejs_bw_session_file }} && bw sync && bw list items --search test 2>/dev/null | head -c 100
+  args:
+    executable: /bin/bash
+  register: nodejs_bw_test_result
+  changed_when: false
+  failed_when: false
+  when: nodejs_bw_session_key is defined
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]
+
+- name: "[bw] Display connection status"
+  ansible.builtin.debug:
+    msg: >-
+      Bitwarden CLI connected to {{ nodejs_bw_server_url }} -
+      Vault access: {{
+        'OK'
+        if (nodejs_bw_test_result.rc | default(1)) == 0
+        else 'PENDING (run verify to check)'
+      }}
+  tags: [deploy, services, nodejs, bitwarden, bitwarden_login, phase3]

@@ -1,0 +1,25 @@
+data_directory = '{{ postgresql_data_directory_path }}'
+hba_file = '/etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf'
+ident_file = '/etc/postgresql/{{ postgresql_version }}/main/pg_ident.conf'
+
+# Managed by Ansible
+listen_addresses = '{{ postgresql_listen_addresses }}'
+port = {{ postgresql_port }}
+max_connections = {{ postgresql_max_connections }}
+shared_buffers = {{ postgresql_shared_buffers }}
+work_mem = {{ postgresql_work_mem }}
+maintenance_work_mem = {{ postgresql_maintenance_work_mem }}
+
+# Encoding and Timezone
+client_encoding = '{{ postgresql_encoding }}'
+timezone = '{{ postgresql_timezone }}'
+{% if postgresql_version | int < 17 %}
+lc_collate = '{{ postgresql_lc_collate }}'
+lc_ctype = '{{ postgresql_lc_ctype }}'
+{% endif %}
+
+# Logging
+log_destination = '{{ postgresql_log_destination }}'
+logging_collector = {{ postgresql_logging_collector }}
+log_directory = '{{ postgresql_log_directory }}'
+log_filename = '{{ postgresql_log_filename }}'

@@ -1,0 +1,20 @@
+---
+# OpenViking rollback tasks
+
+- name: Stop OpenViking service process
+  ansible.builtin.command: pkill -f "openviking serve"
+  register: openviking_stop_result
+  changed_when: openviking_stop_result.rc == 0
+  failed_when: openviking_stop_result.rc not in [0, 1]
+  tags: [rollback, applications, openviking, openviking_rollback, phase5]
+
+- name: Remove OpenViking virtual environment
+  ansible.builtin.file:
+    path: "{{ openviking_venv_path }}"
+    state: absent
+  tags: [rollback, applications, openviking, openviking_rollback, phase5]
+
+- name: Report preserved OpenViking data directory
+  ansible.builtin.debug:
+    msg: "Data directory {{ openviking_data_dir }} preserved. Remove manually if needed."
+  tags: [rollback, applications, openviking, openviking_rollback, phase5]

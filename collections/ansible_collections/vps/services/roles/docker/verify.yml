@@ -1,0 +1,47 @@
+---
+- name: Include tasks/verify.yml when Docker state is absent
+  ansible.builtin.include_tasks: tasks/verify.yml
+  when: docker_state | default('present') == 'absent'
+  tags: [docker]
+
+- name: 验证 Docker 服务是否运行
+  ansible.builtin.systemd_service:
+    name: docker
+    state: started
+    enabled: true
+  check_mode: true
+  register: docker_service_check
+  failed_when: not docker_service_check.status.ActiveState == "active"
+  when: docker_state | default('present') == 'present'
+  tags: [docker]
+
+- name: 验证 Docker 版本
+  ansible.builtin.command: docker version --format '{{.Server.Version}}'
+  register: docker_version
+  changed_when: false
+  when: docker_state | default('present') == 'present'
+  tags: [docker]
+
+- name: 验证 Docker Compose 版本
+  ansible.builtin.command: docker compose version --format '{{.Version}}'
+  register: docker_compose_version
+  changed_when: false
+  when: docker_state | default('present') == 'present'
+  tags: [docker]
+
+- name: 验证 '{{ admin_user }}' 用户是否在 'docker' 组中
+  ansible.builtin.command: groups {{ admin_user }}
+  register: admin_groups
+  changed_when: false
+  become: true
+  when: docker_state | default('present') == 'present'
+  tags: [docker]
+
+- name: 检查 'admin' 用户是否在 'docker' 组中
+  ansible.builtin.fail:
+    msg: "'{{ admin_user }}' 用户不在 'docker' 组中。"
+  when:
+    - docker_state | default('present') == 'present'
+    - "'docker' not in admin_groups.stdout"
+  become: true
+  tags: [docker]

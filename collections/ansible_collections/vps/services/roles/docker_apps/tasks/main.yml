@@ -1,0 +1,144 @@
+---
+# Docker Apps 角色任务
+# 启用控制变量: auroraops_roles['services']['docker_apps']
+# 默认启用，可通过 host_vars 禁用
+
+- name: Docker Apps 部署
+  when: auroraops_roles['services']['docker_apps'] | default(true) | bool
+  tags: [deploy, services, docker_apps, phase5]
+  block:
+  # 合并容器列表（增量配置）
+    - name: 合并 Docker Apps 容器列表
+      ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
+      vars:
+        merge_var_name: docker_apps_containers
+      tags:
+        - deploy
+        - services
+        - docker_apps
+        - gcli2api
+        - sillytavern
+        - vaultwarden
+        - gemini
+        - flare
+        - singbox
+        - sub_store
+        - cliproxyapi
+        - newapi_suite
+        - manifest
+        - shellcrash
+        - opcotoai_toolkit
+        - hysteria2_client
+        - ds2api
+        - vertex
+        - phase5
+
+    - name: 加载 Docker Apps 公共准备任务
+      ansible.builtin.import_tasks: common_setup.yml
+      tags:
+        - deploy
+        - services
+        - docker_apps
+        - gcli2api
+        - sillytavern
+        - vaultwarden
+        - gemini
+        - flare
+        - singbox
+        - sub_store
+        - cliproxyapi
+        - newapi_suite
+        - manifest
+        - shellcrash
+        - opcotoai_toolkit
+        - hysteria2_client
+        - vertex
+        - phase5
+
+    - name: 加载 Docker Apps 数据恢复任务
+      ansible.builtin.import_tasks: restore_data.yml
+      tags: [deploy, services, docker_apps, init_data, phase5]
+
+    - name: 加载 gcli2api 部署任务
+      ansible.builtin.import_tasks: gcli2api.yml
+      when: "'gcli2api' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'gcli2api')"
+      tags: [deploy, services, docker_apps, gcli2api, phase5]
+
+    - name: 加载 DS2API 部署任务
+      ansible.builtin.import_tasks: ds2api.yml
+      when: "'ds2api' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'ds2api')"
+      tags: [deploy, services, docker_apps, ds2api, phase5]
+
+    - name: 加载 Vertex AI Proxy 部署任务
+      ansible.builtin.import_tasks: vertex.yml
+      when: "'vertex' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'vertex')"
+      tags: [deploy, services, docker_apps, vertex, phase5]
+
+    - name: 加载 SillyTavern 部署任务
+      ansible.builtin.import_tasks: sillytavern.yml
+      when: "'sillytavern' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'sillytavern')"
+      tags: [deploy, services, docker_apps, sillytavern, phase5]
+
+    - name: 加载 Vaultwarden 部署任务
+      ansible.builtin.import_tasks: vaultwarden.yml
+      when: "'vaultwarden' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'vaultwarden')"
+      tags: [deploy, services, docker_apps, vaultwarden, phase5]
+
+    - name: 加载 Gemini Balance 部署任务
+      ansible.builtin.import_tasks: gemini_balance.yml
+      when: "'gemini_balance' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'gemini_balance')"
+      tags: [deploy, services, docker_apps, gemini, phase5]
+
+    - name: 加载 Flare 部署任务
+      ansible.builtin.import_tasks: flare.yml
+      when: "'flare' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'flare')"
+      tags: [deploy, services, docker_apps, flare, phase5]
+
+    - name: 加载 Singbox 部署任务
+      ansible.builtin.import_tasks: singbox.yml
+      when: "'singbox' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'singbox')"
+      tags: [deploy, services, docker_apps, singbox, phase5]
+
+    - name: 加载 Sub-Store 部署任务
+      ansible.builtin.import_tasks: sub_store.yml
+      when: "'sub_store' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'sub_store')"
+      tags: [deploy, services, docker_apps, sub_store, phase5]
+
+    - name: 加载 CLIProxyAPI 部署任务
+      ansible.builtin.import_tasks: cliproxyapi.yml
+      when: "'cliproxyapi' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'cliproxyapi')"
+      tags: [deploy, services, docker_apps, cliproxyapi, phase5]
+
+    - name: 加载 New API Suite 部署任务
+      ansible.builtin.import_tasks: newapi_suite.yml
+      when: "'newapi_suite' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'newapi_suite')"
+      tags: [deploy, services, docker_apps, newapi_suite, phase5]
+
+    - name: 加载 Manifest 部署任务
+      ansible.builtin.import_tasks: manifest.yml
+      when: "'manifest' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'manifest')"
+      tags: [deploy, services, docker_apps, manifest, phase5]
+
+    - name: 加载 opcotoai-toolkit 部署任务
+      ansible.builtin.import_tasks: opcotoai_toolkit.yml
+      when: "'opcotoai_toolkit' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'opcotoai_toolkit')"
+      tags: [deploy, services, docker_apps, opcotoai_toolkit, phase5]
+
+    - name: 加载 ShellCrash 部署任务
+      ansible.builtin.import_tasks: shellcrash.yml
+      when: "'shellcrash' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'shellcrash')"
+      tags: [deploy, services, docker_apps, shellcrash, phase5]
+
+    - name: 加载 Hysteria2 Client 部署任务
+      ansible.builtin.import_tasks: hysteria2_client.yml
+      when: docker_apps_hysteria2_client_enabled | default(false) | bool
+      tags: [deploy, services, docker_apps, hysteria2_client, phase5]
+
+- name: Docker Apps 清理 (禁用时)
+  when: not (auroraops_roles['services']['docker_apps'] | default(true) | bool)
+  tags: [deploy, services, docker_apps, phase5]
+  block:
+    - name: 显示禁用消息
+      ansible.builtin.debug:
+        msg: "Docker Apps deployment is disabled (auroraops_roles['services']['docker_apps'] = false)"
+      tags: [deploy, services, docker_apps, phase5]

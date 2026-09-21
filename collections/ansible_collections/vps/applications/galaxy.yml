@@ -1,0 +1,16 @@
+namespace: vps
+name: applications
+version: 1.1.0
+readme: README.md
+authors:
+  - suai
+description: Application roles for AuroraOps-managed Linux hosts
+license:
+  - MIT
+repository: https://github.com/suainam/AuroraOps
+tags:
+  - ansible
+  - vps
+  - application
+  - linux
+dependencies: {}

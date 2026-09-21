@@ -1,0 +1,560 @@
+---
+# === 7. Sing-box ===
+- name: Sing-box - Determine deployment mode
+  ansible.builtin.set_fact:
+    docker_apps_singbox_deploy_mode: >-
+      {{
+        'native'
+        if (
+          (docker_apps_deploy_mode | default('auto')) == 'native'
+          or (ansible_facts.distribution
+              | default(ansible_distribution | default(''))) == 'Alpine'
+          or (ansible_memtotal_mb | default(1024)) < 512
+        )
+        else 'docker'
+      }}
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Detect Host Location
+  ansible.builtin.uri:
+    url: http://ip-api.com/json/
+    return_content: true
+  register: docker_apps_singbox_host_geoip
+  failed_when: false
+  changed_when: false
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Set Host Flag
+  ansible.builtin.set_fact:
+    docker_apps_singbox_host_country: >-
+      {{
+        docker_apps_singbox_host_geoip.json.countryCode | default('UNKNOWN')
+        if docker_apps_singbox_host_geoip.json is defined
+        else 'UNKNOWN'
+      }}
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Ensure directories exist
+  become: true
+  ansible.builtin.file:
+    path: "/opt/dockers/singbox/{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  loop:
+    - ""  # Create the base directory /opt/dockers/singbox
+    - web
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Check for existing Short IDs
+  ansible.builtin.stat:
+    path: /opt/dockers/singbox/short_ids.txt
+  register: docker_apps_singbox_short_ids_file
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Validate existing Short IDs format
+  become: true
+  ansible.builtin.command:
+    argv:
+      - awk
+      - "-v"
+      - "expected={{ docker_apps_singbox_reality_short_id_count }}"
+      - >-
+        length($0) == 16 && $0 ~ /^[0-9a-fA-F]+$/ { valid++ }
+        END { exit !(NR == expected && valid == expected) }
+      - /opt/dockers/singbox/short_ids.txt
+  register: docker_apps_singbox_short_ids_format
+  changed_when: false
+  failed_when: false
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - docker_apps_singbox_short_ids_file.stat.exists | default(false)
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Generate Random Short IDs (if not exist)
+  ansible.builtin.shell: |
+    set -eu
+    for _ in $(seq 1 {{ docker_apps_singbox_reality_short_id_count }}); do
+      set -- $(od -An -N8 -tx1 /dev/urandom)
+      printf '%s%s%s%s%s%s%s%s\n' "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8"
+    done > /opt/dockers/singbox/short_ids.txt
+  changed_when: true
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - >-
+      not docker_apps_singbox_short_ids_file.stat.exists
+      or (docker_apps_singbox_short_ids_file.stat.size | default(0) | int) == 0
+      or (docker_apps_singbox_short_ids_format.rc | default(1) | int) != 0
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Read Short IDs
+  ansible.builtin.command:
+    argv:
+      - cat
+      - /opt/dockers/singbox/short_ids.txt
+  register: docker_apps_singbox_short_ids_gen
+  changed_when: false
+  failed_when:
+    - not ansible_check_mode
+    - docker_apps_singbox_short_ids_gen.rc != 0
+  check_mode: false
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Assert Short IDs are valid
+  become: true
+  ansible.builtin.command:
+    argv:
+      - awk
+      - "-v"
+      - "expected={{ docker_apps_singbox_reality_short_id_count }}"
+      - >-
+        length($0) == 16 && $0 ~ /^[0-9a-fA-F]+$/ { valid++ }
+        END { exit !(NR == expected && valid == expected) }
+      - /opt/dockers/singbox/short_ids.txt
+  changed_when: false
+  failed_when: docker_apps_singbox_short_ids_validation.rc != 0
+  register: docker_apps_singbox_short_ids_validation
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - not ansible_check_mode
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Detect Path MTU
+  ansible.builtin.command:
+    argv:
+      - ip
+      - route
+      - get
+      - 8.8.8.8
+  register: docker_apps_singbox_route_probe
+  changed_when: false
+  failed_when: false
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Resolve Path MTU
+  ansible.builtin.set_fact:
+    docker_apps_singbox_detected_mtu: >-
+      {{
+        docker_apps_singbox_route_probe.stdout
+        | regex_findall('mtu\s+(\d+)')
+        | first
+        | default('1500')
+      }}
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Check for dynamic bandwidth file
+  ansible.builtin.stat:
+    path: /opt/dockers/singbox/best_speed.txt
+  register: docker_apps_singbox_speed_file
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Read dynamic bandwidth
+  ansible.builtin.command:
+    argv:
+      - cat
+      - /opt/dockers/singbox/best_speed.txt
+  register: docker_apps_singbox_dynamic_speed
+  changed_when: false
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - docker_apps_singbox_speed_file.stat.exists
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Process Smart SNI for Nodes
+  ansible.builtin.set_fact:
+    docker_apps_singbox_processed_nodes: >-
+      {{ docker_apps_singbox_processed_nodes_json | from_json }}
+  vars:
+    docker_apps_singbox_processed_nodes_json: |
+      {% set results = [] %}
+      {% for node in singbox_nodes %}
+        {% set n = node.copy() %}
+        {% if n.type == 'vless' and not n.sni | default('') %}
+          {% set _ = n.update({'sni': docker_apps_singbox_reality_sni_candidates | random}) %}
+        {% endif %}
+        {% set _ = results.append(n) %}
+      {% endfor %}
+      {{ results | to_json }}
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Expand optional Hysteria2 fallback ports  # noqa var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    singbox_extra_nodes: >-
+      {{
+        (singbox_extra_nodes | default([]))
+        + (docker_apps_singbox_hysteria_fallback_nodes_json | from_json)
+      }}
+  vars:
+    docker_apps_singbox_hysteria_fallback_nodes_json: |
+      {% set fallback_nodes = [] %}
+      {% for node in singbox_nodes if node.type | default('') == 'hysteria2' %}
+      {% for port in nat_singbox_hysteria_fallback_ports | default([]) %}
+      {% set fallback = node.copy() %}
+      {% set _ = fallback.update({
+        'name': node.name ~ '-fallback-' ~ port,
+        'port': port,
+        'fallback_only': true
+      }) %}
+      {% set _ = fallback_nodes.append(fallback) %}
+      {% endfor %}
+      {% endfor %}
+      {{ fallback_nodes | to_json }}
+  no_log: true
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - nat_singbox_hysteria_fallback_ports | default([]) | length > 0
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Skip deployment (disabled for this host)
+  ansible.builtin.debug:
+    msg: "Singbox deployment skipped (docker_apps_skip_singbox: true)"
+  when: docker_apps_skip_singbox | default(false)
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Gather service facts for legacy cleanup (Systemd only)
+  ansible.builtin.service_facts:
+  register: docker_apps_singbox_service_facts
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - (ansible_service_mgr | default('systemd')) == 'systemd'
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Stop and disable old service if it exists (Legacy Systemd)
+  become: true
+  ansible.builtin.systemd_service:
+    name: sing-box
+    state: stopped
+    enabled: false
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - (ansible_service_mgr | default('systemd')) == 'systemd'
+    - docker_apps_singbox_service_facts.ansible_facts.services is defined
+    - "'sing-box.service' in docker_apps_singbox_service_facts.ansible_facts.services"
+  tags: [deploy, services, docker_apps, singbox, phase5]
+- name: Sing-box - Check for existing Reality Key
+  become: true
+  ansible.builtin.stat:
+    path: /opt/dockers/singbox/reality.key
+  register: docker_apps_reality_key_file
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Include Docker prep tasks
+  ansible.builtin.include_tasks: singbox_docker_prep.yml
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - docker_apps_singbox_deploy_mode == 'docker'
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Include Native prep tasks
+  ansible.builtin.include_tasks: singbox_native_prep.yml
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - docker_apps_singbox_deploy_mode == 'native'
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Save Reality Key to file
+  become: true
+  ansible.builtin.copy:
+    content: "{{ docker_apps_reality_key_gen.stdout }}"
+    dest: /opt/dockers/singbox/reality.key
+    mode: "0600"
+  no_log: true
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - not ansible_check_mode
+    - not (docker_apps_reality_key_file.stat.exists | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Read Reality Key
+  become: true
+  ansible.builtin.slurp:
+    src: /opt/dockers/singbox/reality.key
+  register: docker_apps_reality_key_content
+  check_mode: false
+  no_log: true
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - not ansible_check_mode or docker_apps_reality_key_file.stat.exists
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Parse Reality Key
+  ansible.builtin.set_fact:
+    docker_apps_singbox_reality_private_key: >-
+      {{
+        docker_apps_reality_key_content.content
+        | b64decode
+        | regex_search('PrivateKey: (.+)', '\1')
+        | first
+        if (
+          docker_apps_reality_key_content is defined
+          and docker_apps_reality_key_content.content is defined
+        )
+        else 'DRY_RUN_PRIVATE_KEY'
+      }}
+    docker_apps_singbox_reality_public_key: >-
+      {{
+        docker_apps_reality_key_content.content
+        | b64decode
+        | regex_search('PublicKey: (.+)', '\1')
+        | first
+        if (
+          docker_apps_reality_key_content is defined
+          and docker_apps_reality_key_content.content is defined
+        )
+        else 'DRY_RUN_PUBLIC_KEY'
+      }}
+  no_log: true
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Ensure config directory exists
+  become: true
+  ansible.builtin.file:
+    path: "/opt/dockers/singbox/config"
+    state: directory
+    mode: "0755"
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Ensure Config Path Clean
+  become: true
+  ansible.builtin.file:
+    path: /opt/dockers/singbox/config/
+    state: absent
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Ensure Config Path Exist
+  become: true
+  ansible.builtin.file:
+    path: /opt/dockers/singbox/config/
+    state: directory
+    mode: "0755"
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Deploy 01_base
+  become: true
+  ansible.builtin.template:
+    src: singbox/base.json.j2
+    dest: /opt/dockers/singbox/config/01_base.json
+    mode: "0644"
+  notify: restart singbox
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Manage Cloudflare WARP Local Proxy Lifecycle
+  ansible.builtin.include_tasks: warp.yml
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, warp, phase5]
+
+- name: Sing-box - Deploy 02_outbounds (Direct)
+  become: true
+  diff: false
+  ansible.builtin.template:
+    src: singbox/outbounds_direct.json.j2
+    dest: /opt/dockers/singbox/config/02_outbounds.json
+    mode: "0644"
+  notify: restart singbox
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_role_direct | default(false) | bool
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Deploy 02_outbounds (Relay)
+  become: true
+  diff: false
+  ansible.builtin.template:
+    src: singbox/outbounds_relay.json.j2
+    dest: /opt/dockers/singbox/config/02_outbounds.json
+    mode: "0644"
+  notify: restart singbox
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_role_relay | default(false) | bool
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Deploy 03_dns
+  become: true
+  ansible.builtin.template:
+    src: singbox/dns.json.j2
+    dest: /opt/dockers/singbox/config/03_dns.json
+    mode: "0644"
+  notify: restart singbox
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Deploy 04_inbounds (Direct)
+  become: true
+  diff: false
+  ansible.builtin.template:
+    src: singbox/inbounds_direct.json.j2
+    dest: /opt/dockers/singbox/config/04_inbounds.json
+    mode: "0644"
+  notify: restart singbox
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_role_direct | default(false) | bool
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Deploy 04_inbounds (Relay)
+  become: true
+  diff: false
+  ansible.builtin.template:
+    src: singbox/inbounds_relay.json.j2
+    dest: /opt/dockers/singbox/config/04_inbounds.json
+    mode: "0644"
+  notify: restart singbox
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_role_relay | default(false) | bool
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Deploy 05_route (Direct)
+  become: true
+  ansible.builtin.template:
+    src: singbox/route_direct.json.j2
+    dest: /opt/dockers/singbox/config/05_route.json
+    mode: "0644"
+  notify: restart singbox
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_role_direct | default(false) | bool
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Deploy 05_route (Relay)
+  become: true
+  ansible.builtin.template:
+    src: singbox/route_relay.json.j2
+    dest: /opt/dockers/singbox/config/05_route.json
+    mode: "0644"
+  notify: restart singbox
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_role_relay | default(false) | bool
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Deploy 06_ip2free (IP2Free Outbounds)
+  become: true
+  diff: false
+  ansible.builtin.template:
+    src: singbox/06_ip2free.json.j2
+    dest: /opt/dockers/singbox/config/06_ip2free.json
+    mode: "0644"
+  notify: restart singbox
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_role_direct | default(false) | bool
+    - auroraops_roles['services']['ip2free_gateway'] | default(false) | bool
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Remove 06_ip2free when IP2Free gateway is disabled
+  become: true
+  ansible.builtin.file:
+    path: /opt/dockers/singbox/config/06_ip2free.json
+    state: absent
+  notify: restart singbox
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - not (auroraops_roles['services']['ip2free_gateway'] | default(false) | bool)
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Remove Legacy Config file
+  become: true
+  ansible.builtin.file:
+    path: /opt/dockers/singbox/config.json
+    state: absent
+  when: not (docker_apps_skip_singbox | default(false))
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Deploy Container (Modular)
+  ansible.builtin.include_tasks: singbox_docker_service.yml
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - docker_apps_singbox_deploy_mode == 'docker'
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Include Native service deployment
+  ansible.builtin.include_tasks: singbox_native_service.yml
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - docker_apps_singbox_deploy_mode == 'native'
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Generate Subscription Links (All protocols)
+  ansible.builtin.set_fact:
+    docker_apps_singbox_sub_links: >-
+      {{
+        lookup(
+          'ansible.builtin.template',
+          'singbox/subscription_links.txt.j2'
+        )
+      }}
+  no_log: true
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_role | default('direct') == 'direct'
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Write Base64 Subscription (All protocols)
+  become: true
+  diff: false
+  no_log: true
+  ansible.builtin.copy:
+    content: "{{ docker_apps_singbox_sub_links | b64encode }}"
+    dest: "{{ singbox_sub_path }}"
+    mode: "0644"
+  register: docker_apps_singbox_sub_base64_result
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_role | default('direct') == 'direct'
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Write Full Profile YAML (Clash Meta)
+  become: true
+  diff: false
+  ansible.builtin.template:
+    src: singbox/singbox_client_profile.yaml.j2
+    dest: "{{ singbox_sub_path }}.yaml"
+    mode: "0644"
+  register: docker_apps_singbox_sub_yaml_result
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_role | default('direct') == 'direct'
+  tags: [deploy, services, docker_apps, singbox, phase5]
+- name: Sing-box - Write compact provider profile
+  become: true
+  ansible.builtin.template:
+    src: singbox/singbox_provider_profile.yaml.j2
+    dest: "{{ singbox_sub_path }}.compact.yaml"
+    mode: "0644"
+  no_log: true
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_role | default('direct') == 'direct'
+  tags: [deploy, services, docker_apps, singbox, phase5]
+
+- name: Sing-box - Write Full Profile JSON (Sing-box Native)
+  become: true
+  diff: false
+  ansible.builtin.template:
+    src: singbox/singbox_client_profile.json.j2
+    dest: "{{ singbox_sub_path }}.json"
+    mode: "0644"
+  register: docker_apps_singbox_sub_json_result
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_role | default('direct') == 'direct'
+  tags: [deploy, services, docker_apps, singbox, phase5]

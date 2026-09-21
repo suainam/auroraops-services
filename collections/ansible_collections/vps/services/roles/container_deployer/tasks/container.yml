@@ -1,0 +1,63 @@
+---
+# Container Deployer - 单容器部署
+
+- name: Deploy container
+  become: true
+  community.docker.docker_container:
+    name: "{{ container_deployer_name }}"
+    image: "{{ container_deployer_image }}"
+    pull: "{{ container_deployer_cdp_pull | bool }}"
+    restart_policy: "{{ container_deployer_restart_policy }}"
+    command: "{{ container_deployer_command if container_deployer_command | length > 0 else omit }}"
+    user: "{{ container_deployer_user if container_deployer_user | length > 0 else omit }}"
+    working_dir: "{{ container_deployer_working_dir if container_deployer_working_dir | length > 0 else omit }}"
+    networks: "{{ container_deployer_networks if container_deployer_networks | length > 0 else omit }}"
+    network_mode: "{{ container_deployer_network_mode if container_deployer_network_mode | length > 0 else omit }}"
+    ports: "{{ container_deployer_ports if container_deployer_ports | length > 0 else omit }}"
+    volumes: "{{ container_deployer_volumes if container_deployer_volumes | length > 0 else omit }}"
+    env: "{{ container_deployer_env if container_deployer_env | length > 0 else omit }}"
+    env_file: "{{ container_deployer_env_file if container_deployer_env_file | length > 0 else omit }}"
+    etc_hosts: "{{ container_deployer_etc_hosts if container_deployer_etc_hosts | length > 0 else omit }}"
+    healthcheck: >-
+      {{
+        (
+          container_deployer_healthcheck
+          | combine({'interval': container_deployer_healthcheck_min_interval})
+        )
+        if (
+          container_deployer_healthcheck | length > 0
+          and (container_deployer_healthcheck.test | default([])) != ['NONE']
+          and (container_deployer_healthcheck.test | default('')) != 'NONE'
+        )
+        else (
+          container_deployer_healthcheck
+          if container_deployer_healthcheck | length > 0
+          else omit
+        )
+      }}
+    devices: "{{ container_deployer_devices if container_deployer_devices | length > 0 else omit }}"
+    capabilities: "{{ container_deployer_capabilities if container_deployer_capabilities | length > 0 else omit }}"
+    privileged: "{{ container_deployer_privileged }}"
+    memory: "{{ container_deployer_memory if container_deployer_memory | length > 0 else omit }}"
+    cpu_shares: >-
+      {{
+        container_deployer_cpu_shares | int
+        if container_deployer_cpu_shares | default(false)
+        and container_deployer_cpu_shares | string | length > 0
+        else omit
+      }}
+    cpus: "{{ container_deployer_cpus if container_deployer_cpus | length > 0 else omit }}"
+    shm_size: "{{ container_deployer_shm_size if container_deployer_shm_size | length > 0 else omit }}"
+    memory_reservation: "{{ container_deployer_memory_reservation if container_deployer_memory_reservation | length > 0 else omit }}"
+    oom_score_adj: >-
+      {{
+        container_deployer_oom_score_adj | int
+        if container_deployer_oom_score_adj | default(false)
+        and container_deployer_oom_score_adj | string | length > 0
+        else omit
+      }}
+    log_driver: "{{ container_deployer_log_driver }}"
+    log_options: "{{ container_deployer_log_options }}"
+    recreate: "{{ container_deployer_recreate | bool }}"
+    state: "{{ container_deployer_state }}"
+  tags: [deploy, services, container_deployer, phase5]

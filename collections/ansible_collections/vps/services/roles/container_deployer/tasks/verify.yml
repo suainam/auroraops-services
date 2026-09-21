@@ -1,0 +1,38 @@
+---
+- name: Check container status
+  community.docker.docker_container_info:
+    name: "{{ container_deployer_name }}"
+  register: container_deployer_container_info
+  when: not container_deployer_compose_enabled
+  tags: [verify, services, container_deployer, phase5]
+
+- name: Verify container is running
+  ansible.builtin.assert:
+    that:
+      - container_deployer_container_info.container is defined
+      - container_deployer_container_info.container.state.running
+    fail_msg: "Container {{ container_deployer_name }} is not running"
+    success_msg: "Container {{ container_deployer_name }} is running"
+  when: not container_deployer_compose_enabled
+  tags: [verify, services, container_deployer, phase5]
+
+- name: Check compose services
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ container_deployer_base_path }}/{{ container_deployer_name }}"
+      - ps
+      - --format
+      - json
+  register: container_deployer_compose_status
+  changed_when: false
+  when: container_deployer_compose_enabled
+  tags: [verify, services, container_deployer, phase5]
+
+- name: Verify compose services are running
+  ansible.builtin.debug:
+    msg: "Compose stack {{ container_deployer_name }} status: {{ container_deployer_compose_status.stdout }}"
+  when: container_deployer_compose_enabled
+  tags: [verify, services, container_deployer, phase5]

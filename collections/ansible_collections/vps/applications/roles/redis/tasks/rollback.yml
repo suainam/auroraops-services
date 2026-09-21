@@ -1,0 +1,76 @@
+---
+- name: 停止并禁用 Redis 服务 (示例回滚操作)
+  ansible.builtin.service:
+    name: redis-server
+    state: stopped
+    enabled: false
+  failed_when: false
+  tags:
+    - rollback
+    - applications
+    - redis
+    - redis_rollback_service
+    - phase3
+- name: 卸载 Redis server 软件包 (示例回滚操作)
+  ansible.builtin.apt:
+    name: redis-server
+    state: absent
+  tags:
+    - rollback
+    - applications
+    - redis
+    - redis_uninstall_package
+    - phase3
+- name: 移除 Redis 配置文件 (示例回滚操作)
+  ansible.builtin.file:
+    path: /etc/redis/redis.conf
+    state: absent
+  tags:
+    - rollback
+    - applications
+    - redis
+    - redis_remove_config
+    - phase3
+- name: 移除 Redis 数据目录 (警告：此操作会删除所有 Redis 数据) (示例回滚操作)
+  ansible.builtin.file:
+    path: "{{ redis_data_dir }}"
+    state: absent
+  tags:
+    - rollback
+    - applications
+    - redis
+    - redis_remove_data_dir
+    - phase3
+- name: 移除 Redis 日志目录 (示例回滚操作)
+  ansible.builtin.file:
+    path: "{{ redis_log_file | dirname }}"
+    state: absent
+  tags:
+    - rollback
+    - applications
+    - redis
+    - redis_remove_log_dir
+    - phase3
+- name: 移除 Redis 用户 (示例回滚操作)
+  ansible.builtin.user:
+    name: redis
+    state: absent
+    remove: true
+  tags:
+    - rollback
+    - applications
+    - redis
+    - redis_remove_user
+    - phase3
+
+- name: Remove Redis logrotate configuration
+  become: true
+  ansible.builtin.file:
+    path: "{{ redis_logrotate_config_path }}"
+    state: absent
+  tags:
+    - rollback
+    - applications
+    - redis
+    - redis_remove_logrotate_config
+    - phase3

@@ -1,0 +1,72 @@
+---
+- name: Ensure install directory exists with correct ownership
+  become: true
+  ansible.builtin.file:
+    path: "{{ hysteria2_native_install_dir }}"
+    state: directory
+    owner: "{{ hysteria2_native_user }}"
+    group: "{{ hysteria2_native_group }}"
+    mode: "{{ hysteria2_native_dir_mode }}"
+  tags: [deploy, services, hysteria2_native, hysteria2_native_config, phase3]
+
+- name: Render Hysteria2 client configuration
+  become: true
+  ansible.builtin.template:
+    src: hysteria2_config.yaml.j2
+    dest: "{{ hysteria2_native_config_path }}"
+    owner: "{{ hysteria2_native_user }}"
+    group: "{{ hysteria2_native_group }}"
+    mode: "0600"
+  no_log: true
+  notify: restart hysteria2-native
+  tags: [deploy, services, hysteria2_native, hysteria2_native_config, phase3]
+
+- name: Install Hysteria2 native systemd service unit
+  become: true
+  ansible.builtin.template:
+    src: hysteria2-native.service.j2
+    dest: "/etc/systemd/system/{{ hysteria2_native_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd daemon
+    - restart hysteria2-native
+  tags: [deploy, services, hysteria2_native, hysteria2_native_config, phase3]
+
+# Cutover step:
+# Stop and disable competing old listener (e.g. hysteria2.service on :10808)
+# but explicitly PRESERVE its binary and config on disk (/home/admin/unibox/services/hysteria2) for recovery.
+- name: Check status of competing preexisting service
+  ansible.builtin.systemd:
+    name: "{{ hysteria2_native_competing_service }}"
+  register: hysteria2_native_competing_status
+  failed_when: false
+  tags: [deploy, services, hysteria2_native, hysteria2_native_config, phase3]
+
+- name: Stop and disable competing preexisting service during cutover
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ hysteria2_native_competing_service }}"
+    state: stopped
+    enabled: false
+  when:
+    - not ansible_check_mode | bool
+    - hysteria2_native_competing_status.status is defined
+    - hysteria2_native_competing_status.status.LoadState | default('') == 'loaded'
+  tags: [deploy, services, hysteria2_native, hysteria2_native_config, phase3]
+
+- name: Flush handlers before starting service
+  ansible.builtin.meta: flush_handlers
+  when: not ansible_check_mode | bool
+  tags: [deploy, services, hysteria2_native, hysteria2_native_config, phase3]
+
+- name: Enable and start hysteria2-native service
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ hysteria2_native_service_name }}.service"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode | bool
+  tags: [deploy, services, hysteria2_native, hysteria2_native_config, phase3]

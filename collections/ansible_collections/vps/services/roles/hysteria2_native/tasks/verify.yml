@@ -1,0 +1,121 @@
+---
+- name: Verify Hysteria2 native binary exists
+  become: true
+  ansible.builtin.stat:
+    path: "{{ hysteria2_native_binary_path }}"
+  register: hysteria2_native_verify_binary
+  tags: [verify, services, hysteria2_native, hysteria2_native_verify, phase3]
+
+- name: Assert Hysteria2 native binary exists and is executable
+  ansible.builtin.assert:
+    that:
+      - hysteria2_native_verify_binary.stat.exists
+      - hysteria2_native_verify_binary.stat.executable
+    fail_msg: "Hysteria2 native binary not found or not executable at {{ hysteria2_native_binary_path }}"
+  when: not ansible_check_mode | bool
+  tags: [verify, services, hysteria2_native, hysteria2_native_verify, phase3]
+
+- name: Verify Hysteria2 config file exists and has restrictive permissions
+  become: true
+  ansible.builtin.stat:
+    path: "{{ hysteria2_native_config_path }}"
+  register: hysteria2_native_verify_config
+  tags: [verify, services, hysteria2_native, hysteria2_native_verify, phase3]
+
+- name: Assert Hysteria2 config exists and permissions are 0600
+  ansible.builtin.assert:
+    that:
+      - hysteria2_native_verify_config.stat.exists
+      - hysteria2_native_verify_config.stat.mode == '0600'
+    fail_msg: "Hysteria2 config file missing or mode is not 0600 (actual: {{ hysteria2_native_verify_config.stat.mode | default('missing') }})"
+  when: not ansible_check_mode | bool
+  tags: [verify, services, hysteria2_native, hysteria2_native_verify, phase3]
+
+- name: Check Hysteria2 native systemd service status
+  ansible.builtin.systemd:
+    name: "{{ hysteria2_native_service_name }}.service"
+  register: hysteria2_native_service_status
+  tags: [verify, services, hysteria2_native, hysteria2_native_verify, phase3]
+
+- name: Assert Hysteria2 native service is active and enabled
+  ansible.builtin.assert:
+    that:
+      - hysteria2_native_service_status.status.ActiveState == 'active'
+      - hysteria2_native_service_status.status.UnitFileState in ['enabled', 'static']
+    fail_msg: >-
+      Hysteria2 native service is not active (ActiveState: {{ hysteria2_native_service_status.status.ActiveState | default('unknown') }},
+      UnitFileState: {{ hysteria2_native_service_status.status.UnitFileState | default('unknown') }})
+  when:
+    - not ansible_check_mode | bool
+    - hysteria2_native_verify_binary.stat.exists | default(false) | bool
+  tags: [verify, services, hysteria2_native, hysteria2_native_verify, phase3]
+
+- name: Wait for local SOCKS5 port listener
+  ansible.builtin.wait_for:
+    host: "{{ hysteria2_native_socks5_host }}"
+    port: "{{ hysteria2_native_socks5_port }}"
+    timeout: 15
+    state: started
+  when:
+    - not ansible_check_mode | bool
+    - hysteria2_native_verify_binary.stat.exists | default(false) | bool
+  tags: [verify, services, hysteria2_native, hysteria2_native_verify, phase3]
+
+- name: Wait for local HTTP port listener
+  ansible.builtin.wait_for:
+    host: "{{ hysteria2_native_http_host }}"
+    port: "{{ hysteria2_native_http_port }}"
+    timeout: 15
+    state: started
+  when:
+    - not ansible_check_mode | bool
+    - hysteria2_native_verify_binary.stat.exists | default(false) | bool
+  tags: [verify, services, hysteria2_native, hysteria2_native_verify, phase3]
+
+- name: Probe Hysteria2 proxy egress via SOCKS5
+  ansible.builtin.command:
+    argv:
+      - curl
+      - --fail
+      - --silent
+      - --show-error
+      - --proxy
+      - "socks5h://{{ hysteria2_native_socks5_host }}:{{ hysteria2_native_socks5_port }}"
+      - --connect-timeout
+      - "5"
+      - --max-time
+      - "15"
+      - https://www.cloudflare.com/cdn-cgi/trace
+  register: hysteria2_native_socks5_probe
+  changed_when: false
+  retries: 3
+  delay: 3
+  until: hysteria2_native_socks5_probe.rc == 0
+  when:
+    - not ansible_check_mode | bool
+    - hysteria2_native_verify_binary.stat.exists | default(false) | bool
+  tags: [verify, services, hysteria2_native, hysteria2_native_verify, phase3]
+
+- name: Probe Hysteria2 proxy egress via HTTP
+  ansible.builtin.command:
+    argv:
+      - curl
+      - --fail
+      - --silent
+      - --show-error
+      - --proxy
+      - "http://{{ hysteria2_native_http_host }}:{{ hysteria2_native_http_port }}"
+      - --connect-timeout
+      - "5"
+      - --max-time
+      - "15"
+      - https://www.cloudflare.com/cdn-cgi/trace
+  register: hysteria2_native_http_probe
+  changed_when: false
+  retries: 3
+  delay: 3
+  until: hysteria2_native_http_probe.rc == 0
+  when:
+    - not ansible_check_mode | bool
+    - hysteria2_native_verify_binary.stat.exists | default(false) | bool
+  tags: [verify, services, hysteria2_native, hysteria2_native_verify, phase3]

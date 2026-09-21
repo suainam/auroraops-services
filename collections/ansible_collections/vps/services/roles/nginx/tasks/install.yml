@@ -1,0 +1,87 @@
+# tasks/install.yml
+---
+- name: 强制收集 Ansible Facts
+  ansible.builtin.setup:
+  tags: [deploy, services, nginx, nginx_install, phase4]
+
+- name: 安装 Nginx (Debian/Ubuntu 官方源流程)
+  when: (ansible_facts.distribution | default(ansible_distribution | default('Debian'))) != 'Alpine'
+  block:
+    - name: 安装 Nginx 软件源的依赖
+      become: true
+      ansible.builtin.apt:
+        name:
+          - curl
+          - gnupg
+          - ca-certificates
+        state: present
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      tags: [deploy, services, nginx, nginx_install, phase4]
+
+    - name: 下载 Nginx 官方 GPG 密钥
+      become: true
+      ansible.builtin.get_url:
+        url: https://nginx.org/keys/nginx_signing.key
+        dest: /usr/share/keyrings/nginx-archive-keyring.asc
+        owner: root
+        group: root
+        mode: "0644"
+      tags: [deploy, services, nginx, nginx_install, phase4]
+
+    - name: 添加 Nginx 官方软件源
+      become: true
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.asc]
+          http://nginx.org/packages/mainline/debian
+          {{ ansible_facts.distribution_release | default(ansible_distribution_release) }} nginx
+        filename: nginx
+        state: present
+        update_cache: false
+      tags: [deploy, services, nginx, nginx_install, phase4]
+
+    - name: 强制 APT 使用 IPv4
+      become: true
+      ansible.builtin.copy:
+        content: 'Acquire::ForceIPv4 "true";'
+        dest: /etc/apt/apt.conf.d/99force-ipv4
+        mode: "0644"
+      tags: [deploy, services, nginx, nginx_install, phase4]
+
+    - name: 清理 APT 缓存
+      become: true
+      ansible.builtin.apt:
+        autoclean: true
+        autoremove: true
+      tags: [deploy, services, nginx, nginx_install, phase4]
+
+    - name: 更新 APT 缓存以识别新的 Nginx 源
+      become: true
+      ansible.builtin.apt:
+        update_cache: true
+      retries: 5
+      delay: 5
+      register: nginx_apt_update_result
+      until: nginx_apt_update_result is success
+      tags: [deploy, services, nginx, nginx_install, phase4]
+
+    - name: 安装 Nginx (从官方源)
+      become: true
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      tags: [deploy, services, nginx, nginx_install, phase4]
+
+- name: 安装 Nginx (Alpine apk 流程)
+  become: true
+  community.general.apk:
+    name:
+      - nginx
+      - nginx-openrc
+    state: present
+    update_cache: true
+  when: (ansible_facts.distribution | default(ansible_distribution | default('Debian'))) == 'Alpine'
+  tags: [deploy, services, nginx, nginx_install, phase4]

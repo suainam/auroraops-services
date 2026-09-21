@@ -1,0 +1,174 @@
+---
+# =============================================================================
+# OpenCode 项目级配置 - AuroraOps 专属
+# =============================================================================
+# 用于生成 /root/AuroraOps/.opencode/opencode.json
+# ECC (Everything Claude Code) 集成：planner, security-reviewer, doc-updater, refactor-cleaner
+
+nodejs_opencode_project_config:
+  "$schema": "https://opencode.ai/config.json"
+
+  # Skills 配置
+  skills:
+    auroraops:
+      enabled: true
+      description: "企业级Debian 12服务器自动化管理框架"
+
+  # Plugin 配置
+  plugin:
+    - "./plugins"
+
+  # 自定义 Agent
+  agent:
+    ansible-expert:
+      description: "Ansible 专家，专注于 AuroraOps 框架开发"
+      mode: "subagent"
+      model: "google/antigravity-claude-sonnet-4-5-thinking"
+      prompt: "你是 Ansible 专家，专注于 AuroraOps 框架开发。你熟悉 Ansible 最佳实践、Debian 12 系统管理、Docker 容器部署。你必须严格遵循 AGENTS.md 中的规范。"
+      temperature: 0.2
+      permission:
+        edit: "allow"
+        bash:
+          "*": "allow"
+          "make check*": "allow"
+          "make deploy*": "ask"
+          "make verify*": "allow"
+
+    code-reviewer:
+      description: "代码审查专家"
+      mode: "subagent"
+      model: "google/antigravity-claude-opus-4-5-thinking"
+      prompt: "你是代码审查专家。审查代码时关注：1) 是否符合 AGENTS.md 规范 2) Ansible 幂等性 3) 标签完整性 4) 安全性 5) 文档完整性"
+      temperature: 0.3
+      permission:
+        edit: "deny"
+        bash: "deny"
+
+    doc-updater:
+      description: "文档与 Codemap 专家。生成 role 架构图、更新 README、验证文档与代码一致性。"
+      mode: "subagent"
+      model: "opencode/kimi-k2.5-free"
+      prompt: "{file:prompts/agents/doc-updater.txt}"
+      temperature: 0.4
+      permission:
+        edit: "allow"
+        bash: "deny"
+
+    planner:
+      description: "实施计划专家。用于复杂功能规划、架构变更、重构方案。"
+      mode: "subagent"
+      model: "google/antigravity-claude-opus-4-5-thinking"
+      prompt: "{file:prompts/agents/planner.txt}"
+      temperature: 0.3
+      permission:
+        edit: "deny"
+        bash: "allow"
+
+    security-reviewer:
+      description: "安全审查专家。用于 secrets 泄露检测、配置加固、OWASP 检查。"
+      mode: "subagent"
+      model: "google/antigravity-claude-opus-4-5-thinking"
+      prompt: "{file:prompts/agents/security-reviewer.txt}"
+      temperature: 0.2
+      permission:
+        edit: "allow"
+        bash: "allow"
+
+    refactor-cleaner:
+      description: "重构与清理专家。用于移除冗余 tasks、合并重复变量、安全删除废弃 role。"
+      mode: "subagent"
+      model: "google/antigravity-claude-opus-4-5-thinking"
+      prompt: "{file:prompts/agents/refactor-cleaner.txt}"
+      temperature: 0.3
+      permission:
+        edit: "allow"
+        bash: "allow"
+
+  # 快捷命令
+  command:
+    check-role:
+      template: "检查 Ansible 角色 $ARGUMENTS 的语法和标签"
+      description: "检查角色"
+      agent: "ansible-expert"
+      subtask: true
+
+    deploy-role:
+      template: "部署 Ansible 角色 $ARGUMENTS"
+      description: "部署角色"
+      agent: "ansible-expert"
+
+    review:
+      template: "审查最近的代码变更"
+      description: "代码审查"
+      agent: "code-reviewer"
+
+    doc:
+      template: "为 $ARGUMENTS 编写文档"
+      description: "编写文档"
+      agent: "doc-updater"
+
+    plan:
+      template: "{file:commands/plan.md}\n\n$ARGUMENTS"
+      description: "创建实施计划"
+      agent: "planner"
+      subtask: true
+
+    security:
+      template: "{file:commands/security.md}\n\n$ARGUMENTS"
+      description: "安全审查"
+      agent: "security-reviewer"
+      subtask: true
+
+    update-docs:
+      template: "{file:commands/update-docs.md}\n\n$ARGUMENTS"
+      description: "更新文档"
+      agent: "doc-updater"
+      subtask: true
+
+    update-codemaps:
+      template: "{file:commands/update-codemaps.md}\n\n$ARGUMENTS"
+      description: "更新 Codemap"
+      agent: "doc-updater"
+      subtask: true
+
+    refactor-clean:
+      template: "{file:commands/refactor-clean.md}\n\n$ARGUMENTS"
+      description: "清理冗余代码"
+      agent: "refactor-cleaner"
+      subtask: true
+
+  # 项目权限
+  permission:
+    edit: "allow"
+    bash:
+      "*": "allow"
+      "make check*": "allow"
+      "make deploy*": "ask"
+      "make verify*": "allow"
+      "ansible-playbook * --check": "allow"
+      "ansible-playbook *": "ask"
+      "rm -rf *": "deny"
+      "systemctl stop *": "deny"
+      "systemctl disable *": "deny"
+
+  # 项目监视器
+  watcher:
+    ignore:
+      - ".git/**"
+      - ".venv/**"
+      - "__pycache__/**"
+      - "*.pyc"
+      - ".pytest_cache/**"
+      - "collections/**/*.retry"
+      - "playbooks/**"
+      - "*.log"
+      - ".ansible/**"
+      - "secrets/**"
+
+  # 指令文件（含 skill 路径，确保所有 agent 都有 AuroraOps 上下文）
+  instructions:
+    - "AGENTS.md"
+    - ".opencode/skill/auroraops/SKILL.md"
+    - ".opencode/skills/ansible-builder/SKILL.md"
+    - ".opencode/skills/ansible-deployer/SKILL.md"
+    - ".opencode/skills/ansible-troubleshooter/SKILL.md"

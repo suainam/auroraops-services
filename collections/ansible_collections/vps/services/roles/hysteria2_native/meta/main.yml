@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  author: AuroraOps
+  description: Native Hysteria2 client systemd service with loopback SOCKS5 and HTTP proxy listeners
+  company: AuroraOps
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+        - bullseye
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+  galaxy_tags:
+    - proxy
+    - network
+    - hysteria2
+    - systemd
+
+dependencies: []

@@ -1,0 +1,23 @@
+---
+- name: Assert required connection parameters are defined
+  ansible.builtin.assert:
+    that:
+      - hysteria2_native_server is defined
+      - hysteria2_native_server | length > 0
+      - hysteria2_native_server_port is defined
+      - hysteria2_native_server_port | int > 0
+      - hysteria2_native_auth_password is defined
+      - hysteria2_native_auth_password | length > 0
+    fail_msg: >-
+      Missing required Hysteria2 connection authority variables:
+      server={{ hysteria2_native_server | default('UNDEFINED') }},
+      port={{ hysteria2_native_server_port | default('UNDEFINED') }},
+      auth_password={{ 'SET' if (hysteria2_native_auth_password is defined and hysteria2_native_auth_password | length > 0) else 'MISSING' }}
+  tags: [deploy, services, hysteria2_native, hysteria2_native_preflight, phase3]
+
+- name: Assert architecture is supported
+  ansible.builtin.assert:
+    that:
+      - hysteria2_native_arch in ['arm64', 'amd64']
+    fail_msg: "Unsupported architecture for hysteria2_native: {{ ansible_architecture }} (mapped to {{ hysteria2_native_arch }})"
+  tags: [deploy, services, hysteria2_native, hysteria2_native_preflight, phase3]

@@ -1,0 +1,70 @@
+# =============================================================================
+# Hermes Agent Environment
+# 由 Ansible 管理 - 请勿手动修改
+# =============================================================================
+
+# =============================================================================
+# LLM PROVIDERS
+# =============================================================================
+{% if hermes_openrouter_api_key | length > 0 %}
+OPENROUTER_API_KEY={{ hermes_openrouter_api_key }}
+{% endif %}
+{% if hermes_glm_api_key | length > 0 %}
+GLM_API_KEY={{ hermes_glm_api_key }}
+{% endif %}
+{% if hermes_google_api_key | length > 0 %}
+GOOGLE_API_KEY={{ hermes_google_api_key }}
+{% endif %}
+
+# =============================================================================
+# TELEGRAM INTEGRATION
+# =============================================================================
+{% if hermes_telegram_bot_token | length > 0 %}
+TELEGRAM_BOT_TOKEN={{ hermes_telegram_bot_token }}
+TELEGRAM_ALLOWED_USERS={{ hermes_telegram_allowed_users | join(',') }}
+{% endif %}
+{% if hermes_telegram_home_channel | length > 0 %}
+TELEGRAM_HOME_CHANNEL={{ hermes_telegram_home_channel }}
+{% endif %}
+{% if hermes_telegram_home_channel_name | length > 0 %}
+TELEGRAM_HOME_CHANNEL_NAME={{ hermes_telegram_home_channel_name }}
+{% endif %}
+{% if hermes_telegram_home_channel_thread_id | default('') | length > 0 %}
+TELEGRAM_HOME_CHANNEL_THREAD_ID={{ hermes_telegram_home_channel_thread_id }}
+{% endif %}
+
+# =============================================================================
+# DISCORD INTEGRATION
+# =============================================================================
+{% if hermes_discord_bot_token | length > 0 %}
+DISCORD_BOT_TOKEN={{ hermes_discord_bot_token }}
+DISCORD_ALLOWED_USERS={{ hermes_discord_allowed_users | join(',') }}
+{% endif %}
+
+# =============================================================================
+# CUSTOM PROVIDERS
+# =============================================================================
+{% if hermes_local_new_api_key | length > 0 %}
+LOCAL_NEW_API_KEY={{ hermes_local_new_api_key }}
+{% endif %}
+{% if hermes_deepseek_api_key | length > 0 %}
+DEEPSEEK_API_KEY={{ hermes_deepseek_api_key }}
+{% endif %}
+
+# =============================================================================
+# TERMINAL CONFIGURATION
+# =============================================================================
+TERMINAL_TIMEOUT={{ nodejs_hermes_terminal_timeout }}
+TERMINAL_LIFETIME_SECONDS=300
+
+# =============================================================================
+# GATEWAY
+# =============================================================================
+{% if hermes_gateway_token | length > 0 %}
+HERMES_GATEWAY_TOKEN={{ hermes_gateway_token }}
+{% endif %}
+
+# =============================================================================
+# MISC
+# =============================================================================
+GATEWAY_ALLOW_ALL_USERS={{ 'true' if hermes_allow_all_users else 'false' }}

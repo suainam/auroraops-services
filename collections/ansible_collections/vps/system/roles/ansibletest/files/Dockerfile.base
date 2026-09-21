@@ -1,0 +1,26 @@
+# AuroraOps Pre-built Test Image
+# 快速测试优化：预装所有依赖，通过volume挂载使用项目代码
+#
+# 构建命令:
+#   docker build -t auroraops-test-base -f files/Dockerfile.base .
+
+FROM quay.io/ansible/default-test-container:11.6.0
+
+LABEL maintainer="AuroraOps"
+LABEL description="Pre-built test image for AuroraOps"
+LABEL dailycheckin_persist="true"
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates curl gnupg lsb-release git && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
+    pip cache purge 2>/dev/null || true
+
+ENV ANSIBLE_COLLECTIONS_PATH=/root/.ansible/collections
+ENV ANSIBLE_PIPELINING=True
+ENV ANSIBLE_DEPRECATION_WARNINGS=False
+
+# 关键：使用tmpfs挂载 resolv.conf 避免Docker的resolv.conf覆盖
+# 容器启动时使用 --tmpfs /etc/resolv.conf 参数
+
+CMD ["/bin/sh", "-c", "echo 'AuroraOps Test Image Ready (dailycheckin_persist=true)' && /bin/sleep infinity"]

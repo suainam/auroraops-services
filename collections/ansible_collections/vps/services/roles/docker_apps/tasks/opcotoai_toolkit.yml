@@ -1,0 +1,139 @@
+---
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - docker_apps_opcotoai_toolkit_repo_url is defined
+      - docker_apps_opcotoai_toolkit_repo_url | string | length > 0
+    fail_msg: "opcotoai_toolkit_repo_url is required"
+
+- name: Create base directory
+  become: true
+  ansible.builtin.file:
+    path: "/opt/dockers/opcotoai-toolkit"
+    state: directory
+    mode: '0755'
+
+- name: Configure git safe directory
+  community.general.git_config:
+    name: safe.directory
+    scope: global
+    value: /opt/dockers/opcotoai-toolkit
+    add_mode: add
+
+- name: Clone opcotoai-toolkit repository
+  become: true
+  ansible.builtin.git:
+    repo: "{{ docker_apps_opcotoai_toolkit_repo_url }}"
+    dest: "/opt/dockers/opcotoai-toolkit"
+    version: "{{ docker_apps_opcotoai_toolkit_version }}"
+    update: true
+    force: true
+
+- name: Fix directory ownership
+  become: true
+  ansible.builtin.file:
+    path: "/opt/dockers/opcotoai-toolkit"
+    owner: "{{ docker_apps_docker_user_uid }}"
+    group: "{{ docker_apps_docker_user_gid }}"
+    recurse: true
+
+- name: Remove upstream compose.yaml to avoid conflict with generated docker-compose.yml
+  become: true
+  ansible.builtin.file:
+    path: "/opt/dockers/opcotoai-toolkit/compose.yaml"
+    state: absent
+
+- name: Create config directories
+  become: true
+  ansible.builtin.file:
+    path: "/opt/dockers/opcotoai-toolkit/config/{{ item }}"
+    state: directory
+    owner: "{{ docker_apps_docker_user_uid }}"
+    group: "{{ docker_apps_docker_user_gid }}"
+    mode: '0755'
+  loop:
+    - smtp
+    - gateway
+
+- name: Inspect existing SMTP environment
+  become: true
+  ansible.builtin.stat:
+    path: "/opt/dockers/opcotoai-toolkit/config/smtp/.env"
+  register: docker_apps_existing_smtp_env
+
+- name: Read existing SMTP environment
+  become: true
+  ansible.builtin.slurp:
+    src: "/opt/dockers/opcotoai-toolkit/config/smtp/.env"
+  register: docker_apps_existing_smtp_env_raw
+  when: docker_apps_existing_smtp_env.stat.exists | default(false)
+  no_log: true
+
+- name: Preserve existing FREEMAIL_BASE
+  ansible.builtin.set_fact:
+    docker_apps_preserved_freemail_base: >-
+      {{
+        (
+          docker_apps_existing_smtp_env_raw.content
+          | default('')
+          | b64decode
+          | regex_findall('^FREEMAIL_BASE=(.*)$', multiline=True)
+          | first
+        ) | default('')
+      }}
+  no_log: true
+
+- name: Render opcotoai-toolkit configs
+  become: true
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/opt/dockers/opcotoai-toolkit/{{ item.dest }}"
+    owner: "{{ docker_apps_docker_user_uid }}"
+    group: "{{ docker_apps_docker_user_gid }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {src: 'opcotoai_smtp.env.j2', dest: 'config/smtp/.env', mode: '0600'}
+    - {src: 'opcotoai_gateway_nginx.conf.j2', dest: 'config/gateway/nginx.conf', mode: '0644'}
+
+- name: Generate opcotoai-toolkit password hash
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - passwd
+      - -apr1
+      - -stdin
+    stdin: "{{ vault_opcotoai_web_pwd }}"
+  register: docker_apps_opcotoai_htpasswd_hash
+  changed_when: false
+  no_log: true
+  when:
+    - vault_opcotoai_web_user is defined
+    - vault_opcotoai_web_user | length > 0
+    - vault_opcotoai_web_pwd is defined
+    - vault_opcotoai_web_pwd | length > 0
+
+- name: Create Nginx htpasswd file for opcotoai-toolkit
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/nginx/.htpasswd_opctoai
+    content: >-
+      {{ vault_opcotoai_web_user }}:{{ docker_apps_opcotoai_htpasswd_hash.stdout }}
+    owner: root
+    group: www-data
+    mode: "0640"
+  no_log: true
+  when:
+    - docker_apps_opcotoai_htpasswd_hash is defined
+    - docker_apps_opcotoai_htpasswd_hash.stdout | default('') | length > 0
+
+- name: Deploy opcotoai-toolkit via container_deployer
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+  vars:
+    cdp_name: opcotoai-toolkit
+    cdp_image: "compose-only"
+    cdp_compose_enabled: true
+    cdp_compose_template: opcotoai_toolkit_compose.yml.j2
+    cdp_compose_build: "always"
+    cdp_compose_remove_orphans: true
+    cdp_compose_restart_after_deploy: false

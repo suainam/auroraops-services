@@ -1,0 +1,96 @@
+# AuroraOps Local Test Image
+# 预执行 make bootstrap，确保测试环境已准备就绪
+#
+# 构建命令:
+#   docker build -t auroraops-test-local -f files/Dockerfile.local .
+#
+# 使用说明:
+#   此镜像预装了所有 Ansible 依赖和 AuroraOps 项目结构
+#   通过 volume 挂载本地代码进行测试
+
+FROM debian:12-slim
+
+LABEL maintainer="AuroraOps"
+LABEL description="Local test image with pre-executed make bootstrap"
+LABEL dailycheckin_persist="true"
+
+# 设置环境变量
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+ENV PATH="/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# 安装基础依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # 基础工具
+    curl wget git make \
+    # Python 环境
+    python3 python3-pip python3-venv python3-full pipx \
+    # 系统工具
+    openssl ssh-client ca-certificates \
+    # 编译依赖（某些 Python 包需要）
+    gcc python3-dev libffi-dev libssl-dev \
+    # locales 支持
+    locales \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# 确保 pipx 路径
+RUN pipx ensurepath --force
+
+# 安装 Ansible 核心工具
+RUN pipx install ansible-core && \
+    pipx install ansible-lint
+
+# 注入必要的 Python 包
+RUN pipx inject ansible-core \
+    jmespath \
+    cryptography \
+    passlib \
+    redis \
+    requests \
+    docker \
+    mitogen || true
+
+# 设置 Ansible 环境变量
+ENV ANSIBLE_COLLECTIONS_PATH=/workspace/collections
+ENV ANSIBLE_PIPELINING=True
+ENV ANSIBLE_DEPRECATION_WARNINGS=False
+ENV ANSIBLE_HOST_KEY_CHECKING=False
+
+# 配置 git 安全目录（解决 dubious ownership 问题）
+RUN git config --global --add safe.directory '*'
+
+# 创建工作目录
+WORKDIR /workspace
+
+# 预创建项目结构（加速后续挂载）
+RUN mkdir -p /workspace/collections/ansible_collections/vps
+
+# 安装 ansible-galaxy 依赖
+COPY collections/ansible_collections/vps /tmp/collections/vps
+COPY requirements.yml* /tmp/
+
+# 预安装 collections
+RUN if [ -f /tmp/requirements.yml ]; then \
+        ansible-galaxy collection install -r /tmp/requirements.yml --force; \
+    fi && \
+    # 预安装本地 collections
+    if [ -d /tmp/collections ]; then \
+        cp -r /tmp/collections/* /workspace/collections/ansible_collections/ 2>/dev/null || true; \
+    fi
+
+# 清理临时文件
+RUN rm -rf /tmp/* /var/tmp/*
+
+# 复制入口脚本
+COPY collections/ansible_collections/vps/system/roles/ansibletest/files/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# 验证安装
+RUN ansible --version && \
+    ansible-lint --version && \
+    echo "AuroraOps Local Test Image Ready"
+
+# 默认入口
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["--help"]

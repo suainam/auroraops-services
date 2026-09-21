@@ -1,0 +1,141 @@
+---
+# DailyCheckin 角色 - 受管的手工签到入口
+# 启用控制变量: auroraops_roles['services']['dailycheckin']
+
+- name: Check Docker daemon availability
+  become: true
+  community.docker.docker_host_info:
+  register: dailycheckin_docker_host_info
+  changed_when: false
+  failed_when: false
+  when: auroraops_roles['services']['dailycheckin'] | default(true) | bool
+  tags: [deploy, services, dailycheckin, dailycheckin_preflight, phase5]
+
+- name: Assert Docker daemon is available
+  ansible.builtin.assert:
+    that:
+      - dailycheckin_docker_host_info.can_talk_to_docker | default(false)
+    fail_msg: >-
+      DailyCheckIn requires an installed and running Docker daemon.
+      Deploy services.docker first.
+  when: auroraops_roles['services']['dailycheckin'] | default(true) | bool
+  tags: [deploy, services, dailycheckin, dailycheckin_preflight, phase5]
+
+- name: Assert DailyCheckIn image reference is immutable
+  ansible.builtin.assert:
+    that:
+      - dailycheckin_docker_image is match('^ghcr\.io/suainam/dailycheckin:sha-[0-9a-f]{40}$')
+    fail_msg: >-
+      dailycheckin_docker_image must use the immutable GHCR commit tag
+      ghcr.io/suainam/dailycheckin:sha-<40-hex-commit>.
+  when: auroraops_roles['services']['dailycheckin'] | default(true) | bool
+  tags: [deploy, services, dailycheckin, dailycheckin_preflight, phase5]
+
+- name: Pull pinned DailyCheckIn image
+  become: true
+  community.docker.docker_image:
+    name: "{{ dailycheckin_docker_image }}"
+    source: pull
+    force_source: false
+  when: auroraops_roles['services']['dailycheckin'] | default(true) | bool
+  tags: [deploy, services, dailycheckin, dailycheckin_image_update, phase5]
+
+- name: Ensure config directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ dailycheckin_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: auroraops_roles['services']['dailycheckin'] | default(true) | bool
+  tags: [deploy, services, dailycheckin, dailycheckin_config, phase5]
+
+- name: Validate local dailycheckin config source
+  ansible.builtin.assert:
+    that:
+      - lookup('ansible.builtin.fileglob', dailycheckin_local_config_src, wantlist=True) | length > 0
+    fail_msg: "DailyCheckin 需要本地私有配置文件 {{ dailycheckin_local_config_src }}"
+  when: auroraops_roles['services']['dailycheckin'] | default(true) | bool
+  tags: [deploy, services, dailycheckin, dailycheckin_config, phase5]
+
+- name: Deploy config.json
+  become: true
+  ansible.builtin.copy:
+    src: "{{ dailycheckin_local_config_src }}"
+    dest: "{{ dailycheckin_config_dir }}/config.json"
+    owner: root
+    group: root
+    mode: '0600'
+  when: auroraops_roles['services']['dailycheckin'] | default(true) | bool
+  tags: [deploy, services, dailycheckin, dailycheckin_config, phase5]
+
+- name: Configure V2EX proxy for NAS
+  become: true
+  ansible.builtin.replace:
+    path: "{{ dailycheckin_config_dir }}/config.json"
+    regexp: '"proxy":\s*\{\}'
+    replace: '"proxy": "{{ proxy_http }}"'
+  when: inventory_hostname == 'nas' and (auroraops_roles['services']['dailycheckin'] | default(true) | bool)
+  tags: [deploy, services, dailycheckin, dailycheckin_config, phase5]
+
+- name: Configure Telegram proxy for NAS
+  become: true
+  ansible.builtin.replace:
+    path: "{{ dailycheckin_config_dir }}/config.json"
+    regexp: '"TG_PROXY":\s*""'
+    replace: '"TG_PROXY": "{{ proxy_http }}"'
+  when: inventory_hostname == 'nas' and (auroraops_roles['services']['dailycheckin'] | default(true) | bool)
+  tags: [deploy, services, dailycheckin, dailycheckin_config, phase5]
+
+- name: Create cron symlink in container
+  become: true
+  ansible.builtin.command: >
+    docker run --rm --entrypoint sh {{ dailycheckin_docker_image }}
+    -c "mkdir -p /dailycheckin/cron && ln -sf /dailycheckin/config/cron/crontab_list.sh /dailycheckin/cron/crontab_list.sh"
+  changed_when: false
+  when: inventory_hostname == 'nas' and (auroraops_roles['services']['dailycheckin'] | default(true) | bool)
+  tags: [deploy, services, dailycheckin, dailycheckin_config, phase5]
+
+- name: Deploy dailycheckin systemd service using application_service
+  ansible.builtin.include_role:
+    name: vps.applications.application_service
+  vars:
+    app_service_name: "dailycheckin"
+    app_service_description: "Daily Checkin Docker Service"
+    app_service_type: oneshot
+    app_service_exec_pre: "-/usr/bin/docker rm -f dailycheckin"
+    app_service_exec_start: >-
+      /usr/bin/docker run --rm --name dailycheckin --entrypoint dailycheckin
+      -v {{ dailycheckin_config_dir }}:/dailycheckin/config
+      {{ dailycheckin_docker_image }}
+    app_service_exec_stop: "-/usr/bin/docker rm -f dailycheckin"
+    app_service_exec_stop_post: "-/usr/bin/docker rm -f dailycheckin"
+    app_service_timeout: "{{ dailycheckin_service_timeout }}"
+    app_service_timeout_stop_sec: "{{ dailycheckin_service_timeout_stop_sec }}"
+    app_service_restart: "no"
+    app_service_restart_on_change: false
+    app_service_user: "root"
+    app_service_group: "root"
+    app_service_requires: ["docker.service"]
+    app_service_dependencies: ["docker.service"]
+    app_service_enabled: false
+    app_service_state: stopped
+  when: auroraops_roles['services']['dailycheckin'] | default(true) | bool
+  tags: [deploy, services, dailycheckin, dailycheckin_service, phase5]
+
+- name: Deploy dailycheckin systemd timer using application_timer
+  ansible.builtin.include_role:
+    name: vps.applications.application_timer
+  vars:
+    app_timer_name: "dailycheckin"
+    app_timer_description: "Timer for Daily Checkin Service"
+    app_timer_on_calendar: "{{ dailycheckin_timer_on_calendar }}"
+    app_timer_randomized_delay: "{{ dailycheckin_timer_randomized_delay }}"
+    app_timer_persistent: false
+    app_timer_enabled: "{{ dailycheckin_timer_enabled }}"
+    app_timer_state: "{{ (dailycheckin_timer_enabled | bool) | ternary('started', 'stopped') }}"
+  when: auroraops_roles['services']['dailycheckin'] | default(true) | bool
+  tags: [deploy, services, dailycheckin, dailycheckin_timer, phase5]
+
+# systemd reload 由 application_service 和 application_timer 处理。

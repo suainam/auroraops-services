@@ -1,0 +1,205 @@
+---
+# =============================================================================
+# Node.js Role - Rollback Tasks
+# =============================================================================
+# Rollback tasks for nodejs role
+# Tags: [rollback, services, nodejs, phase3]
+
+- name: Stop OpenCode server service
+  ansible.builtin.systemd:
+    name: "{{ nodejs_opencode_server_service_name }}"
+    state: stopped
+    enabled: false
+  register: nodejs_opencode_stop_service_result
+  failed_when:
+    - nodejs_opencode_stop_service_result is failed
+    - "'Could not find' not in (nodejs_opencode_stop_service_result.msg | default(''))"
+  when:
+    - nodejs_opencode_server_enabled | bool
+  tags: [rollback, services, nodejs, opencode_server, phase3]
+
+- name: Remove OpenCode server systemd service file
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ nodejs_opencode_server_service_name }}.service"
+    state: absent
+  when:
+    - nodejs_opencode_server_enabled | bool
+  tags: [rollback, services, nodejs, opencode_server, phase3]
+
+- name: Reload systemd daemon after removing OpenCode service
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when:
+    - nodejs_opencode_server_enabled | bool
+  tags: [rollback, services, nodejs, opencode_server, phase3]
+
+- name: Get home directory for OpenCode uninstall
+  ansible.builtin.command: "echo ~{{ nodejs_opencode_install_user }}"
+  register: nodejs_opencode_uninstall_home
+  changed_when: false
+  when:
+    - nodejs_opencode_enabled | bool
+  tags: [rollback, services, nodejs, opencode_install, phase3]
+
+- name: Determine OpenCode installation method
+  ansible.builtin.set_fact:
+    nodejs_opencode_uninstall_method: "{{ nodejs_opencode_install_method }}"
+  when:
+    - nodejs_opencode_enabled | bool
+  tags: [rollback, services, nodejs, opencode_install, phase3]
+
+# =============================================================================
+# Uninstall OpenCode (Script Method)
+# =============================================================================
+
+- name: Check if OpenCode binary exists (script method)
+  ansible.builtin.stat:
+    path: "{{ nodejs_opencode_uninstall_home.stdout }}/.opencode/bin/opencode"
+  register: nodejs_opencode_binary_exists
+  when:
+    - nodejs_opencode_enabled | bool
+    - nodejs_opencode_uninstall_home is defined
+    - nodejs_opencode_uninstall_method == 'script'
+  tags: [rollback, services, nodejs, opencode_install, phase3]
+
+- name: Uninstall OpenCode using official uninstall command
+  ansible.builtin.command:
+    cmd: "{{ nodejs_opencode_uninstall_home.stdout }}/.opencode/bin/opencode uninstall"
+  when:
+    - nodejs_opencode_enabled | bool
+    - nodejs_opencode_uninstall_method == 'script'
+    - nodejs_opencode_binary_exists is defined
+    - nodejs_opencode_binary_exists.stat.exists
+  register: nodejs_opencode_uninstall_result
+  changed_when: nodejs_opencode_uninstall_result.rc == 0
+  tags: [rollback, services, nodejs, opencode_install, phase3]
+
+# =============================================================================
+# Uninstall OpenCode (npm Method)
+# =============================================================================
+
+- name: Uninstall OpenCode via npm
+  community.general.npm:
+    name: "opencode-ai"
+    global: true
+    state: absent
+  when:
+    - nodejs_opencode_enabled | bool
+    - nodejs_opencode_uninstall_method == 'npm'
+  tags: [rollback, services, nodejs, opencode_config, phase3]
+
+- name: Remove OpenCode configuration directory for root
+  ansible.builtin.file:
+    path: "{{ nodejs_opencode_config_dir_root }}"
+    state: absent
+  when:
+    - nodejs_opencode_enabled | bool
+  tags: [rollback, services, nodejs, opencode_config, phase3]
+
+- name: Remove OpenCode configuration directory for admin
+  ansible.builtin.file:
+    path: "{{ nodejs_opencode_config_dir_admin }}"
+    state: absent
+  when:
+    - nodejs_opencode_enabled | bool
+    - admin_user is defined
+  tags: [rollback, services, nodejs, opencode_config, phase3]
+
+- name: Inspect shell config files for OpenCode PATH cleanup
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "/root/.bashrc"
+    - "/root/.zshrc"
+    - "/home/{{ admin_user | default('admin') }}/.bashrc"
+    - "/home/{{ admin_user | default('admin') }}/.zshrc"
+  register: nodejs_opencode_shell_config_stats
+  when:
+    - nodejs_opencode_enabled | bool
+    - nodejs_opencode_uninstall_method | default('script') == 'script'
+  tags: [rollback, services, nodejs, opencode_install, phase3]
+
+- name: Remove OpenCode PATH from existing shell config files
+  ansible.builtin.lineinfile:
+    path: "{{ item.item }}"
+    regexp: "^export PATH=.*\\.opencode/bin.*"
+    state: absent
+  loop: "{{ nodejs_opencode_shell_config_stats.results | default([]) }}"
+  when:
+    - item.stat.exists | default(false)
+  tags: [rollback, services, nodejs, opencode_install, phase3]
+
+- name: Uninstall Bitwarden CLI npm package
+  community.general.npm:
+    name: "@bitwarden/cli"
+    global: true
+    state: absent
+  when:
+    - nodejs_bw_enabled | default(true) | bool
+  tags: [rollback, services, nodejs, nodejs_npm_packages, phase3]
+
+- name: Remove Bitwarden session file
+  ansible.builtin.file:
+    path: "{{ nodejs_bw_session_file }}"
+    state: absent
+  when:
+    - nodejs_bw_enabled | default(true) | bool
+  tags: [rollback, services, nodejs, nodejs_bw, phase3]
+
+- name: Inspect shell config files for Bitwarden session cleanup
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "/root/.bashrc"
+    - "/root/.zshrc"
+  register: nodejs_bw_shell_config_stats
+  when:
+    - nodejs_bw_enabled | default(true) | bool
+  tags: [rollback, services, nodejs, nodejs_bw, phase3]
+
+- name: Remove Bitwarden session from existing shell config files
+  ansible.builtin.lineinfile:
+    path: "{{ item.item }}"
+    regexp: "^export BW_SESSION=.*"
+    state: absent
+  loop: "{{ nodejs_bw_shell_config_stats.results | default([]) }}"
+  when:
+    - item.stat.exists | default(false)
+  tags: [rollback, services, nodejs, nodejs_bw, phase3]
+
+- name: Uninstall global npm packages
+  community.general.npm:
+    name: "{{ item.name if item is mapping else item }}"
+    global: true
+    state: absent
+  loop: "{{ nodejs_packages }}"
+  when:
+    - nodejs_packages is defined
+    - nodejs_packages | length > 0
+  tags: [rollback, services, nodejs, nodejs_npm_packages, phase3]
+
+- name: Remove Node.js and npm
+  ansible.builtin.apt:
+    name:
+      - nodejs
+      - npm
+    state: absent
+    purge: true
+  tags: [rollback, services, nodejs, nodejs_install, phase3]
+
+- name: Remove NodeSource repository
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/nodesource.list
+    state: absent
+  tags: [rollback, services, nodejs, nodejs_install, phase3]
+
+- name: Remove NodeSource GPG key
+  ansible.builtin.file:
+    path: /usr/share/keyrings/nodesource.gpg
+    state: absent
+  tags: [rollback, services, nodejs, nodejs_install, phase3]
+
+- name: Update apt cache after removing NodeSource
+  ansible.builtin.apt:
+    update_cache: true
+  tags: [rollback, services, nodejs, nodejs_install, phase3]

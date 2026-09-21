@@ -1,0 +1,67 @@
+---
+- name: Detect target architecture
+  ansible.builtin.command: uname -m
+  register: pi_terminal_architecture
+  changed_when: false
+  check_mode: false
+  tags: [pi_terminal_check, deploy, applications, pi_terminal, pi_terminal_preflight, phase5]
+
+- name: Validate Pi Terminal configuration
+  ansible.builtin.assert:
+    that:
+      - pi_terminal_port | int > 0
+      - pi_terminal_port | int < 65536
+      - pi_terminal_basic_auth_username | length > 0
+      - "':' not in pi_terminal_basic_auth_username"
+      - pi_terminal_workspace_dir is match('^/')
+      - pi_terminal_omp_version | length > 0
+      - pi_terminal_omp_tools | length > 0
+      - "'browser' not in pi_terminal_omp_tools"
+      - "'debug' not in pi_terminal_omp_tools"
+      - "'ssh' not in pi_terminal_omp_tools"
+      - "'github' not in pi_terminal_omp_tools"
+      - pi_terminal_architecture.stdout in ['x86_64', 'aarch64', 'arm64']
+    fail_msg: "Pi Terminal configuration or target architecture is invalid"
+  tags: [pi_terminal_check, deploy, applications, pi_terminal, pi_terminal_preflight, phase5]
+
+- name: Check Docker CLI
+  ansible.builtin.command: docker --version
+  register: pi_terminal_docker_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: [pi_terminal_check, deploy, applications, pi_terminal, pi_terminal_preflight, phase5]
+
+- name: Check Docker Compose plugin
+  ansible.builtin.command: docker compose version
+  register: pi_terminal_compose_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: [pi_terminal_check, deploy, applications, pi_terminal, pi_terminal_preflight, phase5]
+
+- name: Check Docker daemon availability for Pi Terminal
+  become: true
+  community.docker.docker_host_info:
+  register: pi_terminal_docker_host_info
+  changed_when: false
+  failed_when: false
+  tags: [pi_terminal_check, deploy, applications, pi_terminal, pi_terminal_preflight, phase5]
+
+- name: Check OpenSSL CLI
+  ansible.builtin.command: openssl version
+  register: pi_terminal_openssl_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: [pi_terminal_check, deploy, applications, pi_terminal, pi_terminal_preflight, phase5]
+
+- name: Assert Pi Terminal prerequisites
+  ansible.builtin.assert:
+    that:
+      - pi_terminal_docker_version.rc == 0
+      - pi_terminal_compose_version.rc == 0
+      - pi_terminal_docker_host_info.can_talk_to_docker | default(false)
+      - pi_terminal_openssl_version.rc == 0
+    fail_msg: "Docker CLI, Docker Compose, Docker daemon, or OpenSSL is missing"
+  tags: [pi_terminal_check, deploy, applications, pi_terminal, pi_terminal_preflight, phase5]

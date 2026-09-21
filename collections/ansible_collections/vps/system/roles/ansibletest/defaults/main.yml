@@ -1,0 +1,48 @@
+---
+# 默认变量
+
+ansibletest_enabled: true
+ansibletest_use_docker: true
+
+# 测试模式: local | remote
+# local:  本地 Docker 测试（推荐，无需远程主机）
+# remote: 远程主机 Docker 测试（向后兼容）
+ansibletest_mode: "local"
+
+# ========== 本地模式配置 ==========
+# 本地项目路径（自动检测当前工作目录）
+ansibletest_local_project_path: "{{ lookup('env', 'PWD') }}"
+
+# 本地 Docker 镜像名称
+ansibletest_local_image_name: "auroraops-test-local"
+
+# 本地容器名称
+ansibletest_local_container_name: "auroraops-test-runner"
+
+# 本地容器运行时选项
+ansibletest_local_container_auto_remove: true
+ansibletest_local_container_detach: false
+
+# ========== 远程模式配置 ==========
+# Docker 镜像选择
+ansibletest_docker_image: "auroraops-test-base"
+
+# 容器工作目录
+ansibletest_container_home: "/root/ansible_collections"
+
+# 远程模式源码仓库
+ansibletest_source_repo: "git@github.com:suainam/AuroraOps.git"
+ansibletest_source_version: "main"
+ansibletest_source_dir: "/root/AuroraOps"
+
+# ========== 通用配置 ==========
+# 镜像构建选项
+# 默认为 true: 先检测镜像是否存在，不存在才构建（节省时间）
+ansibletest_build_image: true
+ansibletest_force_rebuild: false
+
+# 测试目标
+ansibletest_target: "system_base"
+
+# 测试模式: single | parallel
+ansibletest_execution_mode: "single"

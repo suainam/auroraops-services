@@ -1,0 +1,18 @@
+---
+- name: Restart container
+  community.docker.docker_container:
+    name: "{{ container_deployer_name }}"
+    image: "{{ container_deployer_image }}"
+    state: started
+    restart: true
+  when:
+    - not container_deployer_compose_enabled
+    - container_deployer_state == 'started'
+
+- name: Restart compose stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ container_deployer_base_path }}/{{ container_deployer_name }}"
+    state: restarted
+  when:
+    - container_deployer_compose_enabled
+    - container_deployer_compose_restart_after_deploy

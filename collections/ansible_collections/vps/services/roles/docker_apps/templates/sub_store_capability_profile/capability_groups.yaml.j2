@@ -1,0 +1,143 @@
+{% for capability in [
+  {'key': 'ai', 'pool': 'ai', 'label': 'AI', 'group': '🤖 AI 服务', 'marker': '__FILTER_AI__', 'mode': 'stable'},
+  {'key': 'rtt', 'pool': 'server-low-rtt', 'label': '快速', 'group': '⚡ 快速节点', 'marker': '__FILTER_SERVER_LOW_RTT__', 'mode': 'fast'},
+  {'key': 'pure', 'pool': 'pure-low-risk', 'label': '纯净', 'group': '🧼 纯净节点', 'marker': '__FILTER_PURE_LOW_RISK__', 'mode': 'stable'},
+  {'key': 'hktw', 'pool': 'hk-tw-media', 'label': 'B站港澳台', 'group': '📺 B站港澳台', 'marker': '__FILTER_HK_TW_MEDIA__', 'mode': 'stable'},
+  {'key': 'media', 'pool': 'international-media', 'label': '国际媒体', 'group': '🌍 国际媒体', 'marker': '__FILTER_INTERNATIONAL_MEDIA__', 'mode': 'stable'}
+] %}
+  # User-facing capability groups have two lanes:
+  # 1) automatic: filtered by Registry capability facts;
+  # 2) manual fallback: raw provider groups, intentionally unfiltered so the
+  #    original BP/CF/CC/SK subscriptions remain available as an escape hatch.
+  - name: "{{ capability.group }}"
+    type: select
+    proxies:
+{% if capability.mode == 'fast' %}
+      - "{{ capability.label }} · 自动优选"
+{% else %}
+      - "{{ capability.label }} · 自动稳定"
+{% endif %}
+{% for spec in display_group_specs %}
+{% set matched_sources = namespace(items=[]) %}
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+{% set prefix = provider['additional-prefix'] | default('[' ~ provider.name ~ ']') %}
+{% set display_group = provider['display-group'] | default(provider_display_groups[provider.name] | default(provider_display_groups[provider_id] | default(''))) %}
+{% if not display_group %}
+{% if 'NAT' in prefix or 'nat' in provider.name or 'nat' in provider_id or (provider['provider-group'] | default('') and 'nat' in provider['provider-group']) %}
+{% set display_group = 'NAT' %}
+{% elif 'BP' in prefix or 'baipiao' in provider.name or 'baipiao' in provider_id %}
+{% set display_group = 'BP' %}
+{% elif 'SK' in prefix or 'sakura' in provider.name or 'sakura' in provider_id %}
+{% set display_group = 'SK' %}
+{% else %}
+{% set display_group = 'VPS' %}
+{% endif %}
+{% endif %}
+{% if display_group == spec.key %}
+{% set matched_sources.items = matched_sources.items + [provider_id] %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if matched_sources.items | length > 0 %}
+      - "{{ spec.name }}"
+{% endif %}
+{% endfor %}
+{% if capability.key != 'ai' %}
+    hidden: true
+{% endif %}
+
+{% if capability.mode == 'fast' %}
+  - name: "{{ capability.label }} · 自动优选"
+    type: url-test
+    use:
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+      - source-{{ provider_id }}
+{% endif %}
+{% endfor %}
+    filter: {{ capability.marker }}
+    url: https://www.gstatic.com/generate_204
+    interval: 60
+    tolerance: 50
+    lazy: true
+    hidden: true
+
+{% else %}
+  - name: "{{ capability.label }} · 自动稳定"
+    type: fallback
+    proxies:
+      - "{{ capability.label }} · 自动优选"
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) %}
+{% set prefix = provider['additional-prefix'] | default('[' ~ provider.name ~ ']') %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+      - "{{ capability.label }} · {{ prefix | regex_replace('^\\[|\\]$', '') }} 稳定"
+{% endif %}
+{% endfor %}
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    timeout: 5000
+    max-failed-times: 5
+    lazy: true
+    hidden: true
+
+  - name: "{{ capability.label }} · 自动优选"
+    type: url-test
+    use:
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+      - source-{{ provider_id }}
+{% endif %}
+{% endfor %}
+    filter: {{ capability.marker }}
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 100
+    lazy: true
+    hidden: true
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) %}
+{% set prefix = provider['additional-prefix'] | default('[' ~ provider.name ~ ']') %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+  - name: "{{ capability.label }} · {{ prefix | regex_replace('^\\[|\\]$', '') }} 稳定"
+    type: url-test
+    use: [source-{{ provider_id }}]
+    filter: __FILTER_{{ capability.pool | upper | replace('-', '_') }}_{{ provider_id }}__
+    url: https://www.gstatic.com/generate_204
+    interval: 60
+    tolerance: 50
+    lazy: true
+    hidden: true
+{% endif %}
+{% endfor %}
+{% for group_name in provider_groups.names %}
+{% set group_size = namespace(value=0) %}
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) and (provider['provider-group'] | default(provider.name)) == group_name %}
+{% set group_size.value = group_size.value + 1 %}
+{% endif %}
+{% endfor %}
+{% if group_size.value > 1 %}
+  - name: "{{ capability.label }} · {{ group_name }} 稳定"
+    type: url-test
+    use:
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) and (provider['provider-group'] | default(provider.name)) == group_name %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+      - source-{{ provider_id }}
+{% endif %}
+{% endfor %}
+    filter: {{ capability.marker }}
+    url: https://www.gstatic.com/generate_204
+    interval: 60
+    tolerance: 50
+    lazy: true
+    hidden: true
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}

@@ -1,0 +1,46 @@
+---
+# Certbot 管理员邮箱 (Override in inventory)
+certbot_admin_email: ""
+
+# 要获取证书的域名列表 (Override in inventory)
+# 例如: certbot_certs: [{ domains: ["example.com", "www.example.com"] }]
+certbot_certs: []
+# Certbot DNS 插件：假设使用 Cloudflare。如果使用其他 DNS 服务商，请修改此变量。
+certbot_dns_plugin: cloudflare
+
+# 其他 Certbot 配置
+certbot_create_if_missing: true
+certbot_create_method: dns
+certbot_install_from_source: false
+certbot_auto_renew: true
+certbot_auto_renew_user: root
+certbot_auto_renew_minute: "0"
+certbot_auto_renew_hour: "3"
+certbot_auto_renew_day: "*"
+certbot_auto_renew_month: "*"
+certbot_auto_renew_weekday: "*"
+# 更新续订选项以使用 DNS 挑战和凭证文件
+certbot_auto_renew_options: "--quiet --dns-{{ certbot_dns_plugin }} --dns-{{ certbot_dns_plugin }}-credentials /etc/letsencrypt/{{ certbot_dns_plugin }}.ini"
+
+# DNS 凭证文件路径
+certbot_dns_credentials_file: "/etc/letsencrypt/{{ certbot_dns_plugin }}.ini"
+
+# Optional role-local Logrotate configuration
+certbot_logrotate_enabled: true
+certbot_logrotate_config_path: "/etc/logrotate.d/certbot"
+certbot_logrotate_config:
+  log_path: "/var/log/letsencrypt/*.log"
+  interval: daily
+  rotate_count: 7
+  compress: true
+  delaycompress: true
+  missingok: true
+  notifempty: true
+  create_owner: root
+  create_group: adm
+
+# 代理配置（用于局域网环境访问外网 API）
+# 旧 inventory 输入 proxy_* 保留兼容，Role 内统一消费 certbot_proxy_*。
+certbot_proxy_enabled: "{{ proxy_enabled | default(false) }}"
+certbot_proxy_http: "{{ proxy_http | default('') }}"
+certbot_proxy_https: "{{ proxy_https | default('') }}"

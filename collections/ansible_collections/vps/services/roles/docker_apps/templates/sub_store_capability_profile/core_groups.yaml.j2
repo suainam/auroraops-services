@@ -1,0 +1,217 @@
+{% set category_provider_labels = display_group_specs | map(attribute='key') | list %}
+  - name: "🚀 默认代理"
+    type: select
+    proxies:
+      - "🛡️ 稳定优先"
+      - "⚡ 自动优选"
+{% for spec in display_group_specs %}
+{% set matched_sources = namespace(items=[]) %}
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+{% set prefix = provider['additional-prefix'] | default('[' ~ provider.name ~ ']') %}
+{% set display_group = provider['display-group'] | default(provider_display_groups[provider.name] | default(provider_display_groups[provider_id] | default(''))) %}
+{% if not display_group %}
+{% if 'NAT' in prefix or 'nat' in provider.name or 'nat' in provider_id or (provider['provider-group'] | default('') and 'nat' in provider['provider-group']) %}
+{% set display_group = 'NAT' %}
+{% elif 'BP' in prefix or 'baipiao' in provider.name or 'baipiao' in provider_id %}
+{% set display_group = 'BP' %}
+{% elif 'SK' in prefix or 'sakura' in provider.name or 'sakura' in provider_id %}
+{% set display_group = 'SK' %}
+{% else %}
+{% set display_group = 'VPS' %}
+{% endif %}
+{% endif %}
+{% if display_group == spec.key %}
+{% set matched_sources.items = matched_sources.items + [provider_id] %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if matched_sources.items | length > 0 %}
+      - "{{ spec.name }}"
+{% endif %}
+{% endfor %}
+      - DIRECT
+
+  # Default mode: preserve the current exit identity. Provider and node changes
+  # happen only after health failure; fallback-only providers stay last by catalog order.
+  - name: "🛡️ 稳定优先"
+    type: fallback
+    proxies:
+{% for spec in display_group_specs %}
+{% set matched_sources = namespace(items=[]) %}
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+{% set prefix = provider['additional-prefix'] | default('[' ~ provider.name ~ ']') %}
+{% set display_group = provider['display-group'] | default(provider_display_groups[provider.name] | default(provider_display_groups[provider_id] | default(''))) %}
+{% if not display_group %}
+{% if 'NAT' in prefix or 'nat' in provider.name or 'nat' in provider_id or (provider['provider-group'] | default('') and 'nat' in provider['provider-group']) %}
+{% set display_group = 'NAT' %}
+{% elif 'BP' in prefix or 'baipiao' in provider.name or 'baipiao' in provider_id %}
+{% set display_group = 'BP' %}
+{% elif 'SK' in prefix or 'sakura' in provider.name or 'sakura' in provider_id %}
+{% set display_group = 'SK' %}
+{% else %}
+{% set display_group = 'VPS' %}
+{% endif %}
+{% endif %}
+{% if display_group == spec.key %}
+{% set matched_sources.items = matched_sources.items + [provider_id] %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if matched_sources.items | length > 0 %}
+      - "{{ spec.key }} · 稳定"
+{% endif %}
+{% endfor %}
+{% for group_name in provider_groups.names %}
+{% set group_size = namespace(value=0) %}
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) and (provider['provider-group'] | default(provider.name)) == group_name %}
+{% set group_size.value = group_size.value + 1 %}
+{% endif %}
+{% endfor %}
+{% if group_size.value > 1 %}
+      - "{{ group_name }} · 稳定"
+{% endif %}
+{% endfor %}
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) %}
+{% set prefix = provider['additional-prefix'] | default('[' ~ provider.name ~ ']') %}
+      - "{{ prefix | regex_replace('^\\[|\\]$', '') }} · 稳定"
+{% endif %}
+{% endfor %}
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    timeout: 5000
+    max-failed-times: 5
+    lazy: true
+
+  # Regional url-test helpers are ordered behind a fallback. A healthy region
+  # stays selected; cross-region movement only occurs after regional failure.
+  - name: "⚡ 自动优选"
+    type: fallback
+    proxies:
+      - "🇭🇰 港澳 · 自动优选"
+      - "🇹🇼 台湾 · 自动优选"
+      - "🇯🇵 日本 · 自动优选"
+      - "🇸🇬 新加坡 · 自动优选"
+      - "🇺🇸 美国 · 自动优选"
+      - "🇪🇺 欧洲 · 自动优选"
+      - "🌐 其他 · 自动优选"
+      - "快速 · 自动优选"
+      - "🛡️ 稳定优先"
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    timeout: 5000
+    max-failed-times: 5
+    lazy: true
+
+{% for spec in display_group_specs %}
+{% set matched_sources = namespace(items=[]) %}
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+{% set prefix = provider['additional-prefix'] | default('[' ~ provider.name ~ ']') %}
+{% set display_group = provider['display-group'] | default(provider_display_groups[provider.name] | default(provider_display_groups[provider_id] | default(''))) %}
+{% if not display_group %}
+{% if 'NAT' in prefix or 'nat' in provider.name or 'nat' in provider_id or (provider['provider-group'] | default('') and 'nat' in provider['provider-group']) %}
+{% set display_group = 'NAT' %}
+{% elif 'BP' in prefix or 'baipiao' in provider.name or 'baipiao' in provider_id %}
+{% set display_group = 'BP' %}
+{% elif 'SK' in prefix or 'sakura' in provider.name or 'sakura' in provider_id %}
+{% set display_group = 'SK' %}
+{% else %}
+{% set display_group = 'VPS' %}
+{% endif %}
+{% endif %}
+{% if display_group == spec.key %}
+{% set matched_sources.items = matched_sources.items + [provider_id] %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% if matched_sources.items | length > 0 %}
+  - name: "{{ spec.name }}"
+    type: select
+    use:
+{% for provider_id in matched_sources.items %}
+      - source-{{ provider_id }}
+{% endfor %}
+
+  - name: "{{ spec.key }} · 稳定"
+    type: url-test
+    use:
+{% for provider_id in matched_sources.items %}
+      - source-{{ provider_id }}
+{% endfor %}
+    filter: __FILTER_BASELINE__
+    url: https://www.gstatic.com/generate_204
+    interval: 60
+    tolerance: 50
+    lazy: true
+    hidden: true
+{% endif %}
+{% endfor %}
+
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) %}
+{% set prefix = provider['additional-prefix'] | default('[' ~ provider.name ~ ']') %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+{% set provider_label = prefix | regex_replace('^\\[|\\]$', '') %}
+{% if provider_label not in category_provider_labels %}
+  - name: "🌐 {{ provider_label }}"
+    type: select
+    use: [source-{{ provider_id }}]
+    hidden: true
+
+  # Select the lowest-latency healthy node inside each Provider. The outer
+  # fallback preserves Provider order and only changes Provider after failure.
+  - name: "{{ provider_label }} · 稳定"
+    type: url-test
+    use: [source-{{ provider_id }}]
+    filter: __FILTER_BASELINE_{{ provider_id }}__
+    url: https://www.gstatic.com/generate_204
+    interval: 60
+    tolerance: 50
+    lazy: true
+    hidden: true
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for group_name in provider_groups.names %}
+{% set group_size = namespace(value=0) %}
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) and (provider['provider-group'] | default(provider.name)) == group_name %}
+{% set group_size.value = group_size.value + 1 %}
+{% endif %}
+{% endfor %}
+{% if group_size.value > 1 %}
+  - name: "🌐 {{ group_name }}"
+    type: select
+    use:
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) and (provider['provider-group'] | default(provider.name)) == group_name %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+      - source-{{ provider_id }}
+{% endif %}
+{% endfor %}
+    hidden: true
+
+  - name: "{{ group_name }} · 稳定"
+    type: url-test
+    use:
+{% for provider in capability_providers %}
+{% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) and (provider['provider-group'] | default(provider.name)) == group_name %}
+{% set provider_id = provider['provider-id'] | default(provider.name) %}
+      - source-{{ provider_id }}
+{% endif %}
+{% endfor %}
+    filter: __FILTER_BASELINE__
+    url: https://www.gstatic.com/generate_204
+    interval: 60
+    tolerance: 50
+    lazy: true
+    hidden: true
+{% endif %}
+{% endfor %}

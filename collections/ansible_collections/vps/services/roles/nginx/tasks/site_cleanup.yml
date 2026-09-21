@@ -1,0 +1,21 @@
+---
+- name: 清理 sites-enabled 中的过时站点软链接
+  become: true
+  ansible.builtin.shell: |
+    for f in /etc/nginx/sites-enabled/*.conf; do
+      [ -L "$f" ] || continue
+      site=$(basename "$f" .conf)
+      case " {{ nginx_sites_to_deploy | join(' ') }} " in
+        *" $site "*) ;;
+        *)
+          echo "Removing stale: $f"
+          rm -f "$f"
+          ;;
+      esac
+    done
+  args:
+    executable: /bin/sh
+  register: nginx_stale_sites_cleanup
+  changed_when: "'Removing stale:' in nginx_stale_sites_cleanup.stdout"
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_site_enable, phase4]

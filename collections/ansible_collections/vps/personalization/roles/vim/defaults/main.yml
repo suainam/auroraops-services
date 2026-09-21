@@ -1,0 +1,6 @@
+---
+vim_baseline_fact_path: /etc/ansible/facts.d/vim.fact
+vim_backup_root: /var/backups/auroraops/vim
+vim_system_vimrc_path: /etc/vim/vimrc
+vim_system_vimrc_backup_path: "{{ vim_backup_root }}/system_vimrc"
+vim_plug_url: https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim

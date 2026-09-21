@@ -1,0 +1,39 @@
+server {
+    listen {{ nginx_http_port }};
+    listen [::]:{{ nginx_http_port }};
+    server_name {{ singbox_domain }} _;
+    # Provider paths can black-hole large sendfile/GSO responses when PMTU discovery is incomplete.
+    sendfile off;
+    tcp_nopush off;
+    tcp_nodelay on;
+    gzip off;
+    chunked_transfer_encoding off;
+
+    location = /{{ singbox_sub_token }} {
+        alias {{ singbox_sub_path }};
+        default_type text/plain;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="nat-subscription"';
+        add_header Profile-Title "{{ nat_scenario | default('nat') }}";
+    }
+
+    location = /{{ singbox_sub_token }}.yaml {
+        alias {{ singbox_sub_path }}.compact.yaml;
+        default_type application/x-yaml;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="nat-subscription.yaml"';
+        add_header Profile-Title "{{ nat_scenario | default('nat') }}";
+    }
+
+    location = /{{ singbox_sub_token }}.json {
+        alias {{ singbox_sub_path }}.json;
+        default_type application/json;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="nat-subscription.json"';
+        add_header Profile-Title "{{ nat_scenario | default('nat') }}";
+    }
+
+    location / {
+        return 404;
+    }
+}

@@ -1,0 +1,36 @@
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name {{ singbox_domain }} _;
+
+    # Sing-box Base64 Subscription
+    location = /{{ singbox_sub_token }} {
+        alias {{ singbox_sub_path }};
+        default_type text/plain;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="jpsg6_sub"';
+        add_header Profile-Title "jpsg6_sub";
+    }
+
+    # Sing-box YAML Profile
+    location = /{{ singbox_sub_token }}.yaml {
+        alias {{ singbox_sub_path }}.yaml;
+        default_type application/x-yaml;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="jpsg6_sub"';
+        add_header Profile-Title "jpsg6_sub";
+    }
+
+    # Sing-box JSON Profile
+    location = /{{ singbox_sub_token }}.json {
+        alias {{ singbox_sub_path }}.json;
+        default_type application/json;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="jpsg6_sub"';
+        add_header Profile-Title "jpsg6_sub";
+    }
+
+    location / {
+        return 404;
+    }
+}

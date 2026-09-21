@@ -1,0 +1,52 @@
+---
+# =============================================================================
+# Node.js Installation (install)
+# =============================================================================
+
+- name: Install Node.js prerequisites
+  become: true
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gnupg
+      - ca-certificates
+    state: present
+    update_cache: true
+  tags: [deploy, services, nodejs, nodejs_install, phase3]
+
+- name: Create apt keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  tags: [deploy, services, nodejs, nodejs_install, phase3]
+
+- name: Download NodeSource GPG key
+  ansible.builtin.get_url:
+    url: https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
+    dest: /tmp/nodesource.gpg.key
+    mode: "0644"
+  tags: [deploy, services, nodejs, nodejs_install, phase3]
+
+- name: De-armor NodeSource GPG key
+  ansible.builtin.command:
+    cmd: gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg /tmp/nodesource.gpg.key
+    creates: /etc/apt/keyrings/nodesource.gpg
+  tags: [deploy, services, nodejs, nodejs_install, phase3]
+
+- name: Add NodeSource repository
+  ansible.builtin.copy:
+    content: |
+      deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_{{ nodejs_version }} nodistro main
+    dest: /etc/apt/sources.list.d/nodesource.list
+    mode: "0644"
+  notify: Update apt cache
+  tags: [deploy, services, nodejs, nodejs_install, phase3]
+
+- name: Install Node.js
+  become: true
+  ansible.builtin.apt:
+    name: nodejs
+    state: present
+    update_cache: true
+  tags: [deploy, services, nodejs, nodejs_install, phase3]

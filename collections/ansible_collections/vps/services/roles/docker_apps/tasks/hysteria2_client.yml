@@ -1,0 +1,111 @@
+---
+# Lightweight loopback-only Hysteria2 client backed by sing-box.
+# It intentionally does not install Privoxy, enable TUN, or change Docker/system routes.
+
+- name: Check legacy Hysteria2 systemd unit
+  become: true
+  ansible.builtin.stat:
+    path: /etc/systemd/system/hysteria2.service
+  register: docker_apps_hysteria2_legacy_unit
+  tags: [deploy, services, docker_apps, hysteria2_client, phase5]
+
+- name: Stop and disable legacy Hysteria2 systemd unit
+  become: true
+  ansible.builtin.systemd:
+    name: hysteria2.service
+    state: stopped
+    enabled: false
+  failed_when: false
+  when: docker_apps_hysteria2_legacy_unit.stat.exists | default(false) | bool
+  tags: [deploy, services, docker_apps, hysteria2_client, phase5]
+
+- name: Remove legacy Hysteria2 systemd unit
+  become: true
+  ansible.builtin.file:
+    path: /etc/systemd/system/hysteria2.service
+    state: absent
+  notify: Reload systemd daemon
+  when: docker_apps_hysteria2_legacy_unit.stat.exists | default(false) | bool
+  tags: [deploy, services, docker_apps, hysteria2_client, phase5]
+
+- name: Ensure Hysteria2 client config directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ docker_apps_hysteria2_client_config_dir }}"
+    state: directory
+    owner: "{{ docker_apps_docker_user_uid }}"
+    group: "{{ docker_apps_docker_user_gid }}"
+    mode: "0750"
+  tags: [deploy, services, docker_apps, hysteria2_client, phase5]
+
+- name: Render Hysteria2 client config from shared authority variables
+  become: true
+  ansible.builtin.template:
+    src: hysteria2_client_config.json.j2
+    dest: "{{ docker_apps_hysteria2_client_config_dir }}/config.json"
+    owner: "{{ docker_apps_docker_user_uid }}"
+    group: "{{ docker_apps_docker_user_gid }}"
+    mode: "0600"
+  no_log: true
+  register: docker_apps_hysteria2_client_config
+  tags: [deploy, services, docker_apps, hysteria2_client, phase5]
+
+- name: Deploy loopback-only Hysteria2 client container
+  become: true
+  community.docker.docker_container:
+    name: hysteria2-client
+    image: "{{ singbox_image }}"
+    pull: true
+    command: run -c /etc/sing-box/config.json
+    restart_policy: unless-stopped
+    state: started
+    recreate: "{{ docker_apps_hysteria2_client_config.changed | default(false) | bool }}"
+    published_ports:
+      - "127.0.0.1:10808:10808"
+      - "127.0.0.1:10809:10809"
+    networks: >-
+      {{
+        docker_apps_hysteria2_client_networks
+        if docker_apps_hysteria2_client_networks | length > 0
+        else omit
+      }}
+    volumes:
+      - "{{ docker_apps_hysteria2_client_config_dir }}/config.json:/etc/sing-box/config.json:ro"
+    memory: "{{ docker_apps_hysteria2_client_memory }}"
+    memory_reservation: "{{ docker_apps_hysteria2_client_memory_reservation }}"
+    cpus: "{{ docker_apps_hysteria2_client_cpus }}"
+    healthcheck:
+      test: ["CMD-SHELL", "sing-box check -c /etc/sing-box/config.json || exit 1"]
+      interval: 1800s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+  tags: [deploy, services, docker_apps, hysteria2_client, phase5]
+
+- name: Wait for local Hysteria2 SOCKS listener
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 10808
+    timeout: 20
+  tags: [deploy, services, docker_apps, hysteria2_client, phase5]
+
+- name: Verify Hysteria2 proxy egress
+  ansible.builtin.command:
+    argv:
+      - curl
+      - --fail
+      - --silent
+      - --show-error
+      - --proxy
+      - socks5h://127.0.0.1:10808
+      - --connect-timeout
+      - "5"
+      - --max-time
+      - "15"
+      - https://www.cloudflare.com/cdn-cgi/trace
+  register: docker_apps_hysteria2_client_probe
+  changed_when: false
+  retries: 3
+  delay: 3
+  until: docker_apps_hysteria2_client_probe.rc == 0
+  tags: [deploy, services, docker_apps, hysteria2_client, phase5]

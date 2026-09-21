@@ -1,0 +1,19 @@
+---
+- name: Reload systemd
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: cloudflared_service_manager == 'systemd'
+
+- name: Restart cloudflared
+  become: true
+  ansible.builtin.service:
+    name: "{{ cloudflared_service_name }}"
+    state: restarted
+
+- name: Restart cloudflared watchdog
+  become: true
+  ansible.builtin.service:
+    name: "{{ cloudflared_watchdog_service_name }}"
+    state: restarted
+  when: cloudflared_service_manager == 'openrc'

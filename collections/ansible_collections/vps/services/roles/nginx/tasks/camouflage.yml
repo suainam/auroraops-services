@@ -1,0 +1,19 @@
+---
+- name: Deploy Camouflage Blog
+  when: nginx_install_camouflage_blog | bool
+  tags: [deploy, services, nginx, nginx_camouflage, phase4]
+  block:
+    - name: Ensure camouflage directory exists
+      ansible.builtin.file:
+        path: "/var/www/camouflage"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: "0755"
+
+    - name: Push premium camouflage site assets
+      ansible.posix.synchronize:
+        src: "camouflage/"
+        dest: "/var/www/camouflage/"
+        recursive: true
+        delete: true

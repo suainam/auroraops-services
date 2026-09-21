@@ -1,0 +1,71 @@
+---
+# =============================================================================
+# Docker Prerequisite Check
+# =============================================================================
+# 检查 Docker 是否已安装并运行
+
+- name: "[prereq:docker] Check if docker is installed"
+  ansible.builtin.command: docker --version
+  register: prereq_checks__prereq_docker_version
+  check_mode: false
+  failed_when: false
+  changed_when: false
+
+- name: "[prereq:docker] Set docker installed fact"
+  ansible.builtin.set_fact:
+    prereq_checks_prereq_docker_installed: "{{ prereq_checks__prereq_docker_version.rc == 0 }}"
+    prereq_checks_prereq_docker_version: "{{ prereq_checks__prereq_docker_version.stdout | default('not installed') }}"
+
+- name: "[prereq:docker] Check if docker daemon is running"
+  ansible.builtin.command: docker info
+  register: prereq_checks__prereq_docker_info
+  check_mode: false
+  failed_when: false
+  changed_when: false
+  when: prereq_checks_prereq_docker_installed
+
+- name: "[prereq:docker] Set docker running fact"
+  ansible.builtin.set_fact:
+    prereq_checks_prereq_docker_running: "{{ prereq_checks__prereq_docker_info.rc | default(1) == 0 }}"
+  when: prereq_checks_prereq_docker_installed
+
+- name: "[prereq:docker] Set overall check result"
+  ansible.builtin.set_fact:
+    prereq_checks_prereq_docker_ready: "{{ prereq_checks_prereq_docker_installed and (prereq_checks_prereq_docker_running | default(false)) }}"
+
+- name: "[prereq:docker] Display status"
+  ansible.builtin.debug:
+    msg: |
+      Docker Status:
+        Installed: {{ prereq_checks_prereq_docker_installed }}
+        Version: {{ prereq_checks_prereq_docker_version }}
+        Running: {{ prereq_checks_prereq_docker_running | default(false) }}
+        Ready: {{ prereq_checks_prereq_docker_ready }}
+
+- name: "[prereq:docker] Fail if not ready and required"
+  ansible.builtin.fail:
+    msg: |
+      ============================================================
+      ERROR: Docker is not ready!
+      ============================================================
+
+      Current status:
+        Installed: {{ prereq_checks_prereq_docker_installed }}
+        Running: {{ prereq_checks_prereq_docker_running | default(false) }}
+
+      To fix this, run:
+        make deploy-services.docker
+
+      ============================================================
+  when:
+    - prereq_checks_docker_required | bool
+    - not prereq_checks_prereq_docker_ready
+
+- name: "[prereq:docker] Warn if not ready but not required"
+  ansible.builtin.debug:
+    msg: |
+      WARNING: Docker is not ready, but check is not required.
+      Some features may not work. Run: make deploy-services.docker
+  when:
+    - not (prereq_checks_docker_required | bool)
+    - not prereq_checks_prereq_docker_ready

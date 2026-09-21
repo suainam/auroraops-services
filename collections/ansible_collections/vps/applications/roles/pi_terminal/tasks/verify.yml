@@ -1,0 +1,141 @@
+---
+- name: Inspect Pi Terminal state when disabled
+  community.docker.docker_container_info:
+    name: "{{ pi_terminal_name }}"
+  register: pi_terminal_disabled_container_info
+  tags: [verify, applications, pi_terminal, pi_terminal_verify, phase5]
+
+- name: Assert disabled Pi Terminal is not running
+  ansible.builtin.assert:
+    that:
+      - not pi_terminal_disabled_container_info.exists | default(false)
+        or not pi_terminal_disabled_container_info.container.State.Running | default(false)
+    fail_msg: "Disabled Pi Terminal container must not be running"
+  when: not pi_terminal_enabled | bool
+  tags: [verify, applications, pi_terminal, pi_terminal_verify, phase5]
+
+- name: Inspect Pi Terminal credential files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ pi_terminal_username_file }}"
+    - "{{ pi_terminal_password_file }}"
+  register: pi_terminal_credential_files
+  tags: [verify, applications, pi_terminal, pi_terminal_verify, phase5]
+  when: pi_terminal_enabled | bool
+
+- name: Assert Pi Terminal credential files are protected
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.mode == '0400'
+      - item.stat.uid == pi_terminal_container_uid | int
+      - item.stat.gid == pi_terminal_container_gid | int
+  loop: "{{ pi_terminal_credential_files.results }}"
+  tags: [verify, applications, pi_terminal, pi_terminal_verify, phase5]
+  when: pi_terminal_enabled | bool
+
+- name: Inspect Pi Terminal container
+  community.docker.docker_container_info:
+    name: "{{ pi_terminal_name }}"
+  register: pi_terminal_container_info
+  tags: [verify, applications, pi_terminal, pi_terminal_verify, phase5]
+  when: pi_terminal_enabled | bool
+
+- name: Assert Pi Terminal container is running with a non-root user
+  ansible.builtin.assert:
+    that:
+      - pi_terminal_container_info.exists
+      - pi_terminal_container_info.container.State.Running
+      - pi_terminal_container_info.container.Config.User == (pi_terminal_container_uid | string) ~ ':' ~ (pi_terminal_container_gid | string)
+      - pi_terminal_container_info.container.HostConfig.ReadonlyRootfs
+      - "'ALL' in pi_terminal_container_info.container.HostConfig.CapDrop"
+      - "'no-new-privileges:true' in pi_terminal_container_info.container.HostConfig.SecurityOpt"
+      - pi_terminal_container_info.container.Mounts | selectattr('Destination', 'equalto', '/home/pi/.omp') | list | length == 1
+      - "'PI_NO_TITLE=1' in pi_terminal_container_info.container.Config.Env"
+      - "'PI_NOTIFICATIONS=off' in pi_terminal_container_info.container.Config.Env"
+      - "'PI_FORCE_IMAGE_PROTOCOL=none' in pi_terminal_container_info.container.Config.Env"
+    fail_msg: "Pi Terminal container security or runtime state is invalid"
+  tags: [verify, applications, pi_terminal, pi_terminal_verify, phase5]
+  when: pi_terminal_enabled | bool
+
+- name: Wait for ttyd backend
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ pi_terminal_port }}"
+    timeout: 60
+  tags: [verify, applications, pi_terminal, pi_terminal_verify, phase5]
+  when: pi_terminal_enabled | bool
+
+- name: Verify ttyd requires authentication
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ pi_terminal_port }}/"
+    status_code: 401
+    return_content: false
+  register: pi_terminal_auth_challenge
+  tags: [verify, applications, pi_terminal, pi_terminal_verify, phase5]
+  when: pi_terminal_enabled | bool
+
+- name: Check OMP version in container
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - "{{ pi_terminal_name }}"
+      - omp
+      - --version
+  register: pi_terminal_omp_version_result
+  changed_when: false
+  tags: [verify, applications, pi_terminal, pi_terminal_verify, phase5]
+  when: pi_terminal_enabled | bool
+
+- name: Check Bun version in container
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - "{{ pi_terminal_name }}"
+      - bun
+      - --version
+  register: pi_terminal_bun_version_result
+  changed_when: false
+  tags: [verify, applications, pi_terminal, pi_terminal_verify, phase5]
+  when: pi_terminal_enabled | bool
+
+- name: Check tmux version in container
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - "{{ pi_terminal_name }}"
+      - tmux
+      - -V
+  register: pi_terminal_tmux_version_result
+  changed_when: false
+  tags: [verify, applications, pi_terminal, pi_terminal_verify, phase5]
+  when: pi_terminal_enabled | bool
+
+- name: Check ttyd version in container
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - "{{ pi_terminal_name }}"
+      - ttyd
+      - --version
+  register: pi_terminal_ttyd_version_result
+  changed_when: false
+  tags: [verify, applications, pi_terminal, pi_terminal_verify, phase5]
+  when: pi_terminal_enabled | bool
+
+- name: Assert OMP Terminal component versions
+  ansible.builtin.assert:
+    that:
+      - pi_terminal_omp_version in pi_terminal_omp_version_result.stdout
+      - pi_terminal_bun_version_result.stdout is version('1.3.14', '>=')
+      - pi_terminal_tmux_version_result.stdout is search('tmux 3\\.5')
+      - pi_terminal_ttyd_version_result.rc == 0
+      - pi_terminal_auth_challenge.status == 401
+    fail_msg: "OMP, Bun, tmux, ttyd, or Basic Auth verification failed"
+  tags: [verify, applications, pi_terminal, pi_terminal_verify, phase5]
+  when: pi_terminal_enabled | bool

@@ -1,0 +1,33 @@
+---
+- name: "[prereq] Bitwarden CLI checks"
+  ansible.builtin.import_tasks: check_bw.yml
+  when: prereq_checks_bw_enabled | bool
+  tags:
+    - deploy
+    - services
+    - prereq_checks
+    - phase3
+- name: "[prereq] Docker checks"
+  ansible.builtin.import_tasks: check_docker.yml
+  when: prereq_checks_docker_enabled | bool
+  tags:
+    - deploy
+    - services
+    - prereq_checks
+    - phase3
+- name: "[prereq] Network connectivity checks"
+  ansible.builtin.import_tasks: check_network.yml
+  when: prereq_checks_network_enabled | bool
+  tags:
+    - deploy
+    - services
+    - prereq_checks
+    - phase3
+- name: "[prereq] Custom command checks"
+  ansible.builtin.import_tasks: check_commands.yml
+  when: prereq_checks_commands_enabled | bool
+  tags:
+    - deploy
+    - services
+    - prereq_checks
+    - phase3

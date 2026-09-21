@@ -1,0 +1,11 @@
+---
+# =============================================================================
+# npm Configuration (npm_config)
+# =============================================================================
+
+- name: Configure npm to use domestic registry
+  ansible.builtin.command:
+    cmd: npm config set registry {{ npm_registry }}
+  when: use_domestic_mirrors | default(false)
+  changed_when: true
+  tags: [deploy, services, nodejs, npm_config, phase3]

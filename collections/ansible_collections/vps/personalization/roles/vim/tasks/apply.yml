@@ -1,0 +1,224 @@
+---
+- name: Ensure facts.d directory exists for vim baseline
+  become: true
+  ansible.builtin.file:
+    path: /etc/ansible/facts.d
+    state: directory
+    mode: "0755"
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Ensure vim backup directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ vim_backup_root }}"
+    state: directory
+    mode: "0755"
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Collect current vimrc state for managed users
+  become: true
+  ansible.builtin.stat:
+    path: "{{ item.home }}/.vimrc"
+  loop: "{{ vim_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: vim_user_vimrc_stats
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Collect current plug.vim state for managed users
+  become: true
+  ansible.builtin.stat:
+    path: "{{ item.home }}/.vim/autoload/plug.vim"
+  loop: "{{ vim_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: vim_user_plug_stats
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Collect current autoload directory state for managed users
+  become: true
+  ansible.builtin.stat:
+    path: "{{ item.home }}/.vim/autoload"
+  loop: "{{ vim_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: vim_user_autoload_stats
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Build vim baseline metadata
+  ansible.builtin.set_fact:
+    vim_user_baselines: []
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Append vim baseline metadata per user
+  ansible.builtin.set_fact:
+    vim_user_baselines: "{{ vim_user_baselines + [baseline_entry] }}"
+  vars:
+    baseline_entry:
+      name: "{{ item.0.name }}"
+      home: "{{ item.0.home }}"
+      vimrc_existed: "{{ item.1.stat.exists | default(false) }}"
+      plug_existed: "{{ item.2.stat.exists | default(false) }}"
+      autoload_dir_existed: "{{ item.3.stat.exists | default(false) }}"
+  loop: "{{ vim_users | zip(vim_user_vimrc_stats.results, vim_user_plug_stats.results, vim_user_autoload_stats.results) | list }}"
+  loop_control:
+    label: "{{ item.0.name }}"
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Backup system vimrc before first managed deploy
+  become: true
+  ansible.builtin.copy:
+    src: "{{ vim_system_vimrc_path }}"
+    dest: "{{ vim_system_vimrc_backup_path }}"
+    remote_src: true
+    mode: "0644"
+  when:
+    - not vim_baseline_stat.stat.exists
+    - vim_system_vimrc_stat.stat.exists | default(false)
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Backup user vimrc before first managed deploy
+  become: true
+  ansible.builtin.copy:
+    src: "{{ item.home }}/.vimrc"
+    dest: "{{ vim_backup_root }}/{{ item.name }}.vimrc"
+    remote_src: true
+    mode: "0644"
+  loop: "{{ vim_user_baselines }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - not vim_baseline_stat.stat.exists
+    - item.vimrc_existed
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Backup user plug.vim before first managed deploy
+  become: true
+  ansible.builtin.copy:
+    src: "{{ item.home }}/.vim/autoload/plug.vim"
+    dest: "{{ vim_backup_root }}/{{ item.name }}.plug.vim"
+    remote_src: true
+    mode: "0644"
+  loop: "{{ vim_user_baselines }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - not vim_baseline_stat.stat.exists
+    - item.plug_existed
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Persist vim baseline metadata
+  become: true
+  ansible.builtin.copy:
+    dest: "{{ vim_baseline_fact_path }}"
+    mode: "0644"
+    content: |
+      {{
+        {
+          "auroraops_managed": true,
+          "version": 1,
+          "system_vimrc_existed": vim_system_vimrc_stat.stat.exists | default(false),
+          "users": vim_user_baselines
+        } | to_nice_json
+      }}
+  when: not vim_baseline_stat.stat.exists
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Install vim packages
+  become: true
+  ansible.builtin.apt:
+    name:
+      - vim
+      - curl
+      - git
+    state: present
+    update_cache: true
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Deploy system vimrc
+  become: true
+  ansible.builtin.template:
+    src: vimrc.j2
+    dest: "{{ vim_system_vimrc_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    vim_enable_plugins: false
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Ensure user autoload directories exist
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.home }}/.vim/autoload"
+    state: directory
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: "0755"
+  loop: "{{ vim_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Install vim-plug for managed users
+  become: true
+  ansible.builtin.get_url:
+    url: "{{ vim_plug_url }}"
+    dest: "{{ item.home }}/.vim/autoload/plug.vim"
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: "0644"
+    timeout: 30
+  environment:
+    http_proxy: "{{ proxy_http | default('') }}"
+    https_proxy: "{{ proxy_https | default('') }}"
+  loop: "{{ vim_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  retries: 3
+  delay: 5
+  register: vim_plug_download
+  until: vim_plug_download is succeeded
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Deploy user vimrc files
+  become: true
+  ansible.builtin.template:
+    src: vimrc.j2
+    dest: "{{ item.home }}/.vimrc"
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: "0644"
+  vars:
+    vim_enable_plugins: true
+  loop: "{{ vim_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Gather primary groups for managed users
+  become: true
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+  register: vim_user_info
+  loop: "{{ vim_users }}"
+  changed_when: false
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Fix group ownership for managed user vimrc
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.item.home }}/.vimrc"
+    group: "{{ item.group }}"
+  loop: "{{ vim_user_info.results }}"
+  when: item.group is defined
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Fix group ownership for managed user plug.vim
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.item.home }}/.vim/autoload/plug.vim"
+    group: "{{ item.group }}"
+  loop: "{{ vim_user_info.results }}"
+  when: item.group is defined
+  tags: [deploy, personalization, vim, phase2]

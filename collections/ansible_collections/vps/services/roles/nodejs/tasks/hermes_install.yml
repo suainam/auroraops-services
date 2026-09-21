@@ -1,0 +1,98 @@
+---
+# =============================================================================
+# Hermes Agent Installation
+# =============================================================================
+# 安装步骤:
+#   1. 安装 uv (Python 包管理器)
+#   2. git clone Hermes 仓库
+#   3. 创建 venv + 安装依赖
+#   4. 创建 /usr/local/bin/hermes 启动器
+
+- name: Check if hermes is already installed
+  ansible.builtin.command: which hermes
+  register: nodejs_hermes_binary_check
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, nodejs, hermes, phase3]
+
+- name: Install Hermes Agent
+  when: nodejs_hermes_binary_check.rc != 0
+  tags: [deploy, services, nodejs, hermes, phase3]
+  block:
+    - name: Install uv package manager
+      ansible.builtin.shell: |
+        set -eo pipefail
+        if ! command -v uv >/dev/null 2>&1 && [ ! -x /root/.local/bin/uv ]; then
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+        fi
+        if [ -x /root/.local/bin/uv ]; then
+          ln -sf /root/.local/bin/uv /usr/local/bin/uv
+        fi
+      args:
+        executable: /bin/bash
+        creates: /usr/local/bin/uv
+      register: nodejs_hermes_uv_install
+      changed_when: nodejs_hermes_uv_install.rc == 0
+      tags: [deploy, services, nodejs, hermes, phase3]
+
+    - name: Ensure Hermes install directory exists
+      ansible.builtin.file:
+        path: "{{ nodejs_hermes_install_dir }}"
+        state: directory
+        owner: "{{ nodejs_hermes_user }}"
+        mode: "0755"
+      tags: [deploy, services, nodejs, hermes, phase3]
+
+    - name: Clone or update Hermes repository
+      ansible.builtin.git:
+        repo: "https://github.com/NousResearch/hermes-agent.git"
+        dest: "{{ nodejs_hermes_install_dir }}"
+        version: main
+        force: true
+        depth: 1
+      register: nodejs_hermes_git_clone
+      tags: [deploy, services, nodejs, hermes, phase3]
+
+    - name: Create Hermes virtual environment with Python 3.11
+      ansible.builtin.command: >
+        uv venv "{{ nodejs_hermes_install_dir }}/venv" --python 3.11
+      args:
+        creates: "{{ nodejs_hermes_install_dir }}/venv/bin/python"
+        chdir: "{{ nodejs_hermes_install_dir }}"
+      register: nodejs_hermes_venv_create
+      changed_when: nodejs_hermes_venv_create.rc == 0
+      tags: [deploy, services, nodejs, hermes, phase3]
+
+    - name: Install Hermes dependencies via uv
+      ansible.builtin.command: >
+        uv pip install -e ".[messaging,cli,pty,mcp,honcho,acp]"
+      args:
+        chdir: "{{ nodejs_hermes_install_dir }}"
+      environment:
+        VIRTUAL_ENV: "{{ nodejs_hermes_install_dir }}/venv"
+      register: nodejs_hermes_pip_install
+      changed_when: "'Successfully installed' in nodejs_hermes_pip_install.stdout"
+      tags: [deploy, services, nodejs, hermes, phase3]
+
+    - name: Create hermes launcher script
+      ansible.builtin.copy:
+        dest: "/usr/local/bin/hermes"
+        content: |
+          #!/usr/bin/env bash
+          unset PYTHONPATH
+          unset PYTHONHOME
+          exec "{{ nodejs_hermes_install_dir }}/venv/bin/hermes" "$@"
+        mode: "0755"
+        owner: root
+      tags: [deploy, services, nodejs, hermes, phase3]
+
+- name: Ensure hermes CLI is accessible
+  ansible.builtin.command: which hermes
+  register: nodejs_hermes_check
+  changed_when: false
+  tags: [deploy, services, nodejs, hermes, phase3]
+
+- name: Display Hermes install result
+  ansible.builtin.debug:
+    msg: "Hermes CLI: {{ 'INSTALLED' if nodejs_hermes_check.rc == 0 else 'NOT FOUND' }}"
+  tags: [deploy, services, nodejs, hermes, phase3]

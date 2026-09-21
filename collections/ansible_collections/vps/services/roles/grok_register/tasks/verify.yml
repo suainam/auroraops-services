@@ -1,0 +1,213 @@
+---
+- name: Resolve Grok Register verification state
+  ansible.builtin.set_fact:
+    grok_register_role_enabled: >-
+      {{ grok_register_enabled | bool and
+         auroraops_roles['services']['grok_register'] | default(false) | bool }}
+  tags: [verify, services, grok_register, phase5]
+
+- name: Inspect Grok Register container
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ grok_register_container_name }}"
+  register: grok_register_container_info
+  when: grok_register_role_enabled
+  tags: [verify, services, grok_register, grok_register_container, phase5]
+
+- name: Assert Grok Register container state and port exposure
+  ansible.builtin.assert:
+    that:
+      - grok_register_container_info.exists
+      - grok_register_container_info.container.State.Running | default(false)
+      - >-
+        (grok_register_gui_enabled | bool and
+         grok_register_container_info.container.NetworkSettings.Ports | default({}) | length == 1)
+        or
+        (not grok_register_gui_enabled | bool and
+         grok_register_container_info.container.NetworkSettings.Ports | default({}) | length == 0)
+      - >-
+        grok_register_container_info.container.Mounts
+        | selectattr('Source', 'equalto', grok_register_data_dir)
+        | selectattr('Destination', 'equalto', '/data')
+        | list | length == 1
+    fail_msg: >
+      Grok Register container must be running. Port exposure must match gui_enabled:
+      0 ports when GUI is off, 1 loopback port when GUI is on.
+  when: grok_register_role_enabled
+  tags: [verify, services, grok_register, grok_register_container, phase5]
+
+- name: Inspect Grok Register persistent configuration
+  become: true
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ grok_register_data_dir }}/app/config.json"
+    - "{{ grok_register_data_dir }}/source-provenance.json"
+    - "{{ grok_register_data_dir }}/app/{{ grok_register_persistence_sentinel }}"
+    - "{{ grok_register_data_dir }}/app/browser-home"
+    - "{{ grok_register_data_dir }}/app/logs"
+    - "{{ grok_register_data_dir }}/app/screenshots"
+  register: grok_register_persistent_files
+  when: grok_register_role_enabled
+  tags: [verify, services, grok_register, grok_register_persistence, phase5]
+
+- name: Assert Grok Register persistent configuration is protected
+  ansible.builtin.assert:
+    that:
+      - grok_register_persistent_files.results[0].stat.exists
+      - grok_register_persistent_files.results[0].stat.mode == '0600'
+      - grok_register_persistent_files.results[1].stat.exists
+      - grok_register_persistent_files.results[2].stat.exists
+      - grok_register_persistent_files.results[2].stat.mode == '0600'
+      - grok_register_persistent_files.results[3].stat.isdir
+      - grok_register_persistent_files.results[3].stat.mode == '0700'
+      - grok_register_persistent_files.results[4].stat.isdir
+      - grok_register_persistent_files.results[4].stat.mode == '0700'
+      - grok_register_persistent_files.results[5].stat.isdir
+      - grok_register_persistent_files.results[5].stat.mode == '0700'
+    fail_msg: "Grok Register persistent configuration or provenance is missing or unsafe."
+  when: grok_register_role_enabled
+  tags: [verify, services, grok_register, grok_register_persistence, phase5]
+
+- name: Read Grok Register source provenance
+  become: true
+  ansible.builtin.slurp:
+    path: "{{ grok_register_data_dir }}/source-provenance.json"
+  register: grok_register_source_provenance_raw
+  when: grok_register_role_enabled
+  tags: [verify, services, grok_register, grok_register_source, phase5]
+
+- name: Parse Grok Register source provenance
+  ansible.builtin.set_fact:
+    grok_register_source_provenance: >-
+      {{ grok_register_source_provenance_raw.content | b64decode | from_json }}
+  when: grok_register_role_enabled
+  tags: [verify, services, grok_register, grok_register_source, phase5]
+
+- name: Assert Grok Register source provenance matches the pin
+  ansible.builtin.assert:
+    that:
+      - grok_register_source_provenance.source_repo == grok_register_source_repo
+      - grok_register_source_provenance.source_revision == grok_register_source_revision
+      - grok_register_source_provenance.image == grok_register_image
+  when: grok_register_role_enabled
+  tags: [verify, services, grok_register, grok_register_source, phase5]
+
+- name: Validate Grok Register configuration structure in the container
+  become: true
+  community.docker.docker_container_exec:
+    container: "{{ grok_register_container_name }}"
+    chdir: "{{ grok_register_runtime_dir }}"
+    argv:
+      - python
+      - -c
+      - >-
+        import app_config; app_config.load_config();
+        app_config.validate_config_structure(app_config.config)
+  register: grok_register_config_validation
+  changed_when: false
+  no_log: true
+  when: grok_register_role_enabled
+  tags: [verify, services, grok_register, grok_register_config, phase5]
+
+- name: Verify Chromium is available in the Grok Register container
+  become: true
+  community.docker.docker_container_exec:
+    container: "{{ grok_register_container_name }}"
+    argv: [chromium, --version]
+  register: grok_register_chromium_version
+  changed_when: false
+  when: grok_register_role_enabled
+  tags: [verify, services, grok_register, grok_register_runtime, phase5]
+
+- name: Assert Chromium reports a version
+  ansible.builtin.assert:
+    that:
+      - grok_register_chromium_version.stdout | length > 0
+  when: grok_register_role_enabled
+  tags: [verify, services, grok_register, grok_register_runtime, phase5]
+
+- name: Verify Grok Register writable runtime state remains mounted
+  become: true
+  community.docker.docker_container_exec:
+    container: "{{ grok_register_container_name }}"
+    argv: [test, -f, "/data/app/{{ grok_register_persistence_sentinel }}"]
+  changed_when: false
+  when: grok_register_role_enabled
+  tags: [verify, services, grok_register, grok_register_persistence, phase5]
+
+- name: Verify Cloudflare Worker read-only mailbox capability
+  ansible.builtin.import_tasks: mailbox_probe.yml
+  when:
+    - grok_register_role_enabled
+    - grok_register_mailbox_preflight_enabled | bool
+  tags: [verify, services, grok_register, grok_register_mailbox_preflight, phase5]
+
+# --- GUI/Display bridge verification (Issue #166) ---
+- name: Verify Xvfb is running inside the Grok Register container
+  become: true
+  community.docker.docker_container_exec:
+    container: "{{ grok_register_container_name }}"
+    argv: [pgrep, -x, Xvfb]
+  register: grok_register_xvfb_check
+  changed_when: false
+  when:
+    - grok_register_role_enabled
+    - grok_register_gui_enabled | bool
+  tags: [verify, services, grok_register, grok_register_gui, phase5]
+
+- name: Assert Xvfb is running
+  ansible.builtin.assert:
+    that:
+      - grok_register_xvfb_check.rc == 0
+    fail_msg: "Xvfb is not running inside the Grok Register container."
+  when:
+    - grok_register_role_enabled
+    - grok_register_gui_enabled | bool
+  tags: [verify, services, grok_register, grok_register_gui, phase5]
+
+- name: Verify x11vnc is running inside the Grok Register container
+  become: true
+  community.docker.docker_container_exec:
+    container: "{{ grok_register_container_name }}"
+    argv: [pgrep, -x, x11vnc]
+  register: grok_register_x11vnc_check
+  changed_when: false
+  when:
+    - grok_register_role_enabled
+    - grok_register_gui_enabled | bool
+  tags: [verify, services, grok_register, grok_register_gui, phase5]
+
+- name: Assert x11vnc is running
+  ansible.builtin.assert:
+    that:
+      - grok_register_x11vnc_check.rc == 0
+    fail_msg: "x11vnc is not running inside the Grok Register container."
+  when:
+    - grok_register_role_enabled
+    - grok_register_gui_enabled | bool
+  tags: [verify, services, grok_register, grok_register_gui, phase5]
+
+- name: Verify websockify/noVNC loopback port responds on the host
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ grok_register_novnc_port }}/vnc.html"
+    method: GET
+    status_code: 200
+    timeout: 10
+  register: grok_register_novnc_probe
+  when:
+    - grok_register_role_enabled
+    - grok_register_gui_enabled | bool
+  tags: [verify, services, grok_register, grok_register_gui, phase5]
+
+- name: Assert noVNC loopback port is reachable
+  ansible.builtin.assert:
+    that:
+      - grok_register_novnc_probe.status == 200
+    fail_msg: >-
+      noVNC loopback port {{ grok_register_novnc_port }} did not respond with HTTP 200.
+      Check that websockify started inside the container.
+  when:
+    - grok_register_role_enabled
+    - grok_register_gui_enabled | bool
+  tags: [verify, services, grok_register, grok_register_gui, phase5]

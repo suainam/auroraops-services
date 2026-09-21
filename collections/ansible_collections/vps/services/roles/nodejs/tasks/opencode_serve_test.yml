@@ -1,0 +1,46 @@
+---
+# =============================================================================
+# Test OpenCode Serve Command Directly
+# =============================================================================
+
+- name: "[opencode-serve-test] Test serve command with timeout"
+  ansible.builtin.shell: |
+    timeout 5 /usr/bin/opencode serve --port 4096 --hostname 127.0.0.1 2>&1 || true
+  register: nodejs_opencode_serve_test
+  changed_when: false
+  tags: [deploy, services, nodejs, nodejs_opencode_serve_test, phase3]
+
+- name: "[opencode-serve-test] Display serve test output"
+  ansible.builtin.debug:
+    msg:
+      - "Return code: {{ nodejs_opencode_serve_test.rc }}"
+      - "Output: {{ nodejs_opencode_serve_test.stdout_lines }}"
+      - "Error: {{ nodejs_opencode_serve_test.stderr_lines }}"
+  tags: [deploy, services, nodejs, nodejs_opencode_serve_test, phase3]
+
+- name: "[opencode-serve-test] Check if opencode needs initialization"
+  ansible.builtin.stat:
+    path: "{{ nodejs_opencode_config_dir_root }}/opencode.json"
+  register: nodejs_opencode_config_exists
+  tags: [deploy, services, nodejs, nodejs_opencode_serve_test, phase3]
+
+- name: "[opencode-serve-test] Display config status"
+  ansible.builtin.debug:
+    msg: "Config exists: {{ nodejs_opencode_config_exists.stat.exists }}"
+  tags: [deploy, services, nodejs, nodejs_opencode_serve_test, phase3]
+
+- name: "[opencode-serve-test] Test with explicit config"
+  ansible.builtin.shell: |
+    cd {{ nodejs_opencode_server_working_directory }} && \
+    timeout 5 /usr/bin/opencode serve --port 4096 --hostname 127.0.0.1 2>&1 || true
+  register: nodejs_opencode_serve_with_cd
+  changed_when: false
+  tags: [deploy, services, nodejs, nodejs_opencode_serve_test, phase3]
+
+- name: "[opencode-serve-test] Display serve with cd output"
+  ansible.builtin.debug:
+    msg:
+      - "Return code: {{ nodejs_opencode_serve_with_cd.rc }}"
+      - "Output: {{ nodejs_opencode_serve_with_cd.stdout_lines }}"
+      - "Error: {{ nodejs_opencode_serve_with_cd.stderr_lines }}"
+  tags: [deploy, services, nodejs, nodejs_opencode_serve_test, phase3]

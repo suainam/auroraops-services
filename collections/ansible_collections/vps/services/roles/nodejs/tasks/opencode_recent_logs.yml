@@ -1,0 +1,30 @@
+---
+# =============================================================================
+# Get Recent OpenCode Server Logs
+# =============================================================================
+
+- name: "[opencode-logs] Get logs since last 5 minutes"
+  ansible.builtin.command: journalctl -u {{ nodejs_opencode_server_service_name }} --since "5 minutes ago" --no-pager
+  register: nodejs_opencode_recent_logs
+  changed_when: false
+  tags: [deploy, services, nodejs, nodejs_opencode_recent_logs, phase3]
+
+- name: "[opencode-logs] Display recent logs"
+  ansible.builtin.debug:
+    msg: "{{ nodejs_opencode_recent_logs.stdout_lines }}"
+  tags: [deploy, services, nodejs, nodejs_opencode_recent_logs, phase3]
+
+- name: "[opencode-logs] Get service status"
+  ansible.builtin.systemd:
+    name: "{{ nodejs_opencode_server_service_name }}"
+  register: nodejs_opencode_current_status
+  tags: [deploy, services, nodejs, nodejs_opencode_recent_logs, phase3]
+
+- name: "[opencode-logs] Display current status"
+  ansible.builtin.debug:
+    msg:
+      - "Active: {{ nodejs_opencode_current_status.status.ActiveState }}"
+      - "Sub: {{ nodejs_opencode_current_status.status.SubState }}"
+      - "Result: {{ nodejs_opencode_current_status.status.Result }}"
+      - "Main PID: {{ nodejs_opencode_current_status.status.MainPID }}"
+  tags: [deploy, services, nodejs, nodejs_opencode_recent_logs, phase3]

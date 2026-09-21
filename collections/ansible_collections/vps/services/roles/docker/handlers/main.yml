@@ -1,0 +1,5 @@
+---
+# Handler notifies the inner tasks to work around Ansible 2.20+ handler restrictions.
+- name: Restart Docker service
+  ansible.builtin.include_tasks: handler_restart.yml
+  listen: Restart Docker service

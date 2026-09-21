@@ -1,0 +1,41 @@
+---
+- name: "[Application Service] Verify application service user exists"
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ application_service_user }}"
+  register: application_service_user_info
+  when: application_service_user | length > 0
+  tags: [verify, applications, application_service, phase5]
+
+- name: "[Application Service] Verify application service group exists"
+  ansible.builtin.getent:
+    database: group
+    key: "{{ application_service_group }}"
+  register: application_service_group_info
+  when:
+    - application_service_group is not none
+    - application_service_group | length > 0
+  tags: [verify, applications, application_service, phase5]
+
+- name: "[Application Service] Verify systemd service file exists"
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ application_service_name }}.service"
+  register: application_service_file_stat
+  failed_when: not application_service_file_stat.stat.exists
+  when: application_service_name | length > 0
+  tags: [verify, applications, application_service, phase5]
+
+- name: "[Application Service] Read systemd service facts"
+  ansible.builtin.service_facts:
+  register: application_service_status
+  when: application_service_name | length > 0
+  tags: [verify, applications, application_service, phase5]
+
+- name: "[Application Service] Assert service is running and enabled: {{ application_service_name }}"
+  ansible.builtin.assert:
+    that:
+      - application_service_status.ansible_facts.services[application_service_name + '.service'].state == 'running'
+      - application_service_status.ansible_facts.services[application_service_name + '.service'].status == 'enabled'
+    fail_msg: "{{ application_service_name }} service is not running and enabled"
+  when: application_service_name | length > 0
+  tags: [verify, applications, application_service, phase5]

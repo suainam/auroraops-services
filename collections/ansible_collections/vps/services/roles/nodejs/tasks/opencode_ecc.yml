@@ -1,0 +1,124 @@
+---
+# =============================================================================
+# OpenCode ECC Integration Deployment (opencode_ecc)
+# =============================================================================
+# Deploys ECC (Everything Claude Code) integration:
+# - Agent prompt files to .opencode/prompts/agents/
+# - Command template files to .opencode/commands/
+# - Plugin files to .opencode/plugins/
+#
+# Tags: opencode_ecc, phase3
+
+- name: Load OpenCode project configuration
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/vars/opencode_project.yml"
+  tags: [deploy, services, nodejs, opencode_ecc, phase3]
+
+# =============================================================================
+# Directories
+# =============================================================================
+
+- name: Ensure .opencode/prompts/agents directory exists
+  ansible.builtin.file:
+    path: "{{ nodejs_opencode_project_dir }}/.opencode/prompts/agents"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [deploy, services, nodejs, opencode_ecc, phase3]
+
+- name: Ensure .opencode/commands directory exists
+  ansible.builtin.file:
+    path: "{{ nodejs_opencode_project_dir }}/.opencode/commands"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [deploy, services, nodejs, opencode_ecc, phase3]
+
+- name: Ensure .opencode/plugins directory exists
+  ansible.builtin.file:
+    path: "{{ nodejs_opencode_project_dir }}/.opencode/plugins"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [deploy, services, nodejs, opencode_ecc, phase3]
+
+# =============================================================================
+# Agent Prompt Files
+# =============================================================================
+
+- name: Deploy agent prompt files
+  ansible.builtin.template:
+    src: "prompts/agents/{{ item }}.txt.j2"
+    dest: "{{ nodejs_opencode_project_dir }}/.opencode/prompts/agents/{{ item }}.txt"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop:
+    - planner
+    - security-reviewer
+    - doc-updater
+    - refactor-cleaner
+  tags: [deploy, services, nodejs, opencode_ecc, phase3]
+
+# =============================================================================
+# Command Template Files
+# =============================================================================
+
+- name: Deploy command template files
+  ansible.builtin.template:
+    src: "commands/{{ item }}.md.j2"
+    dest: "{{ nodejs_opencode_project_dir }}/.opencode/commands/{{ item }}.md"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop:
+    - plan
+    - security
+    - update-docs
+    - update-codemaps
+    - refactor-clean
+  tags: [deploy, services, nodejs, opencode_ecc, phase3]
+
+# =============================================================================
+# Plugin Files
+# =============================================================================
+
+- name: Deploy ECC plugin files
+  ansible.builtin.template:
+    src: "plugins/{{ item }}.j2"
+    dest: "{{ nodejs_opencode_project_dir }}/.opencode/plugins/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop:
+    - pre-edit-security.js
+    - pre-command-check.js
+    - shell-env-injector.js
+    - session-audit.js
+    - permission-gate.js
+  tags: [deploy, services, nodejs, opencode_ecc, phase3]
+
+- name: Deploy plugin index
+  ansible.builtin.copy:
+    content: |
+      /**
+       * AuroraOps OpenCode Plugins
+       * ECC Integration + AuroraOps-specific hooks
+       */
+
+      export { PreEditSecurity } from "./pre-edit-security.js";
+      export { PreCommandCheck } from "./pre-command-check.js";
+      export { ShellEnvPlugin } from "./shell-env-injector.js";
+      export { SessionAuditPlugin } from "./session-audit.js";
+      export { PermissionGatePlugin } from "./permission-gate.js";
+    dest: "{{ nodejs_opencode_project_dir }}/.opencode/plugins/index.js"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [deploy, services, nodejs, opencode_ecc, phase3]

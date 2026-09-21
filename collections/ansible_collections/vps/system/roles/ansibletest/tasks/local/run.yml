@@ -1,0 +1,70 @@
+---
+# Local Test Run Tasks
+# 在本地启动 Docker 容器执行测试
+
+- name: Debug test configuration
+  ansible.builtin.debug:
+    msg: |
+      Local Test Configuration:
+      - Target: {{ ansibletest_target }}
+      - Image: {{ ansibletest_local_image_name }}
+      - Container: {{ ansibletest_local_container_name }}
+      - Project Path: {{ ansibletest_local_project_path }}
+      - Auto Remove: {{ ansibletest_local_container_auto_remove }}
+  tags: [deploy, system, ansibletest, ansibletest_run, phase3]
+
+- name: Ensure test container is not already running
+  community.docker.docker_container:
+    name: "{{ ansibletest_local_container_name }}"
+    state: absent
+  tags: [deploy, system, ansibletest, ansibletest_run, phase3]
+
+- name: Run ansible-test in local Docker container
+  community.docker.docker_container:
+    name: "{{ ansibletest_local_container_name }}"
+    image: "{{ ansibletest_local_image_name }}"
+    state: started
+    volumes:
+      - "{{ ansibletest_local_project_path }}:/workspace"
+    env:
+      TEST_TARGET: "{{ ansibletest_target }}"
+    entrypoint: /usr/local/bin/docker-entrypoint.sh
+    working_dir: /workspace
+    detach: false
+    auto_remove: false
+    interactive: false
+  register: ansibletest_test_result
+  failed_when: false
+  tags: [deploy, system, ansibletest, ansibletest_run, phase3]
+
+- name: Display test result
+  ansible.builtin.debug:
+    msg: |
+      Test Execution Result:
+      - Container: {{ ansibletest_local_container_name }}
+      - Target: {{ ansibletest_target }}
+      - Status: {{ ansibletest_display_status }}
+      - Exit Code: {{ ansibletest_test_result.container.State.ExitCode if ansibletest_test_result.container is defined else 'N/A' }}
+      {% if ansibletest_test_result.container is defined and ansibletest_test_result.container.Output is defined %}
+      - Output: |
+          {{ ansibletest_test_result.container.Output | truncate(1000) }}
+      {% endif %}
+  vars:
+    ansibletest_display_status: >-
+      {{
+        'Success'
+        if ansibletest_test_result.container is defined
+        and ansibletest_test_result.container.State.ExitCode == 0
+        else 'Failed'
+        if ansibletest_test_result.container is defined
+        else 'Check mode'
+      }}
+  tags: [deploy, system, ansibletest, ansibletest_run, phase3]
+
+- name: Fail if test execution failed
+  ansible.builtin.fail:
+    msg: "Test execution failed with exit code {{ ansibletest_test_result.container.State.ExitCode }}"
+  when:
+    - ansibletest_test_result.container is defined
+    - ansibletest_test_result.container.State.ExitCode != 0
+  tags: [deploy, system, ansibletest, ansibletest_run, phase3]

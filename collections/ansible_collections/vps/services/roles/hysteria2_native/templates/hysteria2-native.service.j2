@@ -1,0 +1,23 @@
+[Unit]
+Description=Hysteria2 Native Client Service (AuroraOps)
+Documentation=https://v2.hysteria.network/
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ hysteria2_native_user }}
+Group={{ hysteria2_native_group }}
+WorkingDirectory={{ hysteria2_native_install_dir }}
+ExecStart={{ hysteria2_native_binary_path }} client -c {{ hysteria2_native_config_path }}
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

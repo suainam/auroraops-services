@@ -1,0 +1,64 @@
+---
+- name: Validate explicitly managed Tunnel DNS hostname
+  ansible.builtin.assert:
+    that:
+      - cloudflared_dns_zone | length > 0
+      - cloudflared_dns_hostname.endswith('.' ~ cloudflared_dns_zone)
+      - cloudflared_dns_hostname in (cloudflared_custom_ingresses | map(attribute='hostname') | list)
+      - cloudflared_dns_api_token | length > 0
+    fail_msg: "Managed DNS must name an explicit Tunnel ingress in the configured zone"
+  no_log: true
+
+- name: Discover Tunnel DNS zone
+  ansible.builtin.uri:
+    url: "https://api.cloudflare.com/client/v4/zones?name={{ cloudflared_dns_zone | urlencode }}"
+    headers:
+      Authorization: "Bearer {{ cloudflared_dns_api_token }}"
+    return_content: true
+  check_mode: false
+  delegate_to: localhost
+  become: false
+  no_log: true
+  register: cloudflared_dns_zone_response
+
+- name: Assert unique Tunnel DNS zone access
+  ansible.builtin.assert:
+    that:
+      - cloudflared_dns_zone_response.json.success | bool
+      - cloudflared_dns_zone_response.json.result | length == 1
+    fail_msg: "Tunnel DNS token cannot uniquely read the configured zone"
+
+- name: Read existing Tunnel hostname records
+  ansible.builtin.uri:
+    url: >-
+      {{
+        'https://api.cloudflare.com/client/v4/zones/' ~
+        cloudflared_dns_zone_response.json.result[0].id ~
+        '/dns_records?name=' ~ (cloudflared_dns_hostname | urlencode)
+      }}
+    headers:
+      Authorization: "Bearer {{ cloudflared_dns_api_token }}"
+    return_content: true
+  check_mode: false
+  register: cloudflared_dns_records_response
+  delegate_to: localhost
+  become: false
+  no_log: true
+
+- name: Refuse replacing existing unrelated DNS records
+  ansible.builtin.assert:
+    that:
+      - cloudflared_dns_records_response.json.success | bool
+      - >-
+        cloudflared_dns_records_response.json.result | length == 0 or
+        (cloudflared_dns_records_response.json.result | length == 1 and
+         cloudflared_dns_records_response.json.result[0].type == 'CNAME' and
+         cloudflared_dns_records_response.json.result[0].content == cloudflared_tunnel_id ~ '.cfargotunnel.com' and
+         cloudflared_dns_records_response.json.result[0].proxied | bool)
+    fail_msg: "Existing DNS differs from this Tunnel; explicit migration is required"
+
+- name: Inspect Tunnel DNS ownership baseline
+  become: true
+  ansible.builtin.stat:
+    path: "{{ cloudflared_dns_fact_path }}"
+  register: cloudflared_dns_fact_stat

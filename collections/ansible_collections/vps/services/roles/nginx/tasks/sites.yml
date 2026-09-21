@@ -1,0 +1,187 @@
+# tasks/sites.yml
+---
+# =============================================================================
+# 合并站点配置字典（一次性）
+# =============================================================================
+# 在此处合并，而不是在 main.yml，因为：
+# 1. 此时所有依赖变量（ports.yml 等）已加载
+# 2. 只在需要时合并，避免不必要的开销
+# 3. 合并结果可被后续任务复用
+# =============================================================================
+- name: 合并 Nginx 站点配置字典
+  ansible.builtin.set_fact:
+    nginx_sites_config: "{{ (nginx_sites_config_global | default({})) | combine(nginx_sites_config_host | default({}), recursive=True) }}"
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+- name: Validate focused Nginx site mutation target
+  ansible.builtin.assert:
+    that:
+      - >-
+        nginx_site_target | default('') | length == 0
+        or nginx_site_target in nginx_sites_to_deploy
+    fail_msg: >-
+      nginx_site_target must be empty or name one site from the selected
+      nginx_sites_to_deploy set.
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+
+- name: Build focused Nginx site mutation list
+  ansible.builtin.set_fact:
+    nginx_sites_to_mutate: >-
+      {{
+        [nginx_site_target]
+        if nginx_site_target | default('') | length > 0
+        else nginx_sites_to_deploy
+      }}
+    nginx_sites_requiring_certificates: >-
+      {{
+        (
+          nginx_sites_config | dict2items
+          | selectattr('value.ssl', 'undefined')
+          | map(attribute='key')
+          | list
+        )
+        +
+        (
+          nginx_sites_config | dict2items
+          | selectattr('value.ssl', 'defined')
+          | selectattr('value.ssl', 'equalto', true)
+          | map(attribute='key')
+          | list
+        )
+      }}
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+- name: Ensure Nginx site configuration directories exist
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /etc/nginx/sites-available
+    - /etc/nginx/sites-enabled
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+- name: Include sites-enabled in Alpine Nginx http.d
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/nginx/http.d/sites-enabled.conf
+    content: "include /etc/nginx/sites-enabled/*.conf;\n"
+    mode: "0644"
+  when:
+    - >-
+      (ansible_facts.distribution
+      | default(ansible_distribution | default('Debian'))) == 'Alpine'
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+- name: Remove Alpine default http.d virtualhost
+  become: true
+  ansible.builtin.file:
+    path: /etc/nginx/http.d/default.conf
+    state: absent
+  when:
+    - >-
+      (ansible_facts.distribution
+      | default(ansible_distribution | default('Debian'))) == 'Alpine'
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+
+
+- name: Check certificate chains required by Nginx sites
+  become: true
+  ansible.builtin.stat:
+    path: >-
+      /etc/letsencrypt/live/{{
+        nginx_sites_config[item].ssl_cert_name
+        | default(nginx_sites_defaults.ssl_cert_name | default('msuai.top'), true)
+      }}/fullchain.pem
+    checksum_algorithm: sha1
+    get_checksum: true
+  loop: >-
+    {{
+      nginx_sites_to_mutate
+      | select('in', nginx_sites_requiring_certificates)
+      | list
+    }}
+  register: nginx_site_certificate_chains
+  tags: [deploy, services, nginx, nginx_site_config, nginx_certificate_preflight, phase4]
+
+- name: Check certificate keys required by Nginx sites
+  become: true
+  ansible.builtin.stat:
+    path: >-
+      /etc/letsencrypt/live/{{
+        nginx_sites_config[item].ssl_cert_name
+        | default(nginx_sites_defaults.ssl_cert_name | default('msuai.top'), true)
+      }}/privkey.pem
+    checksum_algorithm: sha1
+    get_checksum: true
+  loop: >-
+    {{
+      nginx_sites_to_mutate
+      | select('in', nginx_sites_requiring_certificates)
+      | list
+    }}
+  register: nginx_site_certificate_keys
+  tags: [deploy, services, nginx, nginx_site_config, nginx_certificate_preflight, phase4]
+
+- name: Assert certificates required by Nginx sites already exist
+  ansible.builtin.assert:
+    that:
+      - nginx_site_certificate_chains.results | selectattr('stat.exists', 'equalto', false) | list | length == 0
+      - nginx_site_certificate_keys.results | selectattr('stat.exists', 'equalto', false) | list | length == 0
+    fail_msg: >-
+      Nginx TLS certificate preflight failed.
+      Missing chains for sites: {{
+        nginx_site_certificate_chains.results
+        | selectattr('stat.exists', 'equalto', false)
+        | map(attribute='item') | list
+      }}.
+      Missing keys for sites: {{
+        nginx_site_certificate_keys.results
+        | selectattr('stat.exists', 'equalto', false)
+        | map(attribute='item') | list
+      }}.
+      Deploy services.certbot first, then rerun nginx.nginx_site_config.
+  tags: [deploy, services, nginx, nginx_site_config, nginx_certificate_preflight, phase4]
+
+- name: Capture focused Nginx site lifecycle baseline
+  ansible.builtin.import_tasks: site_baseline.yml
+  tags: [deploy, services, nginx, nginx_site_config, nginx_certificate_preflight, phase4]
+
+- name: 部署 Nginx 站点配置（自定义模板）
+  become: true
+  ansible.builtin.template:
+    src: "{{ item }}.conf.j2"
+    dest: "/etc/nginx/sites-available/{{ item }}.conf"
+    mode: "0644"
+  loop: "{{ nginx_sites_to_mutate }}"
+  diff: "{{ item != (singbox_domain | default('')) }}"
+  vars:
+    site_config: "{{ nginx_sites_config[item] | default({}) }}"
+  when: site_config.type | default('simple_proxy') == 'custom'
+  register: nginx_site_config_custom
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+
+- name: 部署 Nginx 站点配置（元模板）
+  become: true
+  ansible.builtin.template:
+    src: "meta_site.conf.j2"
+    dest: "/etc/nginx/sites-available/{{ item }}.conf"
+    mode: "0644"
+  loop: "{{ nginx_sites_to_mutate }}"
+  vars:
+    site_config: "{{ nginx_sites_config[item] | default({}) }}"
+  when: site_config.type | default('simple_proxy') != 'custom'
+  register: nginx_site_config_meta
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+
+- name: 启用 Nginx 站点
+  become: true
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ item }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ item }}.conf"
+    state: link
+    force: true
+  loop: "{{ nginx_sites_to_mutate }}"
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_site_enable, phase4]

@@ -1,0 +1,21 @@
+export const ShellEnvPlugin = async ({ project, client, $, directory, worktree }) => {
+  return {
+    "shell.env": async (input, output) => {
+      // --- 项目级环境变量 ---
+      output.env.AURORAOPS_ROOT = input.cwd;
+      output.env.OPENCODE_PROJECT = "AuroraOps";
+
+      // --- Ansible 标准环境变量 ---
+      output.env.ANSIBLE_FORCE_COLOR = "1";
+      output.env.ANSIBLE_NOCOWS = "1";
+
+      await client.app.log({
+        body: {
+          service: "auroraops-env",
+          level: "debug",
+          message: `Shell env configured for: ${input.cwd}`,
+        },
+      });
+    },
+  };
+};

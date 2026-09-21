@@ -1,0 +1,131 @@
+---
+- name: Create Grok Register build and persistent data directories
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ grok_register_build_dir }}"
+      mode: "0755"
+    - path: "{{ grok_register_data_dir }}"
+      mode: "0700"
+    - path: "{{ grok_register_data_dir }}/app"
+      mode: "0700"
+    - path: "{{ grok_register_data_dir }}/app/browser-home"
+      mode: "0700"
+    - path: "{{ grok_register_data_dir }}/app/logs"
+      mode: "0700"
+    - path: "{{ grok_register_data_dir }}/app/screenshots"
+      mode: "0700"
+  tags: [deploy, services, grok_register, grok_register_apply, phase5]
+
+- name: Check out the pinned complete Grok Register source
+  become: true
+  ansible.builtin.git:
+    repo: "{{ grok_register_source_repo }}"
+    dest: "{{ grok_register_source_dir }}"
+    version: "{{ grok_register_source_revision }}"
+    update: true
+    force: true
+  register: grok_register_source_checkout
+  tags: [deploy, services, grok_register, grok_register_source, phase5]
+
+- name: Read checked out Grok Register revision # noqa command-instead-of-module
+  become: true
+  ansible.builtin.command:
+    cmd: "git -C {{ grok_register_source_dir }} rev-parse HEAD"
+  register: grok_register_checked_out_revision
+  changed_when: false
+  tags: [deploy, services, grok_register, grok_register_source, phase5]
+
+- name: Assert checked out Grok Register revision is pinned
+  ansible.builtin.assert:
+    that:
+      - grok_register_checked_out_revision.stdout == grok_register_source_revision
+    fail_msg: "The checked out Grok Register source does not match its configured immutable revision."
+  tags: [deploy, services, grok_register, grok_register_source, phase5]
+
+- name: Render Grok Register runtime configuration
+  become: true
+  ansible.builtin.template:
+    src: config.json.j2
+    dest: "{{ grok_register_data_dir }}/app/config.json"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  tags: [deploy, services, grok_register, grok_register_config, phase5]
+
+- name: Record Grok Register source provenance
+  become: true
+  ansible.builtin.template:
+    src: source-provenance.json.j2
+    dest: "{{ grok_register_data_dir }}/source-provenance.json"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [deploy, services, grok_register, grok_register_source, phase5]
+
+- name: Write Grok Register persistent-state sentinel
+  become: true
+  ansible.builtin.copy:
+    content: |-
+      source={{ grok_register_source_revision }}
+      runtime={{ grok_register_runtime_dir }}
+    dest: "{{ grok_register_data_dir }}/app/{{ grok_register_persistence_sentinel }}"
+    owner: root
+    group: root
+    mode: "0600"
+  tags: [deploy, services, grok_register, grok_register_persistence, phase5]
+
+- name: Copy Grok Register container build files
+  become: true
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ grok_register_build_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - Dockerfile
+    - entrypoint.sh
+    - constraints.txt
+  tags: [deploy, services, grok_register, grok_register_image, phase5]
+
+- name: Build pinned Grok Register image with Buildx
+  become: true
+  community.docker.docker_image_build:
+    name: "{{ grok_register_image }}"
+    path: "{{ grok_register_build_dir }}"
+    args:
+      GROK_REGISTER_SOURCE_REVISION: "{{ grok_register_source_revision }}"
+    rebuild: "{{ 'always' if grok_register_force_image_rebuild | bool else 'never' }}"
+  tags: [deploy, services, grok_register, grok_register_image, phase5]
+
+- name: Deploy idle Grok Register container
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+  vars:
+    cdp_name: "{{ grok_register_container_name }}"
+    cdp_image: "{{ grok_register_image }}"
+    cdp_pull: false
+    cdp_restart_policy: unless-stopped
+    cdp_state: started
+    cdp_recreate: true
+    cdp_command: []
+    cdp_env:
+      GROK_REGISTER_RUNTIME_DIR: "{{ grok_register_runtime_dir }}"
+      HOME: "{{ grok_register_browser_home }}"
+      GROK_REGISTER_GUI_ENABLED: "{{ '1' if grok_register_gui_enabled | bool else '0' }}"
+      GROK_REGISTER_NOVNC_PORT: "{{ grok_register_novnc_port }}"
+    cdp_volumes:
+      - "{{ grok_register_data_dir }}:/data"
+    cdp_ports: "{{ ['127.0.0.1:' ~ grok_register_novnc_port ~ ':' ~ grok_register_novnc_port] if grok_register_gui_enabled | bool else [] }}"
+    cdp_shm_size: "{{ grok_register_shm_size }}"
+    cdp_memory: "{{ grok_register_memory }}"
+    cdp_memory_reservation: "{{ grok_register_memory_reservation }}"
+    cdp_cpus: "{{ grok_register_cpus }}"
+  tags: [deploy, services, grok_register, grok_register_container, phase5]

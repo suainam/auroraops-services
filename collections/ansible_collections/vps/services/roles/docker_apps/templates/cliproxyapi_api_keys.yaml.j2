@@ -1,0 +1,3 @@
+{% for api_key in docker_apps_cliproxyapi_api_keys %}
+  - {{ api_key | to_json }}
+{% endfor %}

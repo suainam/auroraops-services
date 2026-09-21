@@ -1,0 +1,15 @@
+---
+- name: Configure Redis logrotate independently of install safe mode
+  ansible.builtin.import_tasks: ../../../common/tasks/manage_optional_logrotate.yml
+  vars:
+    optional_logrotate_owner: Redis
+    optional_logrotate_enabled: "{{ redis_logrotate_enabled }}"
+    optional_logrotate_config_path: "{{ redis_logrotate_config_path }}"
+    optional_logrotate_legacy_paths: "{{ redis_logrotate_legacy_paths }}"
+    optional_logrotate_config: "{{ redis_logrotate_config }}"
+  tags:
+    - deploy
+    - applications
+    - redis
+    - redis_logrotate
+    - phase3

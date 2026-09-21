@@ -1,0 +1,29 @@
+Create a detailed implementation plan for the following AuroraOps infrastructure change.
+
+## Planning Process
+
+1. **Understand the requirement** - What needs to be done?
+2. **Search existing code** - What roles/tasks already exist?
+3. **Identify affected components** - Which roles, variables, templates are involved?
+4. **Break into phases** - Following AuroraOps phase numbering
+5. **Define verification steps** - How to confirm success at each phase
+6. **Document risks and rollback** - What could go wrong?
+
+## Output Format
+
+Produce an implementation plan with:
+- Clear phases with specific file paths
+- Dependencies between steps
+- Verification commands (`make check-`, `make verify-`)
+- Risk assessment and rollback procedures
+- Success criteria checklist
+
+## Context
+
+Refer to AGENTS.md for AuroraOps conventions:
+- Variable naming: `<role>_<resource>_global/host/exclude`
+- Tags: every task must have proper tags
+- Workflow: Sense-Plan-Act-Verify loop
+- Phases: phase0 (prereq) → phase1 (system) → phase2 (services) → phase3 (applications)
+
+Request:

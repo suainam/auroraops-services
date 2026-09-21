@@ -1,0 +1,25 @@
+Safely clean up dead code, duplicates, and unused configurations in the specified AuroraOps component.
+
+## Cleanup Tasks
+
+1. **Unused Variables** - Find defaults/vars never referenced
+2. **Orphan Files** - Templates/files not used by any task
+3. **Duplicate Code** - Consolidate repeated tasks/variables
+4. **Commented Code** - Remove dead commented-out blocks
+
+## Safety Process
+
+1. Scan for unused items (grep-based analysis)
+2. Categorize by risk level (SAFE / CAREFUL / RISKY)
+3. Remove SAFE items first, verify with `make check-<role>`
+4. Document all deletions in `docs/DELETION_LOG.md`
+
+## Rules
+
+- Never remove without understanding why it exists
+- Always run `make check-syntax` after changes
+- Always run `make check-<role>` dry-run after changes
+- Log all deletions with date and reason
+- One commit per logical removal batch
+
+Target:

@@ -1,0 +1,10 @@
+[Unit]
+Description=SillyTavern Scheduler - Stop daily at 23:00
+Documentation=https://github.com/suainam/AuroraOps
+
+[Timer]
+OnCalendar=*-*-* 23:00:00
+Persistent=false
+
+[Install]
+WantedBy=timers.target

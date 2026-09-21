@@ -1,0 +1,32 @@
+---
+# =============================================================================
+# npm Configuration and Package Management
+# =============================================================================
+# Main tag: npm
+# This file combines npm configuration and global package installation
+
+- name: Configure npm to use domestic registry
+  ansible.builtin.command:
+    cmd: npm config set registry {{ npm_registry }}
+  when: use_domestic_mirrors | default(false)
+  changed_when: true
+  tags: [deploy, services, nodejs, npm, phase3]
+
+- name: Install global npm packages (simple format)
+  community.general.npm:
+    name: "{{ item }}"
+    global: true
+    state: latest
+  loop: "{{ nodejs_packages | select('string') | list }}"
+  when: nodejs_packages | default([]) | length > 0
+  tags: [deploy, services, nodejs, npm, phase3]
+
+- name: Install global npm packages (dict format with version)
+  community.general.npm:
+    name: "{{ item.name }}"
+    version: "{{ item.version | default(omit) }}"
+    global: true
+    state: present
+  loop: "{{ nodejs_packages | select('mapping') | list }}"
+  when: nodejs_packages | default([]) | length > 0
+  tags: [deploy, services, nodejs, npm, phase3]

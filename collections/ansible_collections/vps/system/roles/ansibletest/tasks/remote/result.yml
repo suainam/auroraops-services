@@ -1,0 +1,42 @@
+---
+- name: Check PID file
+  ansible.builtin.stat:
+    path: /var/log/ansibletest/{{ ansibletest_target }}.pid
+  register: ansibletest_pid_file
+  tags: [verify, system, ansibletest, ansibletest_result, phase3]
+
+- name: Check process status
+  ansible.builtin.shell: |
+    if [ -f "/var/log/ansibletest/{{ ansibletest_target }}.pid" ]; then
+      PID=$(cat /var/log/ansibletest/{{ ansibletest_target }}.pid)
+      if ps -p $PID > /dev/null; then
+        echo "RUNNING"
+      else
+        echo "FINISHED"
+      fi
+    else
+      echo "NOT_STARTED"
+    fi
+  args:
+    executable: /bin/bash
+  register: ansibletest_process_status
+  changed_when: false
+  tags: [verify, system, ansibletest, ansibletest_result, phase3]
+
+- name: Read log file tail
+  ansible.builtin.command: tail -n 50 /var/log/ansibletest/{{ ansibletest_target }}.log
+  register: ansibletest_log_tail
+  changed_when: false
+  ignore_errors: true
+  tags: [verify, system, ansibletest, ansibletest_result, phase3]
+
+- name: Display Test Status
+  ansible.builtin.debug:
+    msg: |
+      === Ansible Test Status: {{ ansibletest_process_status.stdout }} ===
+      Target: {{ ansibletest_target }}
+      Log File: /var/log/ansibletest/{{ ansibletest_target }}.log
+
+      === Log Tail (Last 50 lines) ===
+      {{ ansibletest_log_tail.stdout | default('Log file not found') }}
+  tags: [verify, system, ansibletest, ansibletest_result, phase3]

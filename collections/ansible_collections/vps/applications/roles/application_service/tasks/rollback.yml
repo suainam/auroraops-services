@@ -1,0 +1,43 @@
+---
+- name: "[Application Service] Stop and disable service: {{ application_service_name }}"
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ application_service_name }}.service"
+    state: stopped
+    enabled: false
+  failed_when: false
+  when: application_service_name | length > 0
+  tags: [rollback, applications, application_service, phase5]
+
+- name: "[Application Service] Remove systemd service file: {{ application_service_name }}"
+  become: true
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ application_service_name }}.service"
+    state: absent
+  when: application_service_name | length > 0
+  tags: [rollback, applications, application_service, phase5]
+
+- name: "[Application Service] Remove application service user: {{ application_service_user }}"
+  become: true
+  ansible.builtin.user:
+    name: "{{ application_service_user }}"
+    state: absent
+    remove: true
+    force: true
+  failed_when: false
+  when:
+    - application_service_user | length > 0
+    - application_service_user != 'root'
+  tags: [rollback, applications, application_service, phase5]
+
+- name: "[Application Service] Remove application service group: {{ application_service_group }}"
+  become: true
+  ansible.builtin.group:
+    name: "{{ application_service_group }}"
+    state: absent
+  failed_when: false
+  when:
+    - application_service_group is not none
+    - application_service_group | length > 0
+    - application_service_group != 'root'
+  tags: [rollback, applications, application_service, phase5]

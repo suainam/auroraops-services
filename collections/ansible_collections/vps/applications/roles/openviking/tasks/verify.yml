@@ -1,0 +1,80 @@
+# =============================================================================
+# OpenViking - Verify Tasks
+# =============================================================================
+
+- name: Check if OpenViking is disabled
+  ansible.builtin.debug:
+    msg: "OpenViking verification skipped (openviking_enabled: false)"
+  when: not openviking_enabled | bool
+  tags: [verify, applications, openviking, openviking_verify, phase5]
+
+- name: Check if OpenViking CLI is installed
+  ansible.builtin.command: which openviking
+  register: openviking_cli_check
+  changed_when: false
+  failed_when: false
+  tags: [verify, applications, openviking, openviking_verify_cli, phase5]
+
+- name: Verify OpenViking CLI is installed
+  ansible.builtin.assert:
+    that:
+      - openviking_cli_check.rc == 0
+    msg: "OpenViking CLI is not installed"
+  when: openviking_enabled | bool
+  tags: [verify, applications, openviking, openviking_verify_cli, phase5]
+
+- name: Check OpenViking config file
+  ansible.builtin.stat:
+    path: "/root/.openviking/ov.conf"
+  register: openviking_config_check
+  when: openviking_enabled | bool
+  tags: [verify, applications, openviking, openviking_verify_config, phase5]
+
+- name: Verify OpenViking config file exists
+  ansible.builtin.assert:
+    that:
+      - openviking_config_check.stat.exists
+    msg: "OpenViking config file does not exist"
+  when: openviking_enabled | bool
+  tags: [verify, applications, openviking, openviking_verify_config, phase5]
+
+- name: Check OpenViking service port
+  ansible.builtin.wait_for:
+    port: "{{ openviking_port }}"
+    host: "{{ openviking_host }}"
+    delay: 1
+    timeout: 10
+    state: started
+  register: openviking_port_check
+  ignore_errors: true
+  tags: [verify, applications, openviking, openviking_verify_port, phase5]
+
+- name: Verify OpenViking service is running
+  ansible.builtin.assert:
+    that:
+      - openviking_port_check is defined
+      - openviking_port_check.state == 'started'
+    msg: "OpenViking service is not running on port {{ openviking_port }}"
+  when: openviking_enabled | bool
+  tags: [verify, applications, openviking, openviking_verify_port, phase5]
+
+- name: Test OpenViking health endpoint
+  ansible.builtin.uri:
+    url: "http://{{ openviking_host }}:{{ openviking_port }}/health"
+    method: GET
+    return_content: true
+  register: openviking_health_check
+  ignore_errors: true
+  when: openviking_enabled | bool
+  tags: [verify, applications, openviking, openviking_verify_health, phase5]
+
+- name: Verify OpenViking health endpoint
+  ansible.builtin.assert:
+    that:
+      - openviking_health_check.content | from_json | json_query('status') == 'ok'
+    msg: "OpenViking health check failed"
+  when:
+    - openviking_enabled | bool
+    - openviking_health_check is defined
+    - openviking_health_check.content is defined
+  tags: [verify, applications, openviking, openviking_verify_health, phase5]

@@ -1,0 +1,103 @@
+---
+# New API Suite - 使用 container_deployer Meta 角色部署
+
+- name: Clone Neko Key Tool source
+  become: true
+  ansible.builtin.git:
+    repo: "{{ docker_apps_neko_key_tool_repo }}"
+    dest: "/opt/dockers/newapi-suite/neko-api-key-tool-src"
+    version: main
+    depth: 1
+    force: false
+  when: docker_apps_newapi_deploy_neko | bool
+  tags: [deploy, services, docker_apps, newapi_suite, phase5]
+
+- name: Configure Neko Key Tool environment
+  become: true
+  ansible.builtin.template:
+    src: neko_env.j2
+    dest: "/opt/dockers/newapi-suite/neko-api-key-tool-src/.env"
+    mode: '0644'
+  when: docker_apps_newapi_deploy_neko | bool
+  tags: [deploy, services, docker_apps, newapi_suite, phase5]
+
+- name: Check if PostgreSQL is installed
+  ansible.builtin.stat:
+    path: /etc/postgresql
+  register: docker_apps_newapi_postgresql_installed
+  when: docker_apps_newapi_use_postgres | bool
+  tags: [deploy, services, docker_apps, newapi_suite, init_db, phase5]
+
+- name: Check if Postgres database exists
+  become: true
+  become_user: postgres
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -tAc
+      - "SELECT 1 FROM pg_database WHERE datname='{{ docker_apps_newapi_pg_db }}'"
+  register: docker_apps_newapi_db_exists
+  changed_when: false
+  failed_when: docker_apps_newapi_db_exists.rc != 0
+  when:
+    - docker_apps_newapi_use_postgres | bool
+    - docker_apps_newapi_postgresql_installed.stat.exists | default(false)
+  tags: [deploy, services, docker_apps, newapi_suite, init_db, phase5]
+
+- name: Create Postgres database
+  become: true
+  become_user: postgres
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -v
+      - ON_ERROR_STOP=1
+      - -c
+      - >-
+        CREATE DATABASE {{ docker_apps_newapi_pg_db }}
+        OWNER {{ docker_apps_newapi_pg_user }};
+  changed_when: true
+  when:
+    - docker_apps_newapi_use_postgres | bool
+    - docker_apps_newapi_postgresql_installed.stat.exists | default(false)
+    - docker_apps_newapi_db_exists.stdout | trim != '1'
+  tags: [deploy, services, docker_apps, newapi_suite, init_db, phase5]
+
+- name: Stop legacy standalone containers
+  become: true
+  community.docker.docker_container:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - new-api
+    - neko-api-key-tool
+  tags: [deploy, services, docker_apps, newapi_suite, phase5]
+
+- name: Deploy newapi-suite
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+  vars:
+    cdp_name: "newapi-suite"
+    cdp_image: "{{ newapi_image }}"
+    cdp_dirs: ["new-api/data", "new-api/logs", "neko-api-key-tool-src"]
+    cdp_compose_enabled: true
+    cdp_compose_template: "newapi_suite_compose.yml.j2"
+    cdp_compose_vars:
+      newapi_image: "{{ newapi_image }}"
+      app_port_newapi: "{{ docker_apps_app_port_newapi }}"
+      newapi_use_postgres: "{{ docker_apps_newapi_use_postgres }}"
+      newapi_pg_host: "{{ docker_apps_newapi_pg_host }}"
+      newapi_pg_port: "{{ docker_apps_newapi_pg_port }}"
+      newapi_pg_db: "{{ docker_apps_newapi_pg_db }}"
+      newapi_pg_user: "{{ docker_apps_newapi_pg_user }}"
+      newapi_pg_pass: "{{ docker_apps_newapi_pg_pass }}"
+      newapi_use_redis: "{{ docker_apps_newapi_use_redis }}"
+      newapi_redis_host: "{{ docker_apps_newapi_redis_host }}"
+      newapi_redis_port: "{{ docker_apps_newapi_redis_port }}"
+      newapi_redis_pass: "{{ docker_apps_newapi_redis_pass }}"
+      newapi_deploy_neko: "{{ docker_apps_newapi_deploy_neko }}"
+      app_port_neko_key_tool: "{{ docker_apps_app_port_neko_key_tool }}"
+      neko_key_tool_image: "{{ docker_apps_neko_key_tool_image }}"
+    cdp_compose_build: always
+    cdp_compose_pull: missing
+  tags: [deploy, services, docker_apps, newapi_suite, phase5]

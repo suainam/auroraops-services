@@ -1,0 +1,69 @@
+---
+- name: Check vim exists
+  ansible.builtin.command: which vim
+  register: _vim_which
+  failed_when: false
+  changed_when: false
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Check vim version
+  ansible.builtin.command: vim --version
+  register: _vim_version
+  failed_when: false
+  changed_when: false
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Set current username
+  ansible.builtin.set_fact:
+    vim_current_user_name: "{{ ansible_user | default(lookup('env', 'USER')) }}"
+    vim_candidate_users:
+      - root
+      - "{{ admin_user }}"
+      - "{{ ansible_user | default(lookup('env', 'USER')) }}"
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Check candidate user existence
+  ansible.builtin.shell: "id -u {{ item }} 2>/dev/null || echo not_found"
+  loop: "{{ vim_candidate_users | unique }}"
+  register: vim_user_checks
+  changed_when: false
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Build managed vim user list
+  ansible.builtin.set_fact:
+    vim_users: []
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Append existing managed vim users
+  ansible.builtin.set_fact:
+    vim_users: "{{ vim_users + [vim_user_entry] }}"
+  vars:
+    vim_user_entry:
+      name: "{{ item.item }}"
+      home: "{{ '/root' if item.item == 'root' else '/home/' ~ item.item }}"
+  loop: "{{ vim_user_checks.results }}"
+  when: item.stdout != 'not_found'
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Check existing system vimrc state
+  become: true
+  ansible.builtin.stat:
+    path: "{{ vim_system_vimrc_path }}"
+  register: vim_system_vimrc_stat
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Check existing vim baseline state
+  become: true
+  ansible.builtin.stat:
+    path: "{{ vim_baseline_fact_path }}"
+  register: vim_baseline_stat
+  tags: [deploy, personalization, vim, phase2]
+
+- name: Set vim preflight summary
+  ansible.builtin.set_fact:
+    vim_auroraops_baseline_vim:
+      installed: "{{ _vim_which.rc == 0 }}"
+      version: "{{ _vim_version.stdout_lines[0] | default('') }}"
+      managed_users: "{{ vim_users | map(attribute='name') | list }}"
+      baseline_exists: "{{ vim_baseline_stat.stat.exists | default(false) }}"
+  tags: [deploy, personalization, vim, phase2]

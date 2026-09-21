@@ -1,0 +1,263 @@
+---
+# 启用控制变量: auroraops_roles['personalization']['rclone'] (定义在 group_vars/all/roles.yml 和 host_vars/)
+# 默认: true (如需禁用，在 host_vars 中设置为 false)
+
+- name: 角色启用检查
+  ansible.builtin.debug:
+    msg: "Role rclone is disabled, skipping"
+  when: not (auroraops_roles['personalization']['rclone'] | default(true) | bool)
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 角色已启用，执行 Rclone 任务
+  ansible.builtin.debug:
+    msg: "Executing rclone role tasks"
+  when: auroraops_roles['personalization']['rclone'] | default(true) | bool
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 卸载系统自带的旧版 rclone (如果存在)
+  become: true
+  ansible.builtin.shell: |
+    if command -v apt-get >/dev/null; then
+      apt-get remove -y rclone
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: auroraops_roles['personalization']['rclone'] | default(true) | bool
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 检查 rclone 是否已安装且版本为最新
+  ansible.builtin.command: rclone version
+  register: rclone_check
+  failed_when: false
+  changed_when: false
+  when: auroraops_roles['personalization']['rclone'] | default(true) | bool
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 安装最新版 rclone (使用官方脚本)
+  become: true
+  ansible.builtin.shell: |
+    set -o pipefail
+    curl https://rclone.org/install.sh | bash
+  args:
+    executable: /bin/bash
+  environment:
+    http_proxy: "{{ rclone_http_proxy if rclone_use_proxy else '' }}"
+    https_proxy: "{{ rclone_https_proxy if rclone_use_proxy else '' }}"
+    HTTP_PROXY: "{{ rclone_http_proxy if rclone_use_proxy else '' }}"
+    HTTPS_PROXY: "{{ rclone_https_proxy if rclone_use_proxy else '' }}"
+  changed_when: true
+  when: >
+    (rclone_check.failed or "v1.7" not in rclone_check.stdout) and
+    (auroraops_roles['personalization']['rclone'] | default(true) | bool)
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 创建 rclone 配置目录
+  become: true
+  ansible.builtin.file:
+    path: /root/.config/rclone
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: auroraops_roles['personalization']['rclone'] | default(true) | bool
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 创建 rclone 用户自定义配置目录
+  become: true
+  ansible.builtin.file:
+    path: /root/.config/rclone/rclone.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: auroraops_roles['personalization']['rclone'] | default(true) | bool
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 检查现有 rclone.conf 是否存在 (Local Check)
+  ansible.builtin.stat:
+    path: /root/.config/rclone/rclone.conf
+  register: rclone_local_conf
+  when: auroraops_roles['personalization']['rclone'] | default(true) | bool
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 寻找最新的系统备份 (Backup Check)
+  ansible.builtin.shell: set -o pipefail; ls -t /opt/backups/system/system_backup_current.tar.gz 2>/dev/null | head -n 1
+  args:
+    executable: /bin/bash
+  register: rclone_system_backup
+  when: not rclone_local_conf.stat.exists and (auroraops_roles['personalization']['rclone'] | default(true) | bool)
+  failed_when: false
+  changed_when: false
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 从系统备份中提取 rclone.conf (Restore from Backup)
+  ansible.builtin.unarchive:
+    src: "{{ rclone_system_backup.stdout }}"
+    dest: /tmp
+    include:
+      - root/.config/rclone/rclone.conf
+    remote_src: true
+  when:
+    - not rclone_local_conf.stat.exists
+    - rclone_system_backup.stdout is defined
+    - rclone_system_backup.stdout != ""
+    - auroraops_roles['personalization']['rclone'] | default(true) | bool
+  failed_when: false
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 移动解压的 rclone.conf 到临时位置
+  ansible.builtin.command: mv /tmp/root/.config/rclone/rclone.conf /tmp/rclone.conf.bak
+  when:
+    - not rclone_local_conf.stat.exists
+    - rclone_system_backup.stdout is defined
+    - rclone_system_backup.stdout != ""
+    - auroraops_roles['personalization']['rclone'] | default(true) | bool
+  failed_when: false
+  changed_when: true
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 读取配置内容 (Read Config)
+  no_log: true
+  ansible.builtin.slurp:
+    src: "{{ '/root/.config/rclone/rclone.conf' if rclone_local_conf.stat.exists else '/tmp/rclone.conf.bak' }}"
+  register: rclone_conf_content
+  when:
+    - rclone_local_conf.stat.exists or (rclone_system_backup.stdout is defined and rclone_system_backup.stdout != "")
+    - auroraops_roles['personalization']['rclone'] | default(true) | bool
+  failed_when: false
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 提取潜在的 OneDrive Token
+  no_log: true
+  ansible.builtin.set_fact:
+    rclone__extracted_onedrive_token: >-
+      {{ (rclone_conf_content['content'] | b64decode
+          | regex_search('\[onedrive\][\s\S]*?token\s*=\s*(\{[^\n]+\})', '\1')
+          | first) | default('', true) }}
+  when:
+    - rclone_conf_content.content is defined
+    - "'[onedrive]' in (rclone_conf_content['content'] | b64decode)"
+    - auroraops_roles['personalization']['rclone'] | default(true) | bool
+  failed_when: false
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 验证提取的 OneDrive Token (Connect Test)
+  no_log: true
+  ansible.builtin.shell: |
+    {{ ansible_python_interpreter }} - <<'PYEOF'
+    token = {{ rclone__extracted_onedrive_token | to_json }}
+    conf = "[onedrive]\ntype = onedrive\ntoken = {tok}\ndrive_id = {{ rclone_onedrive_drive_id }}\ndrive_type = personal\n".format(tok=token)
+    open('/tmp/rclone_verify_onedrive.conf', 'w').write(conf)
+    PYEOF
+    rclone --config /tmp/rclone_verify_onedrive.conf lsd onedrive: --timeout 10s
+  args:
+    executable: /bin/bash
+  register: rclone_onedrive_verify
+  environment:
+    http_proxy: "{{ rclone_http_proxy if rclone_use_proxy else '' }}"
+    https_proxy: "{{ rclone_https_proxy if rclone_use_proxy else '' }}"
+    HTTP_PROXY: "{{ rclone_http_proxy if rclone_use_proxy else '' }}"
+    HTTPS_PROXY: "{{ rclone_https_proxy if rclone_use_proxy else '' }}"
+  when: rclone__extracted_onedrive_token | default('') | length > 0 and (auroraops_roles['personalization']['rclone'] | default(true) | bool)
+  failed_when: false
+  changed_when: false
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 应用有效的 OneDrive Token (否则使用 Vault 默认值)
+  no_log: true
+  ansible.builtin.set_fact:
+    rclone_onedrive_token: "{{ rclone__extracted_onedrive_token }}"
+  when:
+    - rclone__extracted_onedrive_token | default('') | length > 0
+    - rclone_onedrive_verify.rc == 0
+    - auroraops_roles['personalization']['rclone'] | default(true) | bool
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 警告 OneDrive Token 失效 (如果验证失败)
+  ansible.builtin.debug:
+    msg: "Warning: Local/Backup OneDrive token is invalid. Falling back to Vault default."
+  when:
+    - rclone__extracted_onedrive_token | default('') | length > 0
+    - rclone_onedrive_verify.rc != 0
+    - auroraops_roles['personalization']['rclone'] | default(true) | bool
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 提取潜在的 GDrive Token
+  no_log: true
+  ansible.builtin.set_fact:
+    rclone__extracted_gdrive_token: >-
+      {{ (rclone_conf_content['content'] | b64decode
+          | regex_search('\[gdrive\][\s\S]*?token\s*=\s*(\{[^\n]+\})', '\1')
+          | first) | default('', true) }}
+  when:
+    - rclone_conf_content.content is defined
+    - "'[gdrive]' in (rclone_conf_content['content'] | b64decode)"
+    - auroraops_roles['personalization']['rclone'] | default(true) | bool
+  failed_when: false
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 验证提取的 GDrive Token (Connect Test)
+  no_log: true
+  ansible.builtin.shell: |
+    {{ ansible_python_interpreter }} - <<'PYEOF'
+    token = {{ rclone__extracted_gdrive_token | to_json }}
+    conf = "[gdrive]\ntype = drive\nscope = drive\ntoken = {tok}\nuse_trash = false\n".format(tok=token)
+    open('/tmp/rclone_verify_gdrive.conf', 'w').write(conf)
+    PYEOF
+    rclone --config /tmp/rclone_verify_gdrive.conf lsd gdrive: --timeout 10s
+  args:
+    executable: /bin/bash
+  register: rclone_gdrive_verify
+  environment:
+    http_proxy: "{{ rclone_http_proxy if rclone_use_proxy else '' }}"
+    https_proxy: "{{ rclone_https_proxy if rclone_use_proxy else '' }}"
+    HTTP_PROXY: "{{ rclone_http_proxy if rclone_use_proxy else '' }}"
+    HTTPS_PROXY: "{{ rclone_https_proxy if rclone_use_proxy else '' }}"
+  when: rclone__extracted_gdrive_token | default('') | length > 0 and (auroraops_roles['personalization']['rclone'] | default(true) | bool)
+  failed_when: false
+  changed_when: false
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 应用有效的 GDrive Token (否则使用 Vault 默认值)
+  no_log: true
+  ansible.builtin.set_fact:
+    rclone_gdrive_token: "{{ rclone__extracted_gdrive_token }}"
+  when:
+    - rclone__extracted_gdrive_token | default('') | length > 0
+    - rclone_gdrive_verify.rc == 0
+    - auroraops_roles['personalization']['rclone'] | default(true) | bool
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 警告 GDrive Token 失效 (如果验证失败)
+  ansible.builtin.debug:
+    msg: "Warning: Local/Backup GDrive token is invalid. Falling back to Vault default."
+  when:
+    - rclone__extracted_gdrive_token | default('') | length > 0
+    - rclone_gdrive_verify.rc != 0
+    - auroraops_roles['personalization']['rclone'] | default(true) | bool
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 清理临时验证文件
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/rclone.conf.bak
+    - /tmp/rclone_verify_onedrive.conf
+    - /tmp/rclone_verify_gdrive.conf
+  failed_when: false
+  when: auroraops_roles['personalization']['rclone'] | default(true) | bool
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: 部署 rclone.conf 基础结构
+  become: true
+  no_log: true
+  ansible.builtin.template:
+    src: rclone.conf.j2
+    dest: /root/.config/rclone/rclone.conf
+    owner: root
+    group: root
+    mode: "0600"
+  when: auroraops_roles['personalization']['rclone'] | default(true) | bool
+  tags: [deploy, personalization, rclone, phase2]

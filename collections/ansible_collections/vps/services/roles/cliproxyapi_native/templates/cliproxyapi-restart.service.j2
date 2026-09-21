@@ -1,0 +1,7 @@
+[Unit]
+Description=Restart CLIProxyAPI native service to release accumulated memory
+Documentation=https://github.com/suainam/AuroraOps
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl restart cliproxyapi-native.service

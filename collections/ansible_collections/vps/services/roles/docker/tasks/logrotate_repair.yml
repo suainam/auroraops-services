@@ -1,0 +1,9 @@
+---
+- name: Repair Docker logrotate fragments without touching Docker service state
+  ansible.builtin.include_role:
+    name: vps.system.logrotate
+    tasks_from: service_configs
+  vars:
+    logrotate_configs_to_deploy: "{{ docker_logrotate_configs }}"
+    logrotate_legacy_configs_to_remove: []
+  tags: [repair, services, docker, logrotate, phase3]

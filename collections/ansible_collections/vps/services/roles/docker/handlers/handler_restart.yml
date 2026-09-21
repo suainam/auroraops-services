@@ -1,0 +1,23 @@
+---
+- name: Detect systemd for handler
+  ansible.builtin.command: pidof systemd
+  register: docker__handler_systemd
+  changed_when: false
+  failed_when: false
+  when: docker_auroraops_has_systemd is not defined
+
+- name: Restart Docker via systemd
+  ansible.builtin.service:
+    name: docker
+    state: restarted
+  when: (docker_auroraops_has_systemd | default(docker__handler_systemd.rc | default(1) == 0)) | bool
+
+- name: Restart Docker manually (non-systemd)
+  ansible.builtin.shell: |
+    pkill dockerd || true
+    sleep 2
+    nohup dockerd > /var/log/dockerd.log 2>&1 &
+    sleep 3
+    docker info > /dev/null 2>&1
+  changed_when: true
+  when: not ((docker_auroraops_has_systemd | default(docker__handler_systemd.rc | default(1) == 0)) | bool)

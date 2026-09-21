@@ -1,0 +1,79 @@
+---
+- name: Validate ds2api secrets are Vault-backed
+  ansible.builtin.assert:
+    that:
+      - vault_ds2api_admin_key is defined
+      - vault_ds2api_admin_key | string | length > 0
+      - docker_apps_ds2api_admin_key | string == vault_ds2api_admin_key | string
+      - docker_apps_ds2api_config == (vault_ds2api_config | default({}))
+    fail_msg: >-
+      DS2API admin key and config must come from Ansible Vault.
+  no_log: true
+  tags: [deploy, services, docker_apps, ds2api, phase5]
+
+- name: Ensure ds2api data directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ docker_apps_ds2api_data_dir }}"
+    state: directory
+    owner: "999"
+    group: "999"
+    mode: "0750"
+  tags: [deploy, services, docker_apps, ds2api, phase5]
+
+- name: Seed ds2api config once
+  become: true
+  ansible.builtin.template:
+    src: ds2api_config.json.j2
+    dest: "{{ docker_apps_ds2api_data_dir }}/config.json"
+    owner: "999"
+    group: "999"
+    mode: "0600"
+    force: false
+  no_log: true
+  diff: false
+  tags: [deploy, services, docker_apps, ds2api, phase5]
+
+- name: Deploy ds2api
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+    apply:
+      tags:
+        - ds2api
+  vars:
+    cdp_name: "ds2api"
+    cdp_image: "{{ ds2api_image }}"
+    cdp_pull: "{{ docker_apps_ds2api_pull | default(false) | bool }}"
+    container_deployer_cdp_pull: "{{ docker_apps_ds2api_pull | default(false) | bool }}"
+    cdp_dirs: ["data"]
+    cdp_dir_owner: "999"
+    cdp_dir_group: "999"
+    cdp_dir_mode: "0750"
+    cdp_memory: "{{ docker_apps_ds2api_memory }}"
+    cdp_cpus: "1.0"
+    cdp_memory_reservation: "{{ docker_apps_ds2api_memory_reservation }}"
+    cdp_restart_policy: "unless-stopped"
+    cdp_networks: [{name: "sweb"}]
+    cdp_ports:
+      - "127.0.0.1:{{ docker_apps_app_port_ds2api }}:5001"
+    cdp_volumes:
+      - "{{ docker_apps_ds2api_data_dir }}:/data"
+    cdp_env:
+      TZ: "Asia/Shanghai"
+      PORT: "5001"
+      LOG_LEVEL: "WARN"
+      DS2API_ADMIN_KEY: "{{ docker_apps_ds2api_admin_key }}"
+      DS2API_CONFIG_PATH: "/data/config.json"
+      DS2API_CHAT_HISTORY_PATH: "/data/chat_history.json"
+    cdp_healthcheck:
+      test:
+        - CMD
+        - /usr/local/bin/busybox
+        - wget
+        - -qO-
+        - http://127.0.0.1:5001/healthz
+      interval: 1800s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+  tags: [deploy, services, docker_apps, ds2api, phase5]

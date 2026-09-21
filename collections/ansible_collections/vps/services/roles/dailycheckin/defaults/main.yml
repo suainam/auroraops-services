@@ -1,0 +1,17 @@
+---
+dailycheckin_config_dir: "/opt/dailycheckin"
+dailycheckin_docker_image: >-
+  ghcr.io/suainam/dailycheckin:sha-f63661180f45d98da7793a9cab7021b64544e067
+dailycheckin_local_config_src: "{{ lookup('env', 'AURORAOPS_PRIMARY_CHECKOUT') }}/secrets/dailycheckin/config.json"
+
+# GitHub Actions 是默认签到 Runner；AuroraOps 仅保留受管的手工执行入口。
+dailycheckin_timer_enabled: false
+
+# 运行时间仅在显式启用 Timer 时生效。
+dailycheckin_timer_on_calendar: "*-*-* 00,17:00:01"
+# 随机延迟，避免每天同一秒签到被风控 (Jitter)
+dailycheckin_timer_randomized_delay: "20m"
+
+# 一次性签到必须有明确上限，避免 service 长时间 active 阻塞 timer
+dailycheckin_service_timeout: "20m"
+dailycheckin_service_timeout_stop_sec: "30s"

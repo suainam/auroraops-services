@@ -1,0 +1,75 @@
+[Unit]
+Description={{ application_service_description }}
+{% if application_service_dependencies -%}
+After={{ application_service_dependencies | join(' ') }}
+{% endif -%}
+{% if application_service_requires -%}
+Requires={{ application_service_requires | join(' ') }}
+{% endif %}
+
+[Service]
+Type={{ application_service_type }}
+{% if application_service_timeout -%}
+TimeoutSec={{ application_service_timeout }}
+{% endif -%}
+{% if application_service_timeout_stop_sec -%}
+TimeoutStopSec={{ application_service_timeout_stop_sec }}
+{% endif -%}
+User={{ application_service_user | default('root', true) }}
+{% if application_service_group -%}
+Group={{ application_service_group }}
+{% endif -%}
+{% if application_service_working_directory -%}
+WorkingDirectory={{ application_service_working_directory }}
+{% endif %}
+{% if application_service_environment_file -%}
+EnvironmentFile={{ application_service_environment_file }}
+{% endif %}
+{% if application_service_exec_pre -%}
+ExecStartPre={{ application_service_exec_pre }}
+{% endif -%}
+ExecStart={{ application_service_exec_start }}
+{% if application_service_exec_post -%}
+ExecStartPost={{ application_service_exec_post }}
+{% endif -%}
+{% if application_service_exec_stop -%}
+ExecStop={{ application_service_exec_stop }}
+{% endif -%}
+{% if application_service_exec_stop_post -%}
+ExecStopPost={{ application_service_exec_stop_post }}
+{% endif -%}
+{% if application_service_exec_reload -%}
+ExecReload={{ application_service_exec_reload }}
+{% endif -%}
+Restart={{ application_service_restart }}
+{% if application_service_restart_sec -%}
+RestartSec={{ application_service_restart_sec }}
+{% endif -%}
+{% if application_service_kill_mode -%}
+KillMode={{ application_service_kill_mode }}
+{% endif -%}
+{% if application_service_kill_signal -%}
+KillSignal={{ application_service_kill_signal }}
+{% endif -%}
+{% if application_service_standard_output -%}
+StandardOutput={{ application_service_standard_output }}
+{% endif -%}
+{% if application_service_standard_error -%}
+StandardError={{ application_service_standard_error }}
+{% endif -%}
+{% if application_service_environment is mapping -%}
+{% for key, value in application_service_environment.items() -%}
+{% if value -%}
+Environment="{{ key }}={{ value }}"
+{% endif -%}
+{% endfor -%}
+{% elif application_service_environment is iterable and application_service_environment is not string -%}
+{% for env_var in application_service_environment -%}
+{% if env_var -%}
+Environment="{{ env_var }}"
+{% endif -%}
+{% endfor -%}
+{% endif %}
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+---
+- name: Create soft link for qmd config
+  ansible.builtin.file:
+    src: "{{ qmd_local_dir }}"
+    dest: "{{ qmd_services_dir }}"
+    state: link
+    owner: "{{ qmd_services_user }}"
+    group: "{{ qmd_services_group }}"
+    force: true
+  tags: [deploy, services, qmd, qmd_links, phase3]

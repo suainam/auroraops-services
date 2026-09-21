@@ -1,0 +1,16 @@
+---
+namespace: vps
+name: personalization
+version: 1.1.0
+readme: README.md
+authors:
+  - suai
+description: User environment and personalization roles collection
+license:
+  - MIT
+repository: https://github.com/suainam/AuroraOps
+tags:
+  - ansible
+  - linux
+  - tools
+dependencies: {}

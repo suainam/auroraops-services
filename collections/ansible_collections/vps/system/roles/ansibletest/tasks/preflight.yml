@@ -1,0 +1,44 @@
+---
+- name: Locate Docker CLI for AnsibleTest
+  ansible.builtin.command: which docker
+  register: ansibletest_docker_cli_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: ansibletest_use_docker | bool
+  tags:
+    - deploy
+    - system
+    - ansibletest
+    - ansibletest_preflight
+    - phase3
+
+- name: Check Docker daemon availability for AnsibleTest
+  become: true
+  community.docker.docker_host_info:
+  register: ansibletest_docker_host_info
+  changed_when: false
+  failed_when: false
+  when: ansibletest_use_docker | bool
+  tags:
+    - deploy
+    - system
+    - ansibletest
+    - ansibletest_preflight
+    - phase3
+
+- name: Assert Docker capability is available for AnsibleTest
+  ansible.builtin.assert:
+    that:
+      - ansibletest_docker_cli_check.rc == 0
+      - ansibletest_docker_host_info.can_talk_to_docker | default(false)
+    fail_msg: >-
+      AnsibleTest Docker mode requires the Docker CLI and a reachable daemon.
+      Deploy services.docker first.
+  when: ansibletest_use_docker | bool
+  tags:
+    - deploy
+    - system
+    - ansibletest
+    - ansibletest_preflight
+    - phase3

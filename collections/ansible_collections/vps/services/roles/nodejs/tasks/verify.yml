@@ -1,0 +1,480 @@
+---
+# =============================================================================
+# Node.js Verification Tasks
+# =============================================================================
+
+- name: 合并 Nodejs Apps 应用列表
+  ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
+  vars:
+    merge_var_name: nodejs_apps
+  tags:
+    - verify
+    - services
+    - nodejs
+    - phase3
+
+- name: "[nodejs] Check if node is installed"
+  ansible.builtin.command: node --version
+  register: nodejs_version_check
+  failed_when: nodejs_version_check.rc != 0
+  changed_when: false
+  tags: [verify, services, nodejs, nodejs_install, phase3]
+
+- name: "[nodejs] Display node version"
+  ansible.builtin.debug:
+    msg: "Node.js version: {{ nodejs_version_check.stdout }}"
+  tags: [verify, services, nodejs, nodejs_install, phase3]
+
+# =============================================================================
+# Global npm Packages Verification
+# =============================================================================
+- name: Verify npm packages
+  when: "'npm' in nodejs_apps"
+  tags: [verify, services, nodejs, phase3]
+  block:
+    - name: "[nodejs] Check if npm is installed"
+      ansible.builtin.command: npm --version
+      register: nodejs_npm_version_check
+      failed_when: nodejs_npm_version_check.rc != 0
+      changed_when: false
+      tags: [verify, services, nodejs, npm, phase3]
+
+    - name: "[nodejs] Display npm version"
+      ansible.builtin.debug:
+        msg: "npm version: {{ nodejs_npm_version_check.stdout }}"
+      tags: [verify, services, nodejs, npm, phase3]
+
+    - name: "[nodejs] Get list of global npm packages"
+      ansible.builtin.command: npm list -g --depth=0 --json
+      register: nodejs_npm_global_list
+      changed_when: false
+      failed_when: false
+      tags: [verify, services, nodejs, npm, phase3]
+
+    - name: "[nodejs] Parse global npm packages"
+      ansible.builtin.set_fact:
+        nodejs_installed_packages: "{{ (nodejs_npm_global_list.stdout | from_json).dependencies | default({}) | list }}"
+      when: nodejs_npm_global_list.rc == 0
+      tags: [verify, services, nodejs, npm, phase3]
+
+    - name: "[nodejs] Display installed global packages"
+      ansible.builtin.debug:
+        msg: "Installed global npm packages: {{ nodejs_installed_packages | default([]) | join(', ') }}"
+      when: nodejs_installed_packages is defined
+      tags: [verify, services, nodejs, npm, phase3]
+
+# =============================================================================
+# Bitwarden CLI Verification
+# =============================================================================
+- name: Verify Bitwarden CLI
+  when: "'bitwarden' in nodejs_apps"
+  tags: [verify, services, nodejs, phase3]
+  block:
+    - name: "[bw] Check if Bitwarden CLI is installed"
+      ansible.builtin.command: bw --version
+      register: nodejs_bw_version_check
+      changed_when: false
+      failed_when: false
+      tags: [verify, services, nodejs, bitwarden, phase3]
+
+    - name: "[bw] Display Bitwarden CLI version"
+      ansible.builtin.debug:
+        msg: "Bitwarden CLI version: {{ nodejs_bw_version_check.stdout }}"
+      when: nodejs_bw_version_check.rc == 0
+      tags: [verify, services, nodejs, bitwarden, phase3]
+
+    - name: "[bw] Bitwarden CLI not installed"
+      ansible.builtin.debug:
+        msg: "Bitwarden CLI is not installed"
+      when: nodejs_bw_version_check.rc != 0
+      tags: [verify, services, nodejs, bitwarden, phase3]
+
+    - name: "[bw] Check login status"
+      ansible.builtin.command: bw status
+      register: nodejs_bw_status_check
+      changed_when: false
+      failed_when: false
+      when: nodejs_bw_version_check.rc == 0
+      tags: [verify, services, nodejs, bitwarden, phase3]
+
+    - name: "[bw] Parse and display status"
+      ansible.builtin.debug:
+        msg: >-
+          Bitwarden CLI status: {{ (nodejs_bw_status_check.stdout | default('{}') | from_json).status | default('unknown') }}
+          | Server: {{ (nodejs_bw_status_check.stdout | default('{}') | from_json).serverUrl | default('not configured') }}
+      when:
+        - nodejs_bw_version_check.rc == 0
+        - nodejs_bw_status_check.rc == 0
+        - nodejs_bw_status_check.stdout | length > 0
+      tags: [verify, services, nodejs, bitwarden, phase3]
+
+    - name: "[bw] Check session file exists"
+      ansible.builtin.stat:
+        path: "{{ nodejs_bw_session_file }}"
+      register: nodejs_bw_session_file_check
+      when: nodejs_bw_version_check.rc == 0
+      tags: [verify, services, nodejs, bitwarden, phase3]
+
+    - name: "[bw] Display session file status"
+      ansible.builtin.debug:
+        msg: "Session file {{ nodejs_bw_session_file }}: {{ 'EXISTS' if nodejs_bw_session_file_check.stat.exists else 'NOT FOUND' }}"
+      when:
+        - nodejs_bw_version_check.rc == 0
+        - nodejs_bw_session_file_check.stat is defined
+      tags: [verify, services, nodejs, bitwarden, phase3]
+
+    - name: "[bw] Test vault access with session"
+      ansible.builtin.shell: |
+        set -o pipefail
+        source {{ nodejs_bw_session_file }} && bw list items --search test 2>/dev/null | wc -c
+      args:
+        executable: /bin/bash
+      register: nodejs_bw_vault_test
+      changed_when: false
+      failed_when: false
+      when:
+        - nodejs_bw_version_check.rc == 0
+        - nodejs_bw_session_file_check.stat.exists | default(false)
+      tags: [verify, services, nodejs, bitwarden, phase3]
+
+    - name: "[bw] Display vault access status"
+      ansible.builtin.debug:
+        msg: "Vault access: {{ 'OK' if nodejs_bw_vault_test.rc == 0 else 'FAILED - run make deploy-services.nodejs.nodejs_bw to fix' }}"
+      when:
+        - nodejs_bw_version_check.rc == 0
+        - nodejs_bw_vault_test is defined
+        - nodejs_bw_vault_test.rc is defined
+      tags: [verify, services, nodejs, bitwarden, phase3]
+
+    - name: "[bw] Test vaultwarden item retrieval"
+      ansible.builtin.shell: |
+        source {{ nodejs_bw_session_file }} && bw get password "{{ nodejs_bw_test_item }}"
+      args:
+        executable: /bin/bash
+      register: nodejs_bw_lookup_test
+      changed_when: false
+      failed_when: false
+      when:
+        - nodejs_bw_version_check.rc == 0
+        - nodejs_bw_session_file_check.stat.exists | default(false)
+        - nodejs_bw_test_item is defined
+        - nodejs_bw_test_item | length > 0
+      tags: [verify, services, nodejs, bitwarden, phase3]
+
+    - name: "[bw] Display lookup test status"
+      ansible.builtin.debug:
+        msg: >-
+          Vaultwarden lookup: {{ 'OK (retrieved ' ~ (nodejs_bw_lookup_test.stdout | default('') | length) ~ ' chars)'
+          if (nodejs_bw_lookup_test.rc | default(1) == 0 and nodejs_bw_lookup_test.stdout | default('') | length > 0)
+          else 'FAILED (rc=' ~ (nodejs_bw_lookup_test.rc | default(-1)) ~ ') - '
+          ~ (nodejs_bw_lookup_test.stderr | default('no error output')) }}
+      when:
+        - nodejs_bw_version_check.rc == 0
+        - nodejs_bw_test_item is defined
+        - nodejs_bw_test_item | length > 0
+      tags: [verify, services, nodejs, bitwarden, phase3]
+
+# =============================================================================
+# OpenCode Verification
+# =============================================================================
+- name: Verify OpenCode
+  when: "'opencode' in nodejs_apps"
+  tags: [verify, services, nodejs, phase3]
+  block:
+    - name: "[opencode] Check if OpenCode CLI is installed"
+      ansible.builtin.command: opencode --version
+      register: nodejs_opencode_version_check
+      changed_when: false
+      failed_when: false
+      tags: [verify, services, nodejs, opencode, phase3]
+
+    - name: "[opencode] Display OpenCode version"
+      ansible.builtin.debug:
+        msg: "OpenCode version: {{ nodejs_opencode_version_check.stdout }}"
+      when: nodejs_opencode_version_check.rc == 0
+      tags: [verify, services, nodejs, opencode, phase3]
+
+    - name: "[opencode] OpenCode not installed"
+      ansible.builtin.debug:
+        msg: "OpenCode is not installed"
+      when: nodejs_opencode_version_check.rc != 0
+      tags: [verify, services, nodejs, opencode, phase3]
+
+    - name: "[opencode] Check root OpenCode config file"
+      ansible.builtin.stat:
+        path: "{{ nodejs_opencode_config_dir_root }}/opencode.json"
+      register: nodejs_opencode_config_root_check
+      when: nodejs_opencode_version_check.rc == 0
+      tags: [verify, services, nodejs, opencode, phase3]
+
+    - name: "[opencode] Check admin OpenCode config file"
+      ansible.builtin.stat:
+        path: "{{ nodejs_opencode_config_dir_admin }}/opencode.json"
+      register: nodejs_opencode_config_admin_check
+      when:
+        - nodejs_opencode_version_check.rc == 0
+        - admin_user is defined
+      tags: [verify, services, nodejs, opencode, phase3]
+
+    - name: "[opencode] Display config file status"
+      ansible.builtin.debug:
+        msg:
+          - "Root config: {{ 'EXISTS' if nodejs_opencode_config_root_check.stat.exists else 'NOT FOUND' }}"
+          - "Admin config: {{ 'EXISTS' if nodejs_opencode_config_admin_check.stat.exists | default(false) else 'NOT FOUND' }}"
+      when: nodejs_opencode_version_check.rc == 0
+      tags: [verify, services, nodejs, opencode, phase3]
+
+    # Server mode checks inside block
+    - name: "[opencode-server] Check if systemd service exists"
+      ansible.builtin.stat:
+        path: "/etc/systemd/system/{{ nodejs_opencode_server_service_name }}.service"
+      register: nodejs_opencode_service_file_check
+      when: nodejs_opencode_server_enabled | bool
+      tags: [verify, services, nodejs, opencode, phase3]
+
+    - name: "[opencode-server] Get service status"
+      ansible.builtin.systemd:
+        name: "{{ nodejs_opencode_server_service_name }}"
+      register: nodejs_opencode_service_status
+      when:
+        - nodejs_opencode_server_enabled | bool
+        - nodejs_opencode_service_file_check.stat.exists | default(false)
+      tags: [verify, services, nodejs, opencode, phase3]
+
+    - name: "[opencode-server] Display service status"
+      ansible.builtin.debug:
+        msg:
+          - "Service: {{ nodejs_opencode_server_service_name }}"
+          - "Status: {{ nodejs_opencode_service_status.status.ActiveState | default('unknown') }}"
+          - "Enabled: {{ nodejs_opencode_service_status.status.UnitFileState | default('unknown') }}"
+          - "PID: {{ nodejs_opencode_service_status.status.MainPID | default('N/A') }}"
+      when:
+        - nodejs_opencode_server_enabled | bool
+        - nodejs_opencode_service_status.status is defined
+      tags: [verify, services, nodejs, opencode, phase3]
+
+    - name: "[opencode-server] Check if port is listening"
+      ansible.builtin.wait_for:
+        host: "{{ nodejs_opencode_server_hostname }}"
+        port: "{{ nodejs_opencode_server_port }}"
+        timeout: 5
+        state: started
+      register: nodejs_opencode_port_check
+      failed_when: false
+      when:
+        - nodejs_opencode_server_enabled | bool
+        - nodejs_opencode_service_status.status.ActiveState | default('') == 'active'
+      tags: [verify, services, nodejs, opencode, phase3]
+
+    - name: "[opencode-server] Display port status"
+      ansible.builtin.debug:
+        msg: "Port {{ nodejs_opencode_server_port }}: {{ 'LISTENING' if nodejs_opencode_port_check is succeeded else 'NOT LISTENING' }}"
+      when:
+        - nodejs_opencode_server_enabled | bool
+        - nodejs_opencode_port_check is defined
+      tags: [verify, services, nodejs, opencode, phase3]
+
+    - name: "[opencode-server] Test health endpoint"
+      ansible.builtin.uri:
+        url: "http://{{ nodejs_opencode_server_hostname }}:{{ nodejs_opencode_server_port }}/global/health"
+        method: GET
+        timeout: 5
+      register: nodejs_opencode_health_check
+      failed_when: false
+      when:
+        - nodejs_opencode_server_enabled | bool
+        - nodejs_opencode_port_check is succeeded
+      tags: [verify, services, nodejs, opencode, phase3]
+
+    - name: "[opencode-server] Display health check result"
+      ansible.builtin.debug:
+        msg:
+          - "Health endpoint: {{ 'OK' if nodejs_opencode_health_check.status | default(0) == 200 else 'FAILED' }}"
+          - "Status code: {{ nodejs_opencode_health_check.status | default('N/A') }}"
+          - "Response: {{ nodejs_opencode_health_check.json | default('N/A') }}"
+      when:
+        - nodejs_opencode_server_enabled | bool
+        - nodejs_opencode_health_check is defined
+      tags: [verify, services, nodejs, opencode, phase3]
+
+# =============================================================================
+# Hermes Verification Tasks
+# =============================================================================
+- name: Verify Hermes
+  when: "'hermes' in nodejs_apps"
+  tags: [verify, services, nodejs, phase3]
+  block:
+    - name: Load Hermes defaults for verify
+      ansible.builtin.include_vars:
+        file: "{{ role_path }}/defaults/hermes.yml"
+      tags: [verify, services, nodejs, hermes, phase3]
+
+    - name: "[hermes] Check if hermes CLI is installed"
+      ansible.builtin.command: hermes --version
+      register: nodejs_hermes_version_check
+      changed_when: false
+      failed_when: false
+      tags: [verify, services, nodejs, hermes, phase3]
+
+    - name: "[hermes] Display hermes version"
+      ansible.builtin.debug:
+        msg: "Hermes version: {{ nodejs_hermes_version_check.stdout }}"
+      when: nodejs_hermes_version_check.rc == 0
+      tags: [verify, services, nodejs, hermes, phase3]
+
+    - name: "[hermes] Hermes not installed"
+      ansible.builtin.debug:
+        msg: "Hermes CLI is not installed"
+      when: nodejs_hermes_version_check.rc != 0
+      tags: [verify, services, nodejs, hermes, phase3]
+
+    - name: "[hermes] Check config.yaml exists"
+      ansible.builtin.stat:
+        path: "{{ nodejs_hermes_home }}/config.yaml"
+      register: nodejs_hermes_config_check
+      tags: [verify, services, nodejs, hermes, phase3]
+
+    - name: "[hermes] Display config file status"
+      ansible.builtin.debug:
+        msg: "Config file {{ nodejs_hermes_home }}/config.yaml: {{ 'EXISTS' if nodejs_hermes_config_check.stat.exists else 'NOT FOUND' }}"
+      tags: [verify, services, nodejs, hermes, phase3]
+
+    - name: "[hermes] Check .env exists"
+      ansible.builtin.stat:
+        path: "{{ nodejs_hermes_home }}/.env"
+      register: nodejs_hermes_env_check
+      tags: [verify, services, nodejs, hermes, phase3]
+
+    - name: "[hermes] Display .env status"
+      ansible.builtin.debug:
+        msg: "Env file {{ nodejs_hermes_home }}/.env: {{ 'EXISTS' if nodejs_hermes_env_check.stat.exists else 'NOT FOUND' }}"
+      tags: [verify, services, nodejs, hermes, phase3]
+
+    - name: "[hermes] Run hermes doctor"
+      ansible.builtin.command: hermes doctor
+      register: nodejs_hermes_doctor_check
+      changed_when: false
+      ignore_errors: true
+      tags: [verify, services, nodejs, hermes, phase3]
+
+    - name: "[hermes] Display doctor results"
+      ansible.builtin.debug:
+        var: nodejs_hermes_doctor_check.stdout_lines
+      when: not nodejs_hermes_doctor_check.failed
+      tags: [verify, services, nodejs, hermes, phase3]
+
+    - name: "[hermes-gateway] Check if systemd service exists"
+      ansible.builtin.stat:
+        path: /etc/systemd/system/hermes-gateway.service
+      register: nodejs_hermes_service_file_check
+      tags: [verify, services, nodejs, hermes_gateway, phase3]
+
+    - name: "[hermes-gateway] Get service status"
+      ansible.builtin.systemd:
+        name: hermes-gateway
+      register: nodejs_hermes_service_status
+      when: nodejs_hermes_service_file_check.stat.exists
+      tags: [verify, services, nodejs, hermes_gateway, phase3]
+
+    - name: "[hermes-gateway] Display service status"
+      ansible.builtin.debug:
+        msg:
+          - "Service: hermes-gateway"
+          - "Status: {{ nodejs_hermes_service_status.status.ActiveState | default('not found') }}"
+          - "Enabled: {{ nodejs_hermes_service_status.status.UnitFileState | default('not found') }}"
+          - "PID: {{ nodejs_hermes_service_status.status.MainPID | default('N/A') }}"
+      when: nodejs_hermes_service_status.status is defined
+      tags: [verify, services, nodejs, hermes_gateway, phase3]
+
+# =============================================================================
+# OpenClaw Verification Tasks
+# =============================================================================
+- name: Verify OpenClaw
+  when: "'openclaw' in nodejs_apps"
+  tags: [verify, services, nodejs, phase3]
+  block:
+    - name: Load OpenClaw defaults for verify
+      ansible.builtin.include_vars:
+        file: "{{ role_path }}/defaults/openclaw.yml"
+      tags: [verify, services, nodejs, openclaw, phase3]
+
+    - name: Verify openclaw CLI installation
+      ansible.builtin.command: openclaw --version
+      register: nodejs_openclaw_version
+      changed_when: false
+      tags: [verify, services, nodejs, openclaw, phase3]
+
+    - name: Check openclaw version output
+      ansible.builtin.debug:
+        msg: "OpenClaw version: {{ nodejs_openclaw_version.stdout }}"
+      tags: [verify, services, nodejs, openclaw, phase3]
+
+    - name: Verify openclaw agents directory structure
+      ansible.builtin.stat:
+        path: "{{ nodejs_openclaw_home }}/agents/main/agent"
+      register: nodejs_openclaw_agents_dir
+      tags: [verify, services, nodejs, openclaw, phase3]
+
+    - name: Assert agents directory exists
+      ansible.builtin.assert:
+        that:
+          - nodejs_openclaw_agents_dir.stat.exists
+          - nodejs_openclaw_agents_dir.stat.isdir
+        msg: "OpenClaw agents directory does not exist"
+      tags: [verify, services, nodejs, openclaw, phase3]
+
+    - name: Verify openclaw workspace directory
+      ansible.builtin.stat:
+        path: "{{ nodejs_openclaw_agent_workspace }}"
+      register: nodejs_openclaw_workspace_check
+      tags: [verify, services, nodejs, openclaw, phase3]
+
+    - name: Assert workspace directory exists
+      ansible.builtin.assert:
+        that:
+          - nodejs_openclaw_workspace_check.stat.exists
+          - nodejs_openclaw_workspace_check.stat.isdir
+        msg: "OpenClaw workspace directory does not exist"
+      tags: [verify, services, nodejs, openclaw, phase3]
+
+    - name: Check configuration file syntax (tolerant JSON parse)
+      ansible.builtin.command: >
+        python3 -c "import json; json.load(open('{{ nodejs_openclaw_home }}/openclaw.json'))"
+      register: nodejs_openclaw_json_check
+      changed_when: false
+      failed_when: false
+      tags: [verify, services, nodejs, openclaw, phase3]
+
+    - name: Display JSON syntax check result
+      ansible.builtin.debug:
+        msg: >-
+          OpenClaw JSON syntax: {{
+            'OK'
+            if nodejs_openclaw_json_check.rc == 0
+            else 'WARNING - invalid JSON (may have trailing comma from runtime writes)'
+          }}
+      tags: [verify, services, nodejs, openclaw, phase3]
+
+    - name: Verify openclaw doctor output
+      ansible.builtin.command: openclaw doctor
+      register: nodejs_openclaw_doctor
+      changed_when: false
+      ignore_errors: true
+      tags: [verify, services, nodejs, openclaw, phase3]
+
+    - name: Display openclaw doctor results
+      ansible.builtin.debug:
+        var: nodejs_openclaw_doctor.stdout_lines
+      when: not nodejs_openclaw_doctor.failed
+      tags: [verify, services, nodejs, openclaw, phase3]
+
+    - name: Check gateway status
+      ansible.builtin.command: openclaw gateway status
+      register: nodejs_openclaw_gateway_status
+      changed_when: false
+      tags: [verify, services, nodejs, openclaw, phase3]
+
+    - name: Display gateway status
+      ansible.builtin.debug:
+        var: nodejs_openclaw_gateway_status.stdout_lines
+      tags: [verify, services, nodejs, openclaw, phase3]

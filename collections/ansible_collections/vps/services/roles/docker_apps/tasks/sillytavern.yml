@@ -1,0 +1,178 @@
+---
+# SillyTavern - 使用 container_deployer Meta 角色部署
+
+- name: Initialize data from image
+  become: true
+  ansible.builtin.shell: |
+    for item in "config:/home/node/app/config" "data:/home/node/app/public" "plugins:/home/node/app/plugins"; do
+      DIR_NAME=${item%%:*}
+      IMG_PATH=${item#*:}
+      DEST=/opt/dockers/sillytavern/$DIR_NAME
+      if [ -z "$(find "$DEST" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
+        echo "Initializing empty $DIR_NAME..."
+        docker run --rm --entrypoint sh -v "$DEST":/tmp/dest {{ sillytavern_image }} \
+          -c "if [ -d $IMG_PATH ]; then rsync -au $IMG_PATH/ /tmp/dest/ 2>/dev/null || true; fi"
+      else
+        echo "Preserving existing $DIR_NAME data."
+      fi
+    done
+
+    DEFAULT_USER=/opt/dockers/sillytavern/data/default-user
+    if [ -z "$(find "$DEFAULT_USER" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
+      echo "Initializing empty default-user settings..."
+      docker run --rm --entrypoint sh -v "$DEFAULT_USER":/tmp/dest {{ sillytavern_image }} \
+        -c "cp -an /home/node/app/data/default-user/. /tmp/dest/ 2>/dev/null || true"
+    else
+      echo "Preserving existing default-user settings."
+    fi
+  register: docker_apps_sillytavern_data_init
+  changed_when: "'Initializing empty' in docker_apps_sillytavern_data_init.stdout"
+  tags: [deploy, services, docker_apps, sillytavern, phase5]
+
+- name: Initialize extensions directory
+  become: true
+  ansible.builtin.shell: |
+    EXT_DIR="/opt/dockers/sillytavern/extensions"
+    if [ ! -d "$EXT_DIR" ] || [ -z "$(ls -A $EXT_DIR 2>/dev/null)" ]; then
+      mkdir -p "$EXT_DIR"
+      echo "Extensions directory is empty. Please install extensions via Web UI (Extensions -> Download Extensions & Assets)."
+      echo "Installed extensions will have git history and can be updated through the UI."
+      chown -R "{{ docker_apps_docker_user_uid }}:{{ docker_apps_docker_user_gid }}" "$EXT_DIR"
+    fi
+  register: docker_apps_sillytavern_extensions_init
+  changed_when: >-
+    'Extensions directory is empty.' in docker_apps_sillytavern_extensions_init.stdout
+  tags: [deploy, services, docker_apps, sillytavern, phase5]
+
+- name: Deploy config file
+  ansible.builtin.assert:
+    that:
+      - docker_apps_sillytavern_basic_auth_username is defined
+      - docker_apps_sillytavern_basic_auth_username | string | length > 0
+      - docker_apps_sillytavern_basic_auth_password is defined
+      - docker_apps_sillytavern_basic_auth_password | string | length > 0
+    fail_msg: "SillyTavern basic auth 需要在 secrets/vault.yml 中提供 vault_slt_name 和 vault_slt_password"
+  tags: [deploy, services, docker_apps, sillytavern, phase5]
+
+- name: Deploy config file
+  become: true
+  no_log: true
+  diff: false
+  ansible.builtin.template:
+    src: sillytavern_config.yaml.j2
+    dest: /opt/dockers/sillytavern/config/config.yaml
+    owner: "{{ docker_apps_docker_user_uid }}"
+    group: "{{ docker_apps_docker_user_gid }}"
+    mode: "0644"
+    force: "{{ sillytavern_config_force | default(false) | bool }}"
+  notify: restart sillytavern
+  tags: [deploy, services, docker_apps, sillytavern, phase5]
+
+- name: Set sillytavern env vars
+  ansible.builtin.set_fact:
+    docker_apps_sillytavern_env:
+      TZ: "Asia/Shanghai"
+  when: not (docker_apps_hysteria2_client_enabled | default(false) | bool)
+  tags: [deploy, services, docker_apps, sillytavern, phase5]
+
+- name: Set sillytavern env vars (with proxy)
+  ansible.builtin.set_fact:
+    docker_apps_sillytavern_env:
+      TZ: "Asia/Shanghai"
+      http_proxy: "http://hysteria2-client:10809"
+      https_proxy: "http://hysteria2-client:10809"
+      all_proxy: "http://hysteria2-client:10809"
+  when: docker_apps_hysteria2_client_enabled | default(false) | bool
+  tags: [deploy, services, docker_apps, sillytavern, phase5]
+
+- name: Deploy sillytavern
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+    apply:
+      tags:
+        - sillytavern
+  vars:
+    cdp_name: "sillytavern"
+    cdp_image: "{{ sillytavern_image }}"
+    cdp_dirs: ["config", "data", "data/default-user", "plugins", "extensions"]
+    cdp_fix_permissions: true
+    cdp_fix_uid: "{{ docker_apps_docker_user_uid }}"
+    cdp_fix_gid: "{{ docker_apps_docker_user_gid }}"
+    cdp_fix_mode: "0777"
+    cdp_memory: "256m"
+    cdp_cpus: "1.0"
+    cdp_memory_reservation: "192m"
+    cdp_oom_score_adj: "-500"
+    cdp_restart_policy: "unless-stopped"
+    cdp_networks: [name: "sweb"]
+    cdp_ports:
+      - "{{ app_port_sillytavern }}:8000"
+    cdp_volumes:
+      - "/opt/dockers/sillytavern/config:/home/node/app/config"
+      - "/opt/dockers/sillytavern/data:/home/node/app/data"
+      - "/opt/dockers/sillytavern/plugins:/home/node/app/plugins"
+      - "/opt/dockers/sillytavern/extensions:/home/node/app/public/scripts/extensions/third-party"
+    cdp_env: "{{ docker_apps_sillytavern_env }}"
+    cdp_healthcheck:
+      test: ["CMD-SHELL", "netstat -ltn | grep -q :8000 || exit 1"]
+      interval: 1800s
+      timeout: 10s
+      retries: 3
+      start_period: 5m
+  tags: [deploy, services, docker_apps, sillytavern, phase5]
+
+- name: SillyTavern - Deploy scheduler systemd units
+  when: sillytavern_scheduler_enabled | default(true) | bool
+  tags: [deploy, services, docker_apps, sillytavern, phase5]
+  block:
+    - name: Deploy sillytavern-start service
+      ansible.builtin.template:
+        src: sillytavern-scheduler-start.service.j2
+        dest: /etc/systemd/system/sillytavern-scheduler-start.service
+        owner: root
+        group: root
+        mode: "0644"
+      tags: [deploy, services, docker_apps, sillytavern, phase5]
+
+    - name: Deploy sillytavern-stop service
+      ansible.builtin.template:
+        src: sillytavern-scheduler-stop.service.j2
+        dest: /etc/systemd/system/sillytavern-scheduler-stop.service
+        owner: root
+        group: root
+        mode: "0644"
+      tags: [deploy, services, docker_apps, sillytavern, phase5]
+
+    - name: Deploy sillytavern-start timer
+      ansible.builtin.template:
+        src: sillytavern-scheduler-start.timer.j2
+        dest: /etc/systemd/system/sillytavern-scheduler-start.timer
+        owner: root
+        group: root
+        mode: "0644"
+      tags: [deploy, services, docker_apps, sillytavern, phase5]
+
+    - name: Deploy sillytavern-stop timer
+      ansible.builtin.template:
+        src: sillytavern-scheduler-stop.timer.j2
+        dest: /etc/systemd/system/sillytavern-scheduler-stop.timer
+        owner: root
+        group: root
+        mode: "0644"
+      tags: [deploy, services, docker_apps, sillytavern, phase5]
+
+    - name: Enable and start sillytavern-scheduler-start timer
+      ansible.builtin.systemd:
+        name: sillytavern-scheduler-start.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+      tags: [deploy, services, docker_apps, sillytavern, phase5]
+
+    - name: Disable and stop sillytavern-scheduler-stop timer
+      ansible.builtin.systemd:
+        name: sillytavern-scheduler-stop.timer
+        enabled: false
+        state: stopped
+        daemon_reload: true
+      tags: [deploy, services, docker_apps, sillytavern, phase5]

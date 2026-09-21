@@ -1,0 +1,95 @@
+---
+- name: Resolve effective Sub-Store providers for Nginx templates
+  ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_providers.yml
+  tags: [deploy, services, nginx, phase4]
+
+- name: Resolve capability provider catalog for Nginx templates
+  ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_capability_providers.yml
+  tags: [deploy, services, nginx, phase4]
+
+- name: 合并 Nginx 站点列表
+  ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
+  vars:
+    merge_var_name: nginx_sites_to_deploy
+  tags:
+    - deploy
+    - services
+    - nginx
+    - nginx_site_config
+    - nginx_site_enable
+    - phase4
+- name: Check if Nginx is installed
+  ansible.builtin.command: which nginx
+  check_mode: false
+  register: nginx_check
+  changed_when: false
+  failed_when: false
+  tags:
+    - deploy
+    - services
+    - nginx
+    - phase4
+- name: Set skip flag (considering force overwrite)
+  ansible.builtin.set_fact:
+    nginx_installed: "{{ nginx_check.rc == 0 }}"
+    nginx_skip_all: "{{ nginx_check.rc == 0 and not (nginx_force_overwrite | default(false) | bool) }}"
+  tags:
+    - deploy
+    - services
+    - nginx
+    - phase4
+- name: Nginx pre-installed - skip all (safe mode)
+  ansible.builtin.debug:
+    msg: Nginx already installed by system, skipping all. Use FORCE=true to force overwrite.
+  when: nginx_skip_all | bool
+  tags:
+    - deploy
+    - services
+    - nginx
+    - phase4
+- name: Deploy Nginx
+  when: not (nginx_skip_all | default(false) | bool)
+  tags:
+    - deploy
+    - services
+    - nginx
+    - phase4
+
+  block:
+    - name: Install Nginx
+      ansible.builtin.import_tasks: install.yml
+    - name: Configure Global Nginx Settings
+      ansible.builtin.import_tasks: config.yml
+- name: Configure Nginx logrotate independently of install safe mode
+  ansible.builtin.import_tasks: ../../../common/tasks/manage_optional_logrotate.yml
+  vars:
+    optional_logrotate_owner: Nginx
+    optional_logrotate_enabled: "{{ nginx_logrotate_enabled }}"
+    optional_logrotate_config_path: "{{ nginx_logrotate_config_path }}"
+    optional_logrotate_config: "{{ nginx_logrotate_config }}"
+  tags: [deploy, services, nginx, nginx_logrotate, nginx_logrotate_only, phase4]
+
+- name: Deploy Camouflage Site
+  ansible.builtin.import_tasks: camouflage.yml
+  tags: [deploy, services, nginx, nginx_camouflage, phase4]
+
+- name: Deploy Nginx Site Configurations
+  ansible.builtin.import_tasks: sites.yml
+  when: (nginx_installed | bool) or not ansible_check_mode
+  tags:
+    - deploy
+    - services
+    - nginx
+    - nginx_site_config
+    - nginx_site_enable
+    - phase4
+
+- name: Clean stale Nginx site links
+  ansible.builtin.import_tasks: site_cleanup.yml
+  when: (nginx_installed | bool) or not ansible_check_mode
+  tags:
+    - deploy
+    - services
+    - nginx
+    - nginx_site_enable
+    - phase4

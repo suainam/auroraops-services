@@ -1,0 +1,155 @@
+---
+- name: Merge Nginx site list for rollback verification
+  ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
+  vars:
+    merge_var_name: nginx_sites_to_deploy
+  tags: &nginx_site_rollback_verify_tags
+    - rollback_verify
+    - services
+    - nginx
+    - nginx_site_config
+    - phase4
+- name: Validate focused Nginx rollback verification target
+  ansible.builtin.assert:
+    that:
+      - >-
+        nginx_site_target | default('') | length == 0
+        or nginx_site_target in nginx_sites_to_deploy
+    fail_msg: >-
+      nginx_site_target must be empty or name one site from the selected
+      nginx_sites_to_deploy set.
+  tags: *nginx_site_rollback_verify_tags
+
+- name: Build focused Nginx rollback verification list
+  ansible.builtin.set_fact:
+    nginx_sites_to_mutate: >-
+      {{
+        [nginx_site_target]
+        if nginx_site_target | default('') | length > 0
+        else nginx_sites_to_deploy
+      }}
+  tags: *nginx_site_rollback_verify_tags
+
+
+- name: Read preserved Nginx site lifecycle baseline
+  become: true
+  ansible.builtin.slurp:
+    path: "{{ nginx_site_baseline_fact_path }}"
+  register: nginx_site_rollback_verify_baseline_raw
+  tags: *nginx_site_rollback_verify_tags
+
+- name: Parse preserved Nginx site lifecycle baseline
+  ansible.builtin.set_fact:
+    nginx_site_rollback_verify_baseline: >-
+      {{ nginx_site_rollback_verify_baseline_raw.content | b64decode | from_json }}
+  tags: *nginx_site_rollback_verify_tags
+- name: Select Nginx rollback verification baseline scope
+  ansible.builtin.set_fact:
+    nginx_site_rollback_verify_state: >-
+      {{
+        (
+          nginx_site_rollback_verify_baseline.pre_deploy_state | dict2items
+          | selectattr('key', 'equalto', nginx_site_target) | list
+        )
+        if nginx_site_target | default('') | length > 0
+        else nginx_site_rollback_verify_baseline.pre_deploy_state | dict2items
+      }}
+  tags: *nginx_site_rollback_verify_tags
+
+
+- name: Verify Nginx rollback baseline scope
+  ansible.builtin.assert:
+    that:
+      - nginx_site_rollback_verify_baseline.auroraops_managed | default(false) | bool
+      - nginx_site_rollback_verify_state | length > 0
+      - >-
+        (
+          nginx_site_target | default('') | length == 0
+          and nginx_site_rollback_verify_baseline.sites | sort
+              == nginx_sites_to_deploy | sort
+        )
+        or (
+          nginx_site_target | default('') | length > 0
+          and nginx_site_baseline_allow_additive_reconcile | default(false) | bool
+          and nginx_site_target in nginx_site_rollback_verify_baseline.sites
+        )
+    fail_msg: "Nginx rollback verification baseline does not match the selected site set"
+  tags: *nginx_site_rollback_verify_tags
+
+- name: Inspect restored Nginx site configurations
+  become: true
+  ansible.builtin.stat:
+    path: "/etc/nginx/sites-available/{{ item.key }}.conf"
+  loop: "{{ nginx_site_rollback_verify_state }}"
+  register: nginx_site_rollback_verify_available
+  no_log: true
+  tags: *nginx_site_rollback_verify_tags
+
+- name: Read restored Nginx site configurations
+  become: true
+  ansible.builtin.slurp:
+    path: "/etc/nginx/sites-available/{{ item.item.key }}.conf"
+  loop: "{{ nginx_site_rollback_verify_available.results }}"
+  register: nginx_site_rollback_verify_available_raw
+  when: item.stat.exists
+  no_log: true
+  tags: *nginx_site_rollback_verify_tags
+
+- name: Verify restored Nginx site configuration state
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists == (item.item.value.available_exists | bool)
+    fail_msg: "Nginx site configuration state was not restored: {{ item.item.key }}"
+  loop: "{{ nginx_site_rollback_verify_available.results }}"
+  no_log: true
+  tags: *nginx_site_rollback_verify_tags
+
+- name: Verify restored Nginx site configuration content
+  ansible.builtin.assert:
+    that:
+      - (item.content | b64decode) == item.item.item.value.available_content
+    fail_msg: "Nginx site configuration content was not restored: {{ item.item.item.key }}"
+  loop: "{{ nginx_site_rollback_verify_available_raw.results }}"
+  when: not (item.skipped | default(false))
+  no_log: true
+  tags: *nginx_site_rollback_verify_tags
+
+- name: Inspect restored Nginx site links
+  become: true
+  ansible.builtin.stat:
+    path: "/etc/nginx/sites-enabled/{{ item.key }}.conf"
+    follow: false
+  loop: "{{ nginx_site_rollback_verify_state }}"
+  register: nginx_site_rollback_verify_enabled
+  no_log: true
+  tags: *nginx_site_rollback_verify_tags
+
+- name: Verify restored Nginx site link state
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists == (item.item.value.enabled_exists | bool)
+      - not (item.item.value.enabled_exists | bool) or (item.stat.islnk | default(false))
+      - not (item.item.value.enabled_exists | bool) or item.stat.lnk_source == item.item.value.enabled_target
+    fail_msg: "Nginx site link state was not restored: {{ item.item.key }}"
+  loop: "{{ nginx_site_rollback_verify_enabled.results }}"
+  no_log: true
+  tags: *nginx_site_rollback_verify_tags
+
+- name: Verify restored Nginx configuration syntax
+  become: true
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  tags: *nginx_site_rollback_verify_tags
+
+- name: Inspect Nginx service after site rollback
+  become: true
+  ansible.builtin.service_facts:
+  register: nginx_site_rollback_verify_services
+  tags: *nginx_site_rollback_verify_tags
+
+- name: Verify Nginx remains running after site rollback
+  ansible.builtin.assert:
+    that:
+      - nginx_site_rollback_verify_services.ansible_facts.services['nginx.service'].state == 'running'
+    fail_msg: "Nginx is not running after focused site rollback"
+  tags: *nginx_site_rollback_verify_tags

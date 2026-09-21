@@ -1,0 +1,176 @@
+---
+# =============================================================================
+# OpenCode Installation (opencode_install)
+# =============================================================================
+# Install OpenCode using either official script or npm
+# Supports two installation methods:
+#   - script: Official installation script (recommended, default)
+#   - npm: npm global package installation (alternative)
+
+- name: Get home directory for OpenCode installation
+  ansible.builtin.command: "echo ~{{ nodejs_opencode_install_user }}"
+  register: nodejs_opencode_install_home
+  changed_when: false
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+# =============================================================================
+# Method 1: Official Script Installation (Recommended)
+# =============================================================================
+
+- name: Check if OpenCode is already installed (script method)
+  ansible.builtin.stat:
+    path: "{{ nodejs_opencode_install_home.stdout }}/.opencode/bin/opencode"
+  register: nodejs_opencode_script_binary_check
+  when: nodejs_opencode_install_method == 'script'
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+- name: Download OpenCode official installer
+  ansible.builtin.get_url:
+    url: https://opencode.ai/install
+    dest: /tmp/opencode-install.sh
+    mode: "0755"
+  when:
+    - nodejs_opencode_install_method == 'script'
+    - not nodejs_opencode_script_binary_check.stat.exists
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+- name: Install OpenCode via official script
+  ansible.builtin.command:
+    cmd: /bin/bash /tmp/opencode-install.sh
+  become: true
+  become_user: "{{ nodejs_opencode_install_user }}"
+  environment:
+    HOME: "{{ nodejs_opencode_install_home.stdout }}"
+  when:
+    - nodejs_opencode_install_method == 'script'
+    - not nodejs_opencode_script_binary_check.stat.exists
+  register: nodejs_opencode_script_install_result
+  changed_when: nodejs_opencode_script_install_result.rc == 0
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+- name: Remove OpenCode official installer
+  ansible.builtin.file:
+    path: /tmp/opencode-install.sh
+    state: absent
+  when:
+    - nodejs_opencode_install_method == 'script'
+    - not nodejs_opencode_script_binary_check.stat.exists
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+- name: Display OpenCode script installation result
+  ansible.builtin.debug:
+    msg:
+      - "OpenCode installation method: Official Script"
+      - "Installation status: {{ 'Already installed' if nodejs_opencode_script_binary_check.stat.exists else 'Newly installed' }}"
+      - "Binary location: {{ nodejs_opencode_install_home.stdout }}/.opencode/bin/opencode"
+  when: nodejs_opencode_install_method == 'script'
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+# =============================================================================
+# Method 2: npm Global Package Installation (Alternative)
+# =============================================================================
+
+- name: Check if OpenCode is already installed (npm method)
+  ansible.builtin.command: npm list -g opencode-ai --depth=0 --json
+  register: nodejs_opencode_npm_check
+  changed_when: false
+  failed_when: false
+  when: nodejs_opencode_install_method == 'npm'
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+- name: Install OpenCode via npm
+  community.general.npm:
+    name: "opencode-ai"
+    version: "{{ nodejs_opencode_version }}"
+    global: true
+    state: present
+  when:
+    - nodejs_opencode_install_method == 'npm'
+    - nodejs_opencode_npm_check.rc != 0
+  register: nodejs_opencode_npm_install_result
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+- name: Display OpenCode npm installation result
+  ansible.builtin.debug:
+    msg:
+      - "OpenCode installation method: npm"
+      - "Installation status: {{ 'Already installed' if nodejs_opencode_npm_check.rc == 0 else 'Newly installed' }}"
+      - "Version: {{ nodejs_opencode_version }}"
+      - "Binary location: /usr/local/bin/opencode (npm global bin)"
+  when: nodejs_opencode_install_method == 'npm'
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+# =============================================================================
+# Add OpenCode to PATH (script method only)
+# =============================================================================
+
+- name: Add OpenCode to PATH in .bashrc (script method)
+  ansible.builtin.lineinfile:
+    path: "{{ nodejs_opencode_install_home.stdout }}/.bashrc"
+    line: 'export PATH="{{ nodejs_opencode_install_home.stdout }}/.opencode/bin:$PATH"'
+    regexp: "^export PATH=.*\\.opencode/bin.*"
+    state: present
+    create: true
+    mode: "0644"
+  when:
+    - nodejs_opencode_install_method == 'script'
+    - nodejs_opencode_add_to_path | bool
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+- name: Add OpenCode to PATH in .zshrc (script method)
+  ansible.builtin.lineinfile:
+    path: "{{ nodejs_opencode_install_home.stdout }}/.zshrc"
+    line: 'export PATH="{{ nodejs_opencode_install_home.stdout }}/.opencode/bin:$PATH"'
+    regexp: "^export PATH=.*\\.opencode/bin.*"
+    state: present
+    create: false
+  when:
+    - nodejs_opencode_install_method == 'script'
+    - nodejs_opencode_add_to_path | bool
+  failed_when: false
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+# =============================================================================
+# Create Global Symlink (script method only)
+# =============================================================================
+# This ensures OpenCode is accessible in all environments (including Ansible become_user)
+
+- name: Create OpenCode symlink in /usr/local/bin (script method)
+  ansible.builtin.file:
+    src: "{{ nodejs_opencode_install_home.stdout }}/.opencode/bin/opencode"
+    dest: "/usr/local/bin/opencode"
+    state: link
+    force: true
+  become: true
+  when: nodejs_opencode_install_method == 'script'
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+# =============================================================================
+# Post-Installation Verification
+# =============================================================================
+
+- name: Set OpenCode binary path for verification
+  ansible.builtin.set_fact:
+    nodejs_opencode_binary_path: >-
+      {{
+        (nodejs_opencode_install_method == 'script')
+        | ternary(
+            nodejs_opencode_install_home.stdout ~ '/.opencode/bin/opencode',
+            'opencode'
+          )
+      }}
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+- name: Verify OpenCode installation
+  ansible.builtin.command: "{{ nodejs_opencode_binary_path }} --version"
+  register: nodejs_opencode_version_check
+  changed_when: false
+  failed_when: nodejs_opencode_version_check.rc != 0
+  environment:
+    PATH: "{{ nodejs_opencode_install_home.stdout }}/.opencode/bin:{{ ansible_env.PATH }}"
+  tags: [deploy, services, nodejs, opencode_install, phase3]
+
+- name: Display OpenCode version
+  ansible.builtin.debug:
+    msg: "OpenCode installed successfully: {{ nodejs_opencode_version_check.stdout }}"
+  tags: [deploy, services, nodejs, opencode_install, phase3]

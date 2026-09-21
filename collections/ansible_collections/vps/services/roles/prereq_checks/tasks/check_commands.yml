@@ -1,0 +1,74 @@
+---
+# =============================================================================
+# Custom Commands Prerequisite Check
+# =============================================================================
+# 检查自定义命令是否可用
+
+- name: "[prereq:cmd] Check custom commands"
+  ansible.builtin.command: "{{ item.cmd }}"
+  loop: "{{ prereq_checks_commands }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: prereq_checks__prereq_commands_results
+  check_mode: false
+  failed_when: false
+  changed_when: false
+
+- name: "[prereq:cmd] Set command check facts"
+  ansible.builtin.set_fact:
+    prereq_checks_prereq_commands_results: "{{ prereq_checks__prereq_commands_results.results | default([]) }}"
+    prereq_checks_prereq_commands_failed: >-
+      {{
+        prereq_checks__prereq_commands_results.results
+        | default([])
+        | selectattr('rc', 'defined')
+        | selectattr('rc', 'ne', 0)
+        | list
+      }}
+
+- name: "[prereq:cmd] Set overall check result"
+  ansible.builtin.set_fact:
+    prereq_checks_prereq_commands_ready: "{{ (prereq_checks_prereq_commands_failed | length) == 0 }}"
+
+- name: "[prereq:cmd] Display status"
+  ansible.builtin.debug:
+    msg: |
+      Custom Commands Status:
+        Commands checked: {{ prereq_checks_commands | length }}
+        Failed: {{ prereq_checks_prereq_commands_failed | length }}
+        Ready: {{ prereq_checks_prereq_commands_ready }}
+        {% if prereq_checks_prereq_commands_failed | length > 0 %}
+        Failed commands:
+        {% for item in prereq_checks_prereq_commands_failed %}
+          - {{ item.item.name }}: {{ item.item.cmd }}
+        {% endfor %}
+        {% endif %}
+
+- name: "[prereq:cmd] Fail if not ready and required"
+  ansible.builtin.fail:
+    msg: |
+      ============================================================
+      ERROR: Required commands not available!
+      ============================================================
+
+      Missing commands:
+      {% for item in prereq_checks_prereq_commands_failed %}
+        - {{ item.item.name }}
+          Command: {{ item.item.cmd }}
+          {% if item.item.install_hint is defined %}
+          Install: {{ item.item.install_hint }}
+          {% endif %}
+      {% endfor %}
+
+      ============================================================
+  when:
+    - prereq_checks_commands_required | bool
+    - not prereq_checks_prereq_commands_ready
+
+- name: "[prereq:cmd] Warn if not ready but not required"
+  ansible.builtin.debug:
+    msg: |
+      WARNING: Some commands are not available, but check is not required.
+  when:
+    - not (prereq_checks_commands_required | bool)
+    - not prereq_checks_prereq_commands_ready

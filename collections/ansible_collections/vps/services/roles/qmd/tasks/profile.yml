@@ -1,0 +1,18 @@
+---
+- name: Configure bun in PATH
+  ansible.builtin.lineinfile:
+    path: "{{ ansible_user_dir }}/.profile"
+    line: 'export PATH="/usr/local/bin:$PATH"'
+    create: true
+    mode: "0644"
+  when: ansible_user_id != "root"
+  tags: [deploy, services, qmd, qmd_config, phase3]
+
+- name: Configure bun in PATH for root
+  ansible.builtin.lineinfile:
+    path: /root/.profile
+    line: 'export PATH="/usr/local/bin:$PATH"'
+    create: true
+    mode: "0644"
+  when: ansible_user_id == "root"
+  tags: [deploy, services, qmd, qmd_config, phase3]

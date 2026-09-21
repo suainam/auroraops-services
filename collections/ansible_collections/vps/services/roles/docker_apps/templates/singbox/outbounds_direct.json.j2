@@ -1,0 +1,43 @@
+{
+  "outbounds": [
+    { "type": "direct", "tag": "direct-out" },
+    {%- if docker_apps_singbox_warp_enabled | default(false) | bool %}
+    {
+      "type": "socks",
+      "tag": "warp-out",
+      "server": "127.0.0.1",
+      "server_port": {{ docker_apps_singbox_warp_port | default(app_port_singbox_warp | default(40000)) }}
+    },
+    {%- endif %}
+    { "type": "block", "tag": "block" }
+{% if singbox_relay_upstreams | default([]) | length > 0 %},
+    {
+      "type": "urltest",
+      "tag": "relay-failover-cluster",
+      "outbounds": [
+{% for upstream in singbox_relay_upstreams %}
+        "relay-upstream-{{ upstream.name }}"{% if not loop.last %},{% endif %}
+{% endfor %}
+      ],
+      "url": "http://cp.cloudflare.com/generate_204",
+      "interval": "1m",
+      "tolerance": 50
+    }
+{% for upstream in singbox_relay_upstreams %},
+    {
+      "type": "{{ upstream.type }}",
+      "tag": "relay-upstream-{{ upstream.name }}",
+      "server": "{{ upstream.server }}",
+      "server_port": {{ upstream.port }},
+      {% if upstream.type == 'vless' %}"uuid": "{{ upstream.uuid }}",
+      "flow": "xtls-rprx-vision",
+      "tls": { "enabled": true, "server_name": "{{ upstream.sni }}", "utls": { "enabled": true, "fingerprint": "chrome" }, "reality": { "enabled": true, "public_key": "{{ upstream.public_key }}", "short_id": "{{ upstream.short_id }}" } }
+      {% else %}"password": "{{ upstream.password }}",
+      "tls": { "enabled": true, "server_name": "{{ upstream.sni }}", "insecure": {{ upstream.insecure | default(false) | lower }} },
+      "obfs": { "type": "salamander", "password": "{{ upstream.obfs_password }}" }
+      {% endif %}
+    }
+{% endfor %}
+{% endif %}
+  ]
+}

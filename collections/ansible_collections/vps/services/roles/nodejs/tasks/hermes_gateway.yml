@@ -1,0 +1,37 @@
+---
+- name: Manage Hermes Gateway systemd service
+  ansible.builtin.include_role:
+    name: vps.applications.application_service
+  vars:
+    app_service_name: "hermes-gateway"
+    app_service_description: "Hermes Agent Gateway - Messaging Platform Integration"
+    app_service_user: "{{ nodejs_hermes_user }}"
+    app_service_working_directory: "{{ nodejs_hermes_install_dir }}"
+    app_service_environment_file: "{{ nodejs_hermes_home }}/.env"
+    app_service_exec_start: "{{ nodejs_hermes_install_dir }}/venv/bin/hermes gateway run --replace"
+    app_service_enabled: true
+    app_service_state: started
+    app_service_type: simple
+    app_service_restart: always
+    app_service_restart_sec: 60
+    app_service_dependencies:
+      - network-online.target
+    app_service_kill_mode: mixed
+    app_service_kill_signal: SIGTERM
+    app_service_exec_reload: "/bin/kill -USR1 $MAINPID"
+    app_service_timeout_stop_sec: 210
+    app_service_standard_output: journal
+    app_service_standard_error: journal
+    app_service_environment:
+      HOME: "{{ nodejs_hermes_home | dirname }}"
+      USER: "{{ nodejs_hermes_user }}"
+      LOGNAME: "{{ nodejs_hermes_user }}"
+      PATH: >-
+        {{
+          nodejs_hermes_install_dir ~ '/venv/bin:'
+          ~ nodejs_hermes_install_dir ~ '/node_modules/.bin:'
+          ~ '/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+        }}
+      VIRTUAL_ENV: "{{ nodejs_hermes_install_dir }}/venv"
+      HERMES_HOME: "{{ nodejs_hermes_home }}"
+  tags: [deploy, services, nodejs, hermes_gateway, phase3]

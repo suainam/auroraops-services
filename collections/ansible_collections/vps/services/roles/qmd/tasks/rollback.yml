@@ -1,0 +1,24 @@
+---
+- name: Remove qmd soft link
+  ansible.builtin.file:
+    path: "{{ qmd_services_dir }}"
+    state: absent
+  tags: [rollback, services, qmd, qmd_rollback, phase3]
+
+- name: Remove bun executable
+  ansible.builtin.file:
+    path: /usr/bin/bun
+    state: absent
+  tags: [rollback, services, qmd, qmd_rollback, phase3]
+
+- name: Remove bun runtime
+  ansible.builtin.file:
+    path: /usr/local/lib/bun
+    state: absent
+  tags: [rollback, services, qmd, qmd_rollback, phase3]
+
+- name: Remove qmd package
+  ansible.builtin.file:
+    path: "{{ ansible_user_dir }}/.bun/lib/node_modules/qmd"
+    state: absent
+  tags: [rollback, services, qmd, qmd_rollback, phase3]

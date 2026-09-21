@@ -1,0 +1,8 @@
+---
+- name: Restart easytier
+  community.docker.docker_container:
+    name: easytier
+    image: "{{ easytier_image }}"
+    state: started
+    restart: true
+  listen: restart easytier

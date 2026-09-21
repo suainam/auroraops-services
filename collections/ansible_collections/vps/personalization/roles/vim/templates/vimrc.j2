@@ -1,0 +1,114 @@
+runtime! debian.vim
+
+{% if vim_enable_plugins | default(true) %}
+" =========================
+" Vim-Plug 插件管理
+" =========================
+" 仅在用户级配置中启用插件（~/.vimrc）
+" 系统级配置（/etc/vim/vimrc）不包含插件配置
+call plug#begin('~/.vim/plugged')
+
+" 核心工具
+Plug 'preservim/nerdtree'           " 文件资源管理器
+Plug 'vim-airline/vim-airline'      " 状态栏增强
+Plug 'airblade/vim-gitgutter'       " Git 增量提示
+Plug 'tpope/vim-commentary'         " 快速注释 (gcc)
+Plug 'sheerun/vim-polyglot'         " 多语言语法高亮包
+
+call plug#end()
+
+" 首次启动自动安装插件
+if empty(glob('~/.vim/autoload/plug.vim'))
+  silent !curl -fLo ~/.vim/autoload/plug.vim --create-dirs
+    \ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+  autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
+endif
+{% endif %}
+
+" =========================
+" 界面显示
+" =========================
+syntax on
+set number
+set relativenumber
+set cursorline
+set showmatch
+set ruler
+set laststatus=2
+set title
+{% if vim_enable_plugins | default(true) %}
+set noshowmode          " Airline 会显示模式，原生提示隐藏
+{% endif %}
+
+" 颜色方案
+colorscheme desert
+{% if vim_enable_plugins | default(true) %}
+let g:airline_powerline_fonts = 1
+let g:airline#extensions#tabline#enabled = 1
+{% endif %}
+
+" =========================
+" 缩进与格式
+" =========================
+set tabstop=4
+set softtabstop=4
+set shiftwidth=4
+set expandtab
+set autoindent
+set smartindent
+set nowrap
+" 文件类型检测
+filetype plugin indent on
+
+" =========================
+" 搜索优化
+" =========================
+set hlsearch
+set incsearch
+set ignorecase
+set smartcase
+
+" =========================
+" 文件与备份
+" =========================
+set nobackup
+set noswapfile
+set nowritebackup
+set noundofile
+set autoread
+set autochdir
+set clipboard=unnamedplus " 尝试共享系统剪贴板
+
+" =========================
+" 性能与习惯
+" =========================
+set encoding=utf-8
+set history=1000
+set wildmenu
+set scrolloff=5
+set sidescrolloff=15
+set backspace=indent,eol,start
+
+" =========================
+" 快捷键增强
+" =========================
+let mapleader = ","
+
+" 常用操作
+nnoremap <C-s> :w<CR>
+nnoremap <C-q> :q<CR>
+nnoremap <leader><space> :nohlsearch<CR>  " 清除搜索高亮
+
+" 移动增强
+nnoremap H ^
+nnoremap L $
+nnoremap <C-h> <C-w>h
+nnoremap <C-l> <C-w>l
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+
+{% if vim_enable_plugins | default(true) %}
+" 插件快捷键
+map <F3> :NERDTreeToggle<CR>
+{% endif %}
+set pastetoggle=<F2>

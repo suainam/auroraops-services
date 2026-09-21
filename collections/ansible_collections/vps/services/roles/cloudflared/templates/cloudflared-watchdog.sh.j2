@@ -1,0 +1,102 @@
+#!/bin/sh
+set -u
+umask 077
+
+service_name={{ cloudflared_service_name | quote }}
+watchdog_url={{ cloudflared_watchdog_url | quote }}
+curl_path={{ cloudflared_watchdog_curl_path | quote }}
+state_dir={{ cloudflared_watchdog_state_dir | quote }}
+failure_file="${state_dir}/consecutive-failures"
+failure_threshold={{ cloudflared_watchdog_failure_threshold | int }}
+timeout_seconds={{ cloudflared_watchdog_timeout_seconds | int }}
+log_tag={{ cloudflared_watchdog_log_tag | quote }}
+
+log_message() {
+    if ! logger -t "${log_tag}" "$*" 2>/dev/null; then
+        printf '%s\n' "$*" >&2
+    fi
+}
+
+if ! mkdir -p "${state_dir}"; then
+    log_message "unable to create watchdog state directory: ${state_dir}"
+    exit 1
+fi
+
+service_is_active() {
+{% if cloudflared_service_manager | default(ansible_service_mgr) == 'systemd' %}
+    systemctl is-active --quiet "${service_name}"
+{% else %}
+    rc-service "${service_name}" status >/dev/null 2>&1
+{% endif %}
+}
+
+restart_service() {
+{% if cloudflared_service_manager | default(ansible_service_mgr) == 'systemd' %}
+    systemctl restart "${service_name}"
+{% else %}
+    rc-service "${service_name}" restart
+{% endif %}
+}
+
+record_failure() {
+    failures=0
+    if [ -r "${failure_file}" ]; then
+        failures=$(cat "${failure_file}" 2>/dev/null || printf '0')
+    fi
+    case "${failures}" in
+        ''|*[!0-9]*) failures=0 ;;
+    esac
+    failures=$((failures + 1))
+    if ! printf '%s\n' "${failures}" > "${failure_file}"; then
+        log_message "unable to persist watchdog failure counter"
+        return 1
+    fi
+
+    if [ "${failures}" -lt "${failure_threshold}" ]; then
+        log_message "readiness failure ${failures}/${failure_threshold}: $*"
+        return 0
+    fi
+
+    log_message "readiness failure threshold reached; restarting ${service_name}: $*"
+    if restart_service; then
+        if ! rm -f "${failure_file}"; then
+            log_message "restart succeeded but failure counter cleanup failed"
+            return 1
+        fi
+        log_message "restart requested for ${service_name}"
+    else
+        log_message "restart failed for ${service_name}"
+        printf '%s\n' 0 > "${failure_file}" || true
+        return 1
+    fi
+}
+
+run_once() {
+    if ! service_is_active; then
+        record_failure "service inactive" || return 1
+        return 0
+    fi
+
+    if ! "${curl_path}" --fail --silent --show-error \
+        --max-time "${timeout_seconds}" "${watchdog_url}" >/dev/null 2>&1; then
+        record_failure "readiness endpoint unavailable" || return 1
+        return 0
+    fi
+
+    if [ -f "${failure_file}" ]; then
+        if ! rm -f "${failure_file}"; then
+            log_message "readiness recovered but failure counter cleanup failed"
+            return 1
+        fi
+        log_message "readiness recovered for ${service_name}"
+    fi
+}
+
+if [ "${1:-}" = "--loop" ]; then
+    while :; do
+        run_once
+        sleep {{ cloudflared_watchdog_loop_interval_seconds | int }}
+    done
+fi
+
+run_once

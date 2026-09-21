@@ -1,0 +1,21 @@
+---
+# Flare - 使用 container_deployer Meta 角色部署
+- name: Deploy flare
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+  vars:
+    cdp_name: "flare"
+    cdp_image: "{{ flare_image }}"
+    cdp_dirs: ["app"]
+    cdp_init_enabled: true
+    cdp_init_dirs: ["app"]
+    cdp_networks: [{name: "sweb"}]
+    cdp_ports:
+      - "{{ docker_apps_app_port_flare }}:5005"
+    cdp_volumes:
+      - "/opt/dockers/flare/app:/app"
+    cdp_command: "flare --nologin=0"
+    cdp_env:
+      FLARE_USER: "suai"
+      FLARE_PASS: "{{ flare_password }}"
+  tags: [deploy, services, docker_apps, flare, phase5]

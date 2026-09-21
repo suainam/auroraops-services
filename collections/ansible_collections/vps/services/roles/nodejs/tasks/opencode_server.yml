@@ -1,0 +1,35 @@
+---
+# =============================================================================
+# OpenCode Server Mode (opencode_server)
+# =============================================================================
+# Deploy OpenCode as a headless server with systemd service
+# Requires: opencode installed
+
+- name: Get home directory for OpenCode server user
+  ansible.builtin.command: "echo ~{{ nodejs_opencode_server_user }}"
+  register: nodejs_opencode_server_user_home
+  changed_when: false
+  tags: [deploy, services, nodejs, opencode_server, phase3]
+
+- name: Deploy OpenCode Server as systemd service
+  ansible.builtin.include_role:
+    name: vps.applications.application_service
+  vars:
+    app_service_name: "{{ nodejs_opencode_server_service_name }}"
+    app_service_description: "{{ nodejs_opencode_server_service_description }}"
+    app_service_user: "{{ nodejs_opencode_server_user }}"
+    app_service_group: root
+    app_service_working_directory: "{{ nodejs_opencode_server_working_directory }}"
+    app_service_exec_start: >-
+      {{ nodejs_opencode_server_binary }} serve
+      --port {{ nodejs_opencode_server_port }}
+      --hostname {{ nodejs_opencode_server_hostname }}
+    app_service_environment:
+      PATH: "/usr/local/bin:/usr/bin:/bin"
+      NODE_ENV: "production"
+      HOME: "{{ nodejs_opencode_server_user_home.stdout }}"
+      OPENCODE_SERVER_PASSWORD: "{{ nodejs_opencode_server_password }}"
+    app_service_enabled: "{{ nodejs_opencode_server_service_enabled }}"
+    app_service_state: "{{ nodejs_opencode_server_service_state }}"
+  when: nodejs_opencode_server_enabled | bool
+  tags: [deploy, services, nodejs, opencode_server, phase3]

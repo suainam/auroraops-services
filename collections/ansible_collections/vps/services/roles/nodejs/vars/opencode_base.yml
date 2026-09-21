@@ -1,0 +1,15 @@
+---
+# =============================================================================
+# OpenCode 基础配置 - 所有主机通用
+# =============================================================================
+# 用于生成 ~/.config/opencode/opencode.json
+# 会与 vars/opencode_providers.yml 和 vars/opencode_mcp.yml 合并
+
+nodejs_opencode_base_config:
+  "$schema": "https://opencode.ai/config.json"
+  plugin: []
+  model: "opencode/kimi-k2.5-free"
+  logLevel: "WARN"
+  skills:
+    paths:
+      - "/root/AuroraOps/.opencode/skill"

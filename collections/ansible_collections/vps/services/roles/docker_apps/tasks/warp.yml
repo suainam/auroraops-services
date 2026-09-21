@@ -1,0 +1,103 @@
+---
+# Cloudflare WARP Local Proxy Management
+# Runs Cloudflare WARP in Proxy/MASQUE mode on 127.0.0.1:40000 without touching Linux default route.
+
+- name: Ensure WARP state directory exists
+  become: true
+  ansible.builtin.file:
+    path: /opt/dockers/warp/data
+    state: directory
+    mode: "0755"
+    owner: "{{ docker_apps_docker_user_uid | default('1000') }}"
+    group: "{{ docker_apps_docker_user_gid | default('1000') }}"
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - docker_apps_singbox_warp_enabled | default(false) | bool
+  tags: [deploy, services, docker_apps, singbox, warp, phase5]
+
+- name: Sing-box WARP - Deploy Local Proxy Container
+  become: true
+  community.docker.docker_container:
+    name: warp-svc
+    image: "{{ docker_apps_warp_image | default('caomingjun/warp:2026.6.880.0-2.12.0') }}"
+    pull: "{{ docker_apps_warp_pull | default('missing') }}"
+    restart_policy: unless-stopped
+    state: started
+    security_opts:
+      - "no-new-privileges:false"
+    capabilities:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "1"
+      net.ipv4.conf.all.src_valid_mark: "1"
+    published_ports:
+      - "127.0.0.1:{{ docker_apps_singbox_warp_port | default(40000) }}:{{ docker_apps_singbox_warp_port | default(40000) }}"
+    volumes:
+      - "/opt/dockers/warp/data:/var/lib/cloudflare-warp"
+    env:
+      WARP_SLEEP: "2"
+      GOST_ARGS: "-L :{{ docker_apps_singbox_warp_port | default(40000) }}"
+    memory: "{{ docker_apps_warp_memory }}"
+    memory_reservation: "{{ docker_apps_warp_memory_reservation }}"
+    cpus: "{{ docker_apps_warp_cpus }}"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS --proxy socks5h://127.0.0.1:{{ docker_apps_singbox_warp_port | default(40000) }}
+          https://www.cloudflare.com/cdn-cgi/trace | grep -q -E 'warp=(on|plus)' || exit 1
+      interval: 1800s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - docker_apps_singbox_warp_enabled | default(false) | bool
+  tags: [deploy, services, docker_apps, singbox, warp, phase5]
+
+- name: Sing-box WARP - Wait for SOCKS5 Listener Readiness
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ docker_apps_singbox_warp_port | default(40000) | int }}"
+    timeout: 20
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - not ansible_check_mode
+    - docker_apps_singbox_warp_enabled | default(false) | bool
+  tags: [deploy, services, docker_apps, singbox, warp, phase5]
+
+- name: Sing-box WARP - Probe Active Cloudflare Egress
+  ansible.builtin.command:
+    argv:
+      - curl
+      - -fsS
+      - --max-time
+      - "10"
+      - --proxy
+      - "socks5h://127.0.0.1:{{ docker_apps_singbox_warp_port | default(40000) }}"
+      - https://www.cloudflare.com/cdn-cgi/trace
+  register: docker_apps_singbox_warp_probe
+  until:
+    - docker_apps_singbox_warp_probe.rc == 0
+    - "'warp=on' in docker_apps_singbox_warp_probe.stdout or 'warp=plus' in docker_apps_singbox_warp_probe.stdout"
+  retries: 10
+  delay: 3
+  changed_when: false
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - not ansible_check_mode
+    - docker_apps_singbox_warp_enabled | default(false) | bool
+  tags: [deploy, services, docker_apps, singbox, warp, phase5]
+
+- name: Sing-box WARP - Remove container when disabled
+  become: true
+  community.docker.docker_container:
+    name: warp-svc
+    state: absent
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - not (docker_apps_singbox_warp_enabled | default(false) | bool)
+    - (docker_apps_singbox_deploy_mode | default('docker')) == 'docker'
+  tags: [deploy, services, docker_apps, singbox, warp, phase5]

@@ -1,0 +1,145 @@
+---
+# IP2Free Gateway role
+# 由 Singbox 决定是否启用:
+#   - singbox 容器必须在 docker_apps_containers 中
+#   - singbox_role 必须为 direct (生成订阅)
+#   - 通过 auroraops_roles['services']['ip2free_gateway'] 控制
+
+- name: Ensure base prerequisites for IP2Free deploy
+  ansible.builtin.include_role:
+    name: vps.system.base
+    apply:
+      tags: [deploy, services, ip2free_gateway, phase5]
+  when:
+    - auroraops_roles['services']['ip2free_gateway'] | default(false) | bool
+    - ip2free_gateway_ip2free_manage_prerequisites | bool
+  tags: [deploy, services, ip2free_gateway, phase5]
+
+- name: Ensure user prerequisites for IP2Free deploy
+  ansible.builtin.include_role:
+    name: vps.personalization.user_management
+    apply:
+      tags: [deploy, services, ip2free_gateway, phase5]
+  when:
+    - auroraops_roles['services']['ip2free_gateway'] | default(false) | bool
+    - ip2free_gateway_ip2free_manage_prerequisites | bool
+  tags: [deploy, services, ip2free_gateway, phase5]
+
+- name: IP2Free Gateway 部署 (受 Singbox 管控)
+  vars:
+    __sb_containers: >-
+      {{
+        docker_apps_containers |
+        default(docker_apps_containers_host | default([]) + docker_apps_containers_global | default([]))
+      }}
+  when:
+    - auroraops_roles['services']['ip2free_gateway'] | default(false) | bool
+    - "'singbox' in __sb_containers"
+    - singbox_role | default('direct') == 'direct'
+  tags: [deploy, services, ip2free_gateway, phase5]
+  block:
+    - name: 确保依赖已安装
+      ansible.builtin.pip:
+        name: "{{ ip2free_gateway_ip2free_requirements }}"
+        executable: "{{ ip2free_gateway_ip2free_pip }}"
+        state: present
+      tags: [deploy, services, ip2free_gateway, ip2free_gateway_install, phase5]
+
+    - name: 确保目录存在
+      ansible.builtin.file:
+        path: "{{ ip2free_gateway_ip2free_dir }}"
+        state: directory
+        mode: "0755"
+      tags: [deploy, services, ip2free_gateway, ip2free_gateway_install, phase5]
+
+    - name: 部署 IP2Free 脚本
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ ip2free_gateway_ip2free_dir }}/{{ item | basename }}"
+        mode: "0755"
+      loop:
+        - ip2free_agent.py
+        - health_check.py
+        - update_outbounds.py
+      tags: [deploy, services, ip2free_gateway, ip2free_gateway_install, phase5]
+
+    - name: 部署 config.json
+      no_log: true
+      ansible.builtin.template:
+        src: config.json.j2
+        dest: "{{ ip2free_gateway_ip2free_config_file }}"
+        mode: "0600"
+      notify: restart ip2free timers
+      tags: [deploy, services, ip2free_gateway, ip2free_gateway_config, phase5]
+
+    - name: 部署 systemd service - ip2free-agent
+      ansible.builtin.template:
+        src: ip2free-agent.service.j2
+        dest: /etc/systemd/system/ip2free-agent.service
+        mode: "0644"
+      notify: restart ip2free timers
+      tags: [deploy, services, ip2free_gateway, ip2free_gateway_config, phase5]
+
+    - name: 部署 systemd timer - ip2free-agent
+      ansible.builtin.template:
+        src: ip2free-agent.timer.j2
+        dest: /etc/systemd/system/ip2free-agent.timer
+        mode: "0644"
+      notify: restart ip2free timers
+      tags: [deploy, services, ip2free_gateway, ip2free_gateway_config, phase5]
+
+    - name: 部署 systemd service - ip2free-health
+      ansible.builtin.template:
+        src: ip2free-health.service.j2
+        dest: /etc/systemd/system/ip2free-health.service
+        mode: "0644"
+      notify: restart ip2free timers
+      tags: [deploy, services, ip2free_gateway, ip2free_gateway_config, phase5]
+
+    - name: 部署 systemd timer - ip2free-health
+      ansible.builtin.template:
+        src: ip2free-health.timer.j2
+        dest: /etc/systemd/system/ip2free-health.timer
+        mode: "0644"
+      notify: restart ip2free timers
+      tags: [deploy, services, ip2free_gateway, ip2free_gateway_config, phase5]
+
+    - name: 确保定时器已启动
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+        daemon_reload: true
+      loop:
+        - ip2free-agent.timer
+        - ip2free-health.timer
+      tags: [deploy, services, ip2free_gateway, ip2free_gateway_config, phase5]
+
+    - name: 清理旧的 merge_subscription.py
+      ansible.builtin.file:
+        path: "{{ ip2free_gateway_ip2free_dir }}/merge_subscription.py"
+        state: absent
+      tags: [deploy, services, ip2free_gateway, ip2free_gateway_install, phase5]
+
+    - name: 首次部署立即运行 ip2free-agent
+      ansible.builtin.systemd:
+        name: ip2free-agent.service
+        state: started
+      changed_when: false
+      tags: [deploy, services, ip2free_gateway, ip2free_gateway_install, phase5]
+
+
+- name: IP2Free Gateway 跳过 (条件未满足)
+  ansible.builtin.debug:
+    msg: "IP2Free Gateway skipped: singbox not deployed or not in direct mode"
+  vars:
+    __sb_containers: >-
+      {{
+        docker_apps_containers |
+        default(docker_apps_containers_host | default([]) + docker_apps_containers_global | default([]))
+      }}
+  when: >-
+    (not (auroraops_roles['services']['ip2free_gateway'] | default(false) | bool))
+    or ('singbox' not in __sb_containers)
+    or (singbox_role | default('direct') != 'direct')
+  tags: [deploy, services, ip2free_gateway, phase5]

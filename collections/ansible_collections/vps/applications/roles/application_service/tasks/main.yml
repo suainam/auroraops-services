@@ -1,0 +1,62 @@
+---
+# Application Service meta role tasks. Callers control enablement through include_role.
+
+- name: "[Application Service] Ensure application user and group exist"
+  ansible.builtin.user:
+    name: "{{ application_service_user }}"
+    group: "{{ application_service_group | default(omit) }}"
+    state: present
+    system: true
+  when:
+    - application_service_user is not none
+    - application_service_user | length > 0
+  tags:
+    - deploy
+    - phase5
+    - applications
+    - application_service
+    - application_service_user
+
+- name: "[Application Service] Create systemd service file: {{ application_service_name }}"
+  ansible.builtin.template:
+    src: application.service.j2
+    dest: "/etc/systemd/system/{{ application_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: "[Application Service] Reload systemd and apply service change: {{ application_service_name }}"
+  when: application_service_name | length > 0
+  tags:
+    - deploy
+    - phase5
+    - applications
+    - application_service
+    - application_service_config
+
+- name: "[Application Service] Ensure systemd is reloaded after service file changes"
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: application_service_name | length > 0
+  tags:
+    - deploy
+    - phase5
+    - applications
+    - application_service
+    - application_service_reload
+
+- name: "[Application Service] Enable and set service state: {{ application_service_name }}"
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ application_service_name }}.service"
+    enabled: "{{ application_service_enabled | bool }}"
+    state: "{{ application_service_state }}"
+  when:
+    - application_service_name | length > 0
+    - not ansible_check_mode
+  tags:
+    - deploy
+    - phase5
+    - applications
+    - application_service
+    - application_service_service

@@ -1,0 +1,33 @@
+---
+# EasyTier 回滚任务
+
+- name: 停止并移除 EasyTier 容器
+  community.docker.docker_container:
+    name: easytier
+    state: absent
+    stop_timeout: 10
+  tags: [rollback, services, easytier, phase3]
+
+- name: 移除配置目录
+  ansible.builtin.file:
+    path: "{{ easytier_config_dir }}"
+    state: absent
+  tags: [rollback, services, easytier, phase3]
+
+- name: 关闭防火墙端口（监听模式）
+  tags: [rollback, services, easytier, phase3]
+  when: easytier_listen | bool
+  block:
+    - name: 关闭 TCP 端口
+      community.general.ufw:
+        rule: deny
+        port: "{{ easytier_listen_port_tcp }}"
+        proto: tcp
+      tags: [rollback, services, easytier, phase3]
+
+    - name: 关闭 UDP 端口
+      community.general.ufw:
+        rule: deny
+        port: "{{ easytier_listen_port_udp }}"
+        proto: udp
+      tags: [rollback, services, easytier, phase3]

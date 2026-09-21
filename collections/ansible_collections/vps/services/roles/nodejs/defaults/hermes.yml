@@ -1,0 +1,46 @@
+---
+# Hermes Agent technical defaults. Public inputs are normalized in defaults/main.yml.
+nodejs_hermes_defaults:
+  hermes_install_dir: "/usr/local/lib/hermes-agent"
+  hermes_home: "/root/.hermes"
+  hermes_user: "root"
+
+  hermes_model_default: "deepseek-v4-flash"
+  hermes_model_provider: "deepseek"
+  hermes_model_base_url: "https://api.deepseek.com/v1"
+  hermes_model_max_tokens: 8192
+  hermes_model_fallbacks:
+    - "google/gemini-2.5-flash"
+
+  hermes_terminal_backend: "local"
+  hermes_terminal_timeout: 180
+  hermes_terminal_cwd: "/root"
+
+  hermes_telegram_enabled: true
+  hermes_telegram_dm_policy: "pairing"
+  hermes_telegram_group_policy: "allowlist"
+
+  hermes_discord_enabled: true
+  hermes_discord_dm_policy: "pairing"
+  hermes_discord_group_policy: "allowlist"
+
+  hermes_memory_enabled: true
+  hermes_user_profile_enabled: true
+  hermes_memory_char_limit: 2200
+  hermes_user_char_limit: 1375
+
+  hermes_agent_max_turns: 60
+  hermes_agent_reasoning_effort: "medium"
+  hermes_agent_verbose: false
+
+  hermes_display_compact: false
+  hermes_display_streaming: true
+
+  hermes_compression_enabled: true
+  hermes_compression_threshold: 0.20
+  hermes_compression_target_ratio: 0.20
+  hermes_compression_protect_last_n: 20
+
+  hermes_aux_compression_provider: "zai"
+  hermes_aux_compression_model: "glm-4.7-flash"
+  hermes_aux_compression_timeout: 120

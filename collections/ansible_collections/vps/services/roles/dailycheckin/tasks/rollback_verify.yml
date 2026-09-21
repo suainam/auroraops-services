@@ -1,0 +1,52 @@
+---
+- name: "[DailyCheckin] Inspect timer unit after rollback"
+  become: true
+  ansible.builtin.stat:
+    path: /etc/systemd/system/dailycheckin.timer
+  register: dailycheckin_rollback_timer_unit
+  tags: &dailycheckin_rollback_verify_tags
+    - rollback_verify
+    - services
+    - dailycheckin
+    - phase5
+
+- name: "[DailyCheckin] Inspect service unit after rollback"
+  become: true
+  ansible.builtin.stat:
+    path: /etc/systemd/system/dailycheckin.service
+  register: dailycheckin_rollback_service_unit
+  tags: *dailycheckin_rollback_verify_tags
+
+- name: "[DailyCheckin] Inspect residual container after rollback"
+  become: true
+  community.docker.docker_container_info:
+    name: dailycheckin
+  register: dailycheckin_rollback_container
+  tags: *dailycheckin_rollback_verify_tags
+
+- name: "[DailyCheckin] Inspect protected config after rollback"
+  become: true
+  ansible.builtin.stat:
+    path: "{{ dailycheckin_config_dir }}/config.json"
+  register: dailycheckin_rollback_config
+  tags: *dailycheckin_rollback_verify_tags
+
+- name: "[DailyCheckin] Inspect protected image after rollback"
+  become: true
+  community.docker.docker_image_info:
+    name: "{{ dailycheckin_docker_image }}"
+  register: dailycheckin_rollback_image
+  tags: *dailycheckin_rollback_verify_tags
+
+- name: "[DailyCheckin] Assert rollback terminal state"
+  ansible.builtin.assert:
+    that:
+      - not dailycheckin_rollback_timer_unit.stat.exists
+      - not dailycheckin_rollback_service_unit.stat.exists
+      - not dailycheckin_rollback_container.exists
+      - dailycheckin_rollback_config.stat.exists
+      - dailycheckin_rollback_image.images | length > 0
+    fail_msg: >-
+      DailyCheckin rollback must remove deployment units and residual containers
+      while preserving config.json and the pinned published image.
+  tags: *dailycheckin_rollback_verify_tags

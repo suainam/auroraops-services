@@ -1,0 +1,57 @@
+---
+- name: Install unzip dependency
+  ansible.builtin.apt:
+    name: unzip
+    state: present
+    update_cache: true
+  tags: [deploy, services, qmd, qmd_install, phase3]
+
+- name: Install bun runtime
+  ansible.builtin.get_url:
+    url: https://bun.sh/install
+    dest: /tmp/bun-install.sh
+    mode: "0755"
+    owner: root
+    group: root
+  register: qmd_bun_download
+  tags: [deploy, services, qmd, qmd_install, phase3]
+
+- name: Run bun installer
+  ansible.builtin.command:
+    cmd: /tmp/bun-install.sh
+    creates: /usr/local/bin/bun
+  environment:
+    BUN_INSTALL: "/usr/local"
+  tags: [deploy, services, qmd, qmd_install, phase3]
+
+- name: Verify bun installation
+  ansible.builtin.command:
+    cmd: bun --version
+  register: qmd_bun_version
+  changed_when: false
+  tags: [deploy, services, qmd, qmd_install, phase3]
+
+- name: Install qmd globally
+  ansible.builtin.command:
+    argv:
+      - bun
+      - add
+      - --global
+      - tobi/qmd
+  register: qmd_install_result
+  changed_when: qmd_install_result.rc == 0
+  failed_when: >-
+    qmd_install_result.rc != 0 and
+    'already installed' not in qmd_install_result.stderr | lower
+  tags: [deploy, services, qmd, qmd_install, phase3]
+
+- name: Check qmd installation
+  ansible.builtin.stat:
+    path: "{{ ansible_user_dir }}/.bun/lib/node_modules/qmd"
+  register: qmd_install_stat
+  tags: [deploy, services, qmd, qmd_install, phase3]
+
+- name: Set qmd installed fact
+  ansible.builtin.set_fact:
+    qmd_installed: "{{ qmd_install_stat.stat.exists }}"
+  tags: [deploy, services, qmd, qmd_install, phase3]

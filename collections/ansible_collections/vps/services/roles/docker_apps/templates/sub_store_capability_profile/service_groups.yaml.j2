@@ -1,0 +1,29 @@
+# Service groups expose stable defaults while retaining explicit manual
+# overrides. Capability groups remain the source of verified admission facts.
+{% for service in [
+  {'name': '📹 YouTube', 'proxies': ['⚡ 自动优选', '🌍 国际媒体', '🛡️ 稳定优先', 'DIRECT']},
+  {'name': '🎬 国际流媒体', 'proxies': ['🌍 国际媒体', '🧼 纯净节点', '🛡️ 稳定优先', '⚡ 自动优选', 'DIRECT']},
+  {'name': '🎵 Spotify', 'proxies': ['🌍 国际媒体', '🛡️ 稳定优先', '⚡ 自动优选', 'DIRECT']},
+  {'name': '✈️ Telegram', 'proxies': ['🛡️ 稳定优先', '⚡ 自动优选', '⚡ 快速节点', 'DIRECT']},
+  {'name': '🐙 GitHub', 'proxies': ['⚡ 自动优选', '🛡️ 稳定优先', 'DIRECT']},
+  {'name': 'Ⓜ️ 微软服务', 'proxies': ['DIRECT', '🛡️ 稳定优先', '⚡ 自动优选']},
+  {'name': '🍎 苹果服务', 'proxies': ['DIRECT', '🛡️ 稳定优先', '⚡ 自动优选']}
+] %}
+  - name: "{{ service.name }}"
+    type: select
+    proxies:
+{% for proxy in service.proxies %}
+      - "{{ proxy }}"
+{% endfor %}
+    hidden: true
+{% endfor %}
+
+  - name: "🐟 漏网之鱼"
+    type: select
+    proxies:
+      - "🚀 默认代理"
+      - "🛡️ 稳定优先"
+      - "⚡ 自动优选"
+      - DIRECT
+    hidden: true
+

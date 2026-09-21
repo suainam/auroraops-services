@@ -1,0 +1,197 @@
+# tasks/config.yml
+---
+- name: 检查 Alpine Nginx 旧版 pidfile
+  become: true
+  ansible.builtin.stat:
+    path: /run/nginx.pid
+  register: nginx_legacy_pidfile
+  when: (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Alpine'
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 检查 Alpine Nginx 新版 pidfile
+  become: true
+  ansible.builtin.stat:
+    path: "{{ nginx_pid_path }}"
+  register: nginx_current_pidfile
+  when: (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Alpine'
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 停止 Alpine Nginx 旧版 pidfile 对应的进程
+  become: true
+  ansible.builtin.command: nginx -s quit
+  register: nginx_legacy_quit
+  changed_when: nginx_legacy_quit.rc == 0
+  failed_when: false
+  when:
+    - (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Alpine'
+    - nginx_legacy_pidfile.stat.exists | default(false)
+    - not (nginx_current_pidfile.stat.exists | default(false))
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 等待 Alpine Nginx 旧版 pidfile 消失
+  become: true
+  ansible.builtin.wait_for:
+    path: /run/nginx.pid
+    state: absent
+    timeout: 5
+  when:
+    - (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Alpine'
+    - nginx_legacy_quit is not skipped
+    - nginx_legacy_pidfile.stat.exists | default(false)
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 创建配置备份目录
+  become: true
+  ansible.builtin.file:
+    path: /var/backups/auroraops/nginx
+    state: directory
+    mode: "0700"
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: Check current Nginx configuration directory
+  become: true
+  ansible.builtin.stat:
+    path: /etc/nginx
+  register: nginx_current_config_dir
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 备份当前 Nginx 配置 (如果存在)
+  become: true
+  community.general.archive:
+    path: /etc/nginx/
+    dest: /var/backups/auroraops/nginx/last_stable.tar.gz
+    format: gz
+    mode: "0600"
+  when: nginx_current_config_dir.stat.isdir | default(false)
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 确保 Nginx 配置目录存在
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /etc/nginx/sites-available
+    - /etc/nginx/sites-enabled
+    - /etc/nginx/conf.d
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 确保 Alpine Nginx 运行时目录存在
+  become: true
+  ansible.builtin.file:
+    path: "{{ nginx_pid_path | dirname }}"
+    state: directory
+    owner: "{{ nginx_user }}"
+    group: "{{ nginx_user }}"
+    mode: "0755"
+  when: (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Alpine'
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 部署 Nginx 主配置文件 (骨架)
+  become: true
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    mode: "0644"
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 部署 HTTP 级别配置 Drop-in (99-auroraops-http.conf)
+  become: true
+  no_log: true
+  diff: false
+  ansible.builtin.template:
+    src: 99-auroraops-http.conf.j2
+    dest: /etc/nginx/conf.d/99-auroraops-http.conf
+    mode: "0644"
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 部署默认虚拟主机配置文件
+  become: true
+  ansible.builtin.template:
+    src: default.conf.j2
+    dest: /etc/nginx/sites-available/default
+    mode: "0644"
+  notify: reload nginx
+  when: nginx_install_default_vhost | default(true) | bool
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 部署通用 SSL 配置
+  become: true
+  ansible.builtin.template:
+    src: common_ssl.conf.j2
+    dest: /etc/nginx/conf.d/common_ssl.conf
+    mode: "0644"
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 部署通用 Headers 配置
+  become: true
+  ansible.builtin.template:
+    src: common_headers.conf.j2
+    dest: /etc/nginx/conf.d/common_headers.conf
+    mode: "0644"
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 部署通用 Performance 配置
+  become: true
+  ansible.builtin.template:
+    src: common_performance.conf.j2
+    dest: /etc/nginx/conf.d/common_performance.conf
+    mode: "0644"
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 部署通用 Proxy 配置
+  become: true
+  ansible.builtin.template:
+    src: common_proxy.conf.j2
+    dest: /etc/nginx/conf.d/common_proxy.conf
+    mode: "0644"
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 部署 Cloudflare IP 列表
+  become: true
+  ansible.builtin.template:
+    src: cfip.conf.j2
+    dest: /etc/nginx/conf.d/cfip.conf
+    mode: "0644"
+  notify: reload nginx
+  tags: [deploy, services, nginx, config, cfip, phase4]
+
+- name: 启用默认站点
+  become: true
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/default
+    dest: /etc/nginx/sites-enabled/default
+    state: link
+  when: nginx_install_default_vhost | default(true) | bool
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 清理 Nginx 默认欢迎页
+  become: true
+  ansible.builtin.file:
+    path: /var/www/html/index.nginx-debian.html
+    state: absent
+  when: nginx_install_default_vhost | default(true) | bool
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 确保 Nginx 服务已启动并开机自启
+  become: true
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+  tags: [deploy, services, nginx, nginx_config, phase4]
+
+- name: 重新加载 systemd 以识别新的 Nginx 服务
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: (ansible_service_mgr | default('systemd')) == 'systemd'
+  tags: [deploy, services, nginx, nginx_config, phase4]

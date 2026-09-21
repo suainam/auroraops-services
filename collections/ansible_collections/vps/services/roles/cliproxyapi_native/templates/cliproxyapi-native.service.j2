@@ -1,0 +1,25 @@
+[Unit]
+Description=CLIProxyAPI Native Service
+Documentation=https://github.com/router-for-me/CLIProxyAPI
+After=network.target network-online.target transparent-gateway.service hysteria2-native.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory={{ cliproxyapi_native_install_dir }}
+Environment="GOMEMLIMIT={{ cliproxyapi_native_gomemlimit }}"
+{% if cliproxyapi_native_http_proxy | default('') | length > 0 %}
+Environment="http_proxy={{ cliproxyapi_native_http_proxy }}"
+Environment="https_proxy={{ cliproxyapi_native_http_proxy }}"
+Environment="HTTP_PROXY={{ cliproxyapi_native_http_proxy }}"
+Environment="HTTPS_PROXY={{ cliproxyapi_native_http_proxy }}"
+{% endif %}
+ExecStart={{ cliproxyapi_native_install_dir }}/cli-proxy-api -config {{ cliproxyapi_native_install_dir }}/config.yaml
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,27 @@
+---
+- name: Validate CLIProxyAPI supported platform architecture
+  ansible.builtin.assert:
+    that:
+      - ansible_architecture in cliproxyapi_native_arch_map
+    fail_msg: >-
+      Unsupported architecture '{{ ansible_architecture }}' for CLIProxyAPI native.
+      Supported architectures: {{ cliproxyapi_native_arch_map.keys() | list }}.
+  tags: [deploy, services, cliproxyapi_native, cliproxyapi_native_preflight, phase5]
+
+- name: Validate CLIProxyAPI release checksum configured for architecture
+  ansible.builtin.assert:
+    that:
+      - (ansible_architecture in cliproxyapi_native_checksums) or (cliproxyapi_native_auto_checksum | default(true) | bool)
+    fail_msg: >-
+      Missing release checksum for architecture '{{ ansible_architecture }}' in version {{ cliproxyapi_native_version }}.
+  tags: [deploy, services, cliproxyapi_native, cliproxyapi_native_preflight, phase5]
+
+- name: Inspect CLIProxyAPI baseline directories
+  become: true
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ cliproxyapi_native_install_dir }}"
+    - "{{ cliproxyapi_native_data_dir }}"
+  register: cliproxyapi_native_baseline_stats
+  tags: [deploy, services, cliproxyapi_native, cliproxyapi_native_preflight, phase5]

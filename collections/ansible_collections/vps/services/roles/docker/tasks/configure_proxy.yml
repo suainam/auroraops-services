@@ -1,0 +1,34 @@
+---
+# Configure Docker daemon proxy (to pull images from Docker Hub through a
+# local HTTP proxy). Only nas needs this; other hosts use registry mirrors.
+- name: Create Docker systemd proxy directory
+  become: true
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: "0755"
+  when: ansible_hostname == 'nas' and proxy_enabled | default(false)
+  tags: [deploy, services, docker, docker_config, phase3]
+
+- name: Configure Docker daemon proxy
+  become: true
+  ansible.builtin.copy:
+    content: |
+      [Service]
+      Environment="HTTP_PROXY={{ proxy_http }}"
+      Environment="HTTPS_PROXY={{ proxy_https }}"
+      Environment="NO_PROXY=localhost,127.0.0.1"
+    dest: /etc/systemd/system/docker.service.d/http-proxy.conf
+    mode: "0644"
+  when: ansible_hostname == 'nas' and proxy_enabled | default(false)
+  notify: Restart Docker service
+  tags: [deploy, services, docker, docker_config, phase3]
+
+- name: Remove Docker daemon proxy when disabled
+  become: true
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d/http-proxy.conf
+    state: absent
+  when: not (ansible_hostname == 'nas' and proxy_enabled | default(false))
+  notify: Restart Docker service
+  tags: [deploy, services, docker, docker_config, phase3]

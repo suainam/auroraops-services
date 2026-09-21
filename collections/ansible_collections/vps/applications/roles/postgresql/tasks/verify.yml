@@ -1,0 +1,179 @@
+---
+- name: Preflight PostgreSQL runtime capabilities for verification
+  ansible.builtin.import_tasks: preflight.yml
+  tags:
+    - verify
+    - applications
+    - postgresql
+    - postgresql_preflight
+    - phase4
+
+- name: Verify PostgreSQL package is installed
+  ansible.builtin.command: "dpkg -s postgresql-{{ postgresql_version }}"
+  register: postgresql_pg_package_check
+  changed_when: false
+  failed_when: postgresql_pg_package_check.rc != 0
+  tags:
+    - verify
+    - applications
+    - postgresql
+    - postgresql_verify_install
+    - phase4
+
+- name: Gather PostgreSQL service facts
+  ansible.builtin.service_facts:
+  register: postgresql_service_status
+  tags:
+    - verify
+    - applications
+    - postgresql
+    - postgresql_verify_service
+    - phase4
+
+- name: Record PostgreSQL systemd units
+  ansible.builtin.debug:
+    msg: >-
+      Found PostgreSQL-related units:
+      {{ postgresql_service_status.ansible_facts.services
+         | dict2items
+         | selectattr('key', 'search', 'postgresql')
+         | map(attribute='key')
+         | list }}
+  when: postgresql_service_status is defined
+  tags:
+    - verify
+    - applications
+    - postgresql
+    - postgresql_verify_service
+    - phase4
+
+- name: Verify PostgreSQL responds through pg_isready
+  become: true
+  become_user: postgres
+  ansible.builtin.command: pg_isready -q -h 127.0.0.1 -p 5432
+  register: postgresql_pg_isready_check
+  changed_when: false
+  failed_when: postgresql_pg_isready_check.rc != 0
+  tags:
+    - verify
+    - applications
+    - postgresql
+    - postgresql_verify_service
+    - phase4
+
+- name: Verify postgresql.conf listen address
+  ansible.builtin.command:
+    argv:
+      - grep
+      - "listen_addresses = '{{ postgresql_listen_addresses }}'"
+      - "/etc/postgresql/{{ postgresql_version }}/main/postgresql.conf"
+  register: postgresql_pg_conf_check
+  changed_when: false
+  failed_when: postgresql_pg_conf_check.rc != 0
+  tags:
+    - verify
+    - applications
+    - postgresql
+    - postgresql_verify_config
+    - phase4
+
+- name: Verify pg_hba.conf localhost rule
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -E
+      - '^\s*host\s+all\s+all\s+127\.0\.0\.1/32\s+\S+'
+      - "/etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf"
+  register: postgresql_pg_hba_check
+  changed_when: false
+  failed_when: postgresql_pg_hba_check.rc != 0
+  tags:
+    - verify
+    - applications
+    - postgresql
+    - postgresql_verify_config
+    - phase4
+
+- name: Show pg_hba.conf context when validation fails
+  ansible.builtin.command:
+    argv:
+      - head
+      - -n
+      - "50"
+      - "/etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf"
+  register: postgresql_pg_hba_head
+  changed_when: false
+  when:
+    - postgresql_pg_hba_check is defined
+    - postgresql_pg_hba_check.rc != 0
+  tags:
+    - verify
+    - applications
+    - postgresql
+    - postgresql_verify_config
+    - phase4
+
+- name: Verify postgres superuser connection
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_query:
+    query: SELECT 1
+    login_db: postgres
+    login_user: postgres
+  register: postgresql_pg_root_password_check
+  failed_when: postgresql_pg_root_password_check.failed
+  tags:
+    - verify
+    - applications
+    - postgresql
+    - postgresql_verify_users_dbs
+    - phase4
+
+- name: Verify application database user exists
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_query:
+    query: "SELECT 1 FROM pg_user WHERE usename = '{{ postgresql_app_db_user }}'"
+    login_db: postgres
+    login_user: postgres
+  register: postgresql_pg_app_user_check
+  failed_when: postgresql_pg_app_user_check.rowcount == 0
+  tags:
+    - verify
+    - applications
+    - postgresql
+    - postgresql_verify_users_dbs
+    - phase4
+
+- name: Verify application database owner
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_query:
+    query: >-
+      SELECT 1
+      FROM pg_database
+      WHERE datname = '{{ postgresql_app_db_name }}'
+        AND pg_get_userbyid(datdba) = '{{ postgresql_app_db_user }}'
+    login_db: postgres
+    login_user: postgres
+  register: postgresql_pg_app_db_check
+  failed_when: postgresql_pg_app_db_check.rowcount == 0
+  tags:
+    - verify
+    - applications
+    - postgresql
+    - postgresql_verify_users_dbs
+    - phase4
+
+- name: Verify PostgreSQL logrotate configuration
+  ansible.builtin.import_tasks: ../../../common/tasks/verify_optional_logrotate.yml
+  vars:
+    optional_logrotate_owner: PostgreSQL
+    optional_logrotate_enabled: "{{ postgresql_logrotate_enabled }}"
+    optional_logrotate_config_path: "{{ postgresql_logrotate_config_path }}"
+  tags:
+    - verify
+    - applications
+    - postgresql
+    - postgresql_verify_logrotate
+    - phase4

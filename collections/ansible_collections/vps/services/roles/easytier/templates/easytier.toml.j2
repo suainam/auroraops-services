@@ -1,0 +1,46 @@
+# Managed by Ansible - AuroraOps
+# EasyTier Configuration
+
+instance_name = "{{ ansible_hostname | default(inventory_hostname) }}"
+{% if easytier_ipv4 | length > 0 %}
+ipv4 = "{{ easytier_ipv4 }}"
+{% endif %}
+dhcp = {{ easytier_dhcp | lower }}
+
+[network_identity]
+network_name = "{{ easytier_network_name }}"
+network_secret = "{{ easytier_network_secret }}"
+
+{% if easytier_listen | bool %}
+listeners = [
+  "tcp://0.0.0.0:{{ easytier_listen_port }}",
+  "udp://0.0.0.0:{{ easytier_listen_port }}",
+]
+{% endif %}
+
+{% set _peers = (easytier_peers_global + easytier_peers_host) | reject('in', easytier_peers_exclude) | list %}
+{% if _peers | length > 0 %}
+{% for peer in _peers %}
+[[peer]]
+uri = "{{ peer }}"
+
+{% endfor %}
+{% endif %}
+
+{% set _proxies = (easytier_subnet_proxies_global + easytier_subnet_proxies_host) | reject('in', easytier_subnet_proxies_exclude) | list %}
+{% if _proxies | length > 0 %}
+{% for proxy in _proxies %}
+[[proxy_network]]
+cidr = "{{ proxy }}"
+
+{% endfor %}
+{% endif %}
+
+{% if easytier_exit_nodes | length > 0 %}
+exit_nodes = {{ easytier_exit_nodes | to_json }}
+{% endif %}
+
+{% if easytier_vpn_portal_wg | length > 0 %}
+[vpn_portal_config]
+{{ easytier_vpn_portal_wg }}
+{% endif %}

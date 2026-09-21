@@ -1,0 +1,163 @@
+---
+- name: Debug test configuration
+  ansible.builtin.debug:
+    msg: |
+      Test Configuration:
+      - Target: {{ ansibletest_target }}
+      - Docker: {{ ansibletest_use_docker }}
+      - Image: {{ ansibletest_docker_image }}
+      - Mode: {{ ansibletest_mode | default('single') }}
+  tags: [deploy, system, ansibletest, ansibletest_run, phase3]
+
+- name: Ensure log directory exists
+  ansible.builtin.file:
+    path: /var/log/ansibletest
+    state: directory
+    mode: "0755"
+  tags: [deploy, system, ansibletest, ansibletest_run, phase3]
+
+- name: Determine Docker image to use
+  ansible.builtin.set_fact:
+    ansibletest_docker_image: "{{ ansibletest_docker_image if not ansibletest_use_prebuilt | bool else ansibletest_prebuilt_image }}"
+  tags: [deploy, system, ansibletest, ansibletest_run, phase3]
+
+- name: Debug image selection
+  ansible.builtin.debug:
+    msg: "Using Docker image: {{ ansibletest_docker_image }}"
+  tags: [deploy, system, ansibletest, ansibletest_run, phase3]
+
+- name: Run ansible-test integration (Docker Mode with Predefined Environment)
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    # CRITICAL: Must cd into collection directory for ansible-test Docker mode
+    COLLECTION_DIR="/root/AuroraOps/collections/ansible_collections/vps/system"
+    cd "$COLLECTION_DIR"
+    echo "Working directory: $(pwd)"
+
+    # Determine target name (prepend test_ if missing)
+    TARGET="$TEST_TARGET"
+    echo "Initial TARGET: $TARGET"
+    echo "Checking directory: tests/integration/targets/test_$TARGET"
+
+    if [[ -d "tests/integration/targets/test_$TARGET" ]]; then
+      TARGET="test_$TARGET"
+      echo "Target updated to: $TARGET"
+    elif [[ ! -d "tests/integration/targets/$TARGET" ]]; then
+      echo "WARNING: Neither $TARGET nor test_$TARGET found"
+    fi
+
+    LOG_FILE="/var/log/ansibletest/$TEST_TARGET.log"
+    PID_FILE="/var/log/ansibletest/$TEST_TARGET.pid"
+
+    echo "========================================" > "$LOG_FILE"
+    echo "Target: $TARGET" >> "$LOG_FILE"
+    echo "Mode: Docker (Predefined Environment)" >> "$LOG_FILE"
+    echo "Environment: $TEST_ENV" >> "$LOG_FILE"
+    echo "Working Directory: $(pwd)" >> "$LOG_FILE"
+    echo "Started at: $(date)" >> "$LOG_FILE"
+
+    # Use prebuilt image if specified
+    if [[ "$TEST_ENV" == "auroraops-test-base" ]]; then
+      echo "Using prebuilt image: $TEST_ENV (skip dependency installation)" >> "$LOG_FILE"
+    fi
+
+    # Start test using predefined environment (e.g., 'default')
+    echo "Starting test with environment $TEST_ENV..." >> "$LOG_FILE"
+    nohup ansible-test integration "$TARGET" --docker "$TEST_ENV" -v >> "$LOG_FILE" 2>&1 &
+
+    PID=$!
+    echo $PID > "$PID_FILE"
+    echo "Test started with PID: $PID" >> "$LOG_FILE"
+    echo "Waiting for container startup..." >> "$LOG_FILE"
+
+    # Wait for container to be ready, then install dependencies
+    # Reduce wait time if using pre-built image (dependencies already installed)
+    if [[ "$TEST_ENV" == "auroraops-test-base" ]]; then
+      sleep 5
+      echo "Using pre-built image - shorter wait time." >> "$LOG_FILE"
+    else
+      sleep 15
+    fi
+
+    # Find the ansible-test container (escape Jinja2 syntax)
+    {% raw %}
+    CONTAINER_ID=$(docker ps -qf "name=ansible-test-controller" --format "{{.ID}}" | head -n 1)
+    {% endraw %}
+    if [ -n "$CONTAINER_ID" ]; then
+      echo "Container ID: $CONTAINER_ID" >> "$LOG_FILE"
+      # Only install dependencies if NOT using pre-built image
+      if [[ "$TEST_ENV" != "auroraops-test-base" ]]; then
+        echo "Installing dependencies inside container..." >> "$LOG_FILE"
+        docker exec $CONTAINER_ID ansible-galaxy collection install -r /root/requirements.yml --force 2>&1 | tee -a "$LOG_FILE" || true
+        docker exec $CONTAINER_ID pip install pytest-xdist 2>&1 | tee -a "$LOG_FILE" || true
+        echo "Dependencies installed." >> "$LOG_FILE"
+      else
+        echo "Using pre-built image - dependencies already installed, skipping installation." >> "$LOG_FILE"
+      fi
+    else
+      echo "WARNING: Could not find ansible-test container. Dependencies not installed." >> "$LOG_FILE"
+    fi
+
+    echo "========================================" >> "$LOG_FILE"
+  args:
+    executable: /bin/bash
+  environment:
+    TEST_TARGET: "{{ ansibletest_target }}"
+    # Use predefined environment name (e.g., 'default', 'centos8', 'ubuntu2004')
+    TEST_ENV: "{{ ansibletest_docker_image | default('default') }}"
+  register: ansibletest_test_start
+  changed_when: true
+  when: ansibletest_use_docker | bool
+  tags: [deploy, system, ansibletest, ansibletest_run, phase3]
+
+- name: Run ansible-test integration (Venv Mode)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    cd "$ANSIBLE_TEST_HOME"
+
+    # Determine target name (prepend test_ if missing)
+    TARGET="$TEST_TARGET"
+    if [[ ! -d "tests/integration/targets/$TARGET" && -d "tests/integration/targets/test_$TARGET" ]]; then
+      TARGET="test_$TARGET"
+    fi
+
+    LOG_FILE="/var/log/ansibletest/$TEST_TARGET.log"
+    PID_FILE="/var/log/ansibletest/$TEST_TARGET.pid"
+
+    echo "========================================" > "$LOG_FILE"
+    echo "Target: $TARGET" >> "$LOG_FILE"
+    echo "Mode: Venv" >> "$LOG_FILE"
+    echo "Started at: $(date)" >> "$LOG_FILE"
+
+    echo "Installing dependencies..." >> "$LOG_FILE"
+    ansible-galaxy collection install -r /root/AuroraOps/requirements.yml --force 2>&1 | tee -a "$LOG_FILE" || true
+    pip install pytest-xdist 2>&1 | tee -a "$LOG_FILE" || true
+
+    echo "Starting test..." >> "$LOG_FILE"
+    nohup ansible-test integration "$TARGET" --venv -v >> "$LOG_FILE" 2>&1 &
+
+    PID=$!
+    echo $PID > "$PID_FILE"
+    echo "Test started with PID: $PID" >> "$LOG_FILE"
+    echo "========================================" >> "$LOG_FILE"
+  args:
+    executable: /bin/bash
+  environment:
+    ANSIBLE_TEST_HOME: "{{ ansibletest_container_home }}"
+    TEST_TARGET: "{{ ansibletest_target }}"
+  register: ansibletest_test_start
+  changed_when: true
+  when: not (ansibletest_use_docker | bool)
+  tags: [deploy, system, ansibletest, ansibletest_run, phase3]
+
+- name: Display execution info
+  ansible.builtin.debug:
+    msg: |
+      Test started in background.
+      Target: {{ ansibletest_target }}
+      Log file: /var/log/ansibletest/{{ ansibletest_target }}.log
+      PID file: /var/log/ansibletest/{{ ansibletest_target }}.pid
+
+      Use 'make test-log ROLE={{ ansibletest_target }}' to check progress.
+  tags: [deploy, system, ansibletest, ansibletest_run, phase3]

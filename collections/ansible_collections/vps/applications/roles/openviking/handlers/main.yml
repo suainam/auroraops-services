@@ -1,0 +1,28 @@
+---
+# OpenViking handlers
+
+- name: Restart OpenViking
+  ansible.builtin.shell: |
+    pkill -f "openviking serve" || true
+    sleep 2
+    cd {{ openviking_data_dir }} && \
+    nohup {{ openviking_venv_path }}/bin/openviking serve \
+      --host {{ openviking_host }} \
+      --port {{ openviking_port }} \
+      > {{ openviking_log_file }} 2>&1 &
+  changed_when: true
+  listen: restart openviking
+  tags: [handlers]
+
+- name: Reload OpenViking
+  ansible.builtin.shell: |
+    pkill -f "openviking serve" || true
+    sleep 1
+    cd {{ openviking_data_dir }} && \
+    nohup {{ openviking_venv_path }}/bin/openviking serve \
+      --host {{ openviking_host }} \
+      --port {{ openviking_port }} \
+      > {{ openviking_log_file }} 2>&1 &
+  changed_when: true
+  listen: reload openviking
+  tags: [handlers]

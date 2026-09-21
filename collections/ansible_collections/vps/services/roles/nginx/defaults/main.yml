@@ -1,0 +1,89 @@
+---
+# ===========================================
+# Nginx Role 默认配置
+# ===========================================
+# 说明: 本文件仅定义技术默认值
+# 业务配置在 group_vars/all/nginx.yml 中定义
+# 主机特定配置在 host_vars/<host>.yml 中定义
+# ===========================================
+
+# 基础端口配置
+nginx_http_port: 80
+nginx_https_port: 443
+nginx_install_default_vhost: true
+nginx_user: >-
+  {{
+    'nginx'
+    if (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Alpine'
+    else 'www-data'
+  }}
+nginx_module_include: >-
+  {{
+    '/etc/nginx/modules/*.conf'
+    if (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Alpine'
+    else '/etc/nginx/modules-enabled/*.conf'
+  }}
+nginx_pid_path: >-
+  {{ '/run/nginx/nginx.pid'
+     if (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Alpine'
+     else '/run/nginx.pid' }}
+nginx_service_fact_key: >-
+  {{ 'nginx' if (ansible_service_mgr | default('systemd')) != 'systemd' else 'nginx.service' }}
+
+# Upload Size Limit
+nginx_client_max_body_size: "100m"
+
+# Optional role-local Logrotate configuration
+nginx_logrotate_enabled: true
+nginx_logrotate_config_path: "/etc/logrotate.d/nginx"
+nginx_logrotate_config:
+  log_path: "/var/log/nginx/*.log"
+  interval: daily
+  rotate_count: 14
+  compress: true
+  delaycompress: true
+  missingok: true
+  notifempty: true
+  create_owner: root
+  create_group: adm
+  postrotate_command: "systemctl reload nginx >/dev/null 2>&1"
+
+# Camouflage Website (Anti-probing fallback)
+nginx_install_camouflage_blog: false
+# DEPRECATED: nginx_camouflage_blog_url (Now using local files in roles/nginx/files/camouflage/)
+# nginx_camouflage_blog_url: "https://github.com/mack-a/v2ray-agent/raw/master/fodder/blog/unable/html1.zip"
+nginx_camouflage_extract_dir: ""
+
+# 网站默认配置（元模板使用）
+nginx_sites_defaults:
+  type: simple_proxy # 默认类型
+  ssl_cert_name: msuai.top # 默认证书名
+  cloudflare_only: true # 默认启用 Cloudflare IP 限制
+  static_cache: false # 默认不启用静态缓存
+  http2: true # 默认启用 HTTP/2
+
+# ===========================================
+# 分层变量（由 group_vars/host_vars 填充）
+# ===========================================
+# 这些变量将在 role 执行时合并
+# 合并规则: final = global + host - exclude
+# ===========================================
+
+# 空列表，由 group_vars/host_vars 填充
+nginx_sites_to_deploy_global: []
+nginx_sites_to_deploy_host: []
+nginx_sites_to_exclude: []
+# 空字典，由 group_vars/host_vars 填充
+nginx_sites_config_global: {}
+nginx_sites_config_host: {}
+# 最终合并结果（在 tasks/main.yml 中计算）
+nginx_sites_to_deploy: []
+nginx_sites_config: {}
+
+# One-time controlled baseline reseed for intentional site-set migrations.
+nginx_site_baseline_reseed: false
+
+# Focused site lifecycle recovery baseline
+nginx_site_baseline_fact_path: /etc/ansible/facts.d/nginx_site_config.fact
+nginx_site_target: ""
+nginx_site_baseline_allow_additive_reconcile: false

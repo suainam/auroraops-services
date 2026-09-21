@@ -1,0 +1,273 @@
+---
+# Node.js version (NodeSource format)
+nodejs_version: "22.x"
+nodejs_install_npm_user: "root"
+
+# ===========================================
+# Nodejs npm 全局包管理 - 分层变量
+# ===========================================
+# 变量优先级（从高到低）:
+#   1. host_vars/<host>.yml (主机特定)
+#   2. group_vars/all/nodejs.yml (全局默认)
+#   3. role/defaults/main.yml (技术默认)
+#
+# 使用规则:
+#   - nodejs_packages_global: 所有主机都需要的包
+#   - nodejs_packages_host: 主机特定包（在 host_vars 中定义）
+#   - nodejs_packages_exclude: 主机排除的包（在 host_vars 中定义）
+#   - 最终列表 = global + host - exclude
+# ===========================================
+
+# 新变量（分层）
+nodejs_packages_global: []
+nodejs_packages_host: []
+nodejs_packages_exclude: []
+# 旧变量（保留兼容，已废弃）
+nodejs_npm_global_packages:
+  - { name: "@bitwarden/cli", version: "2024.7.2" }
+
+# =============================================================================
+# Bitwarden CLI Configuration (nodejs_bw)
+# =============================================================================
+# Configure and login to Vaultwarden/Bitwarden server
+#
+# Authentication methods (in order of preference):
+#   1. API Key (recommended for 2FA-enabled accounts)
+#   2. Password (for accounts without 2FA)
+#
+# Required secrets in vault.yml:
+#   - vault_vaultwarden_user_name: email address
+#   - vault_vaultwarden_password: master password
+#   - vault_vaultwarden_client_id: API key client_id (optional, for 2FA)
+#   - vault_vaultwarden_client_secret: API key client_secret (optional, for 2FA)
+#
+
+# Session file path - uses ansible_env.HOME for non-root support
+nodejs_bw_server_url: "https://bws.msuai.top"
+nodejs_bw_session_file: "{{ ansible_env.HOME | default('/root') }}/.bw_session"
+
+# Credentials from vault
+nodejs_bw_email: "{{ vault_vaultwarden_user_name }}"
+nodejs_bw_password: "{{ vault_vaultwarden_password }}"
+# API Key credentials (for 2FA accounts) - set in vault.yml
+nodejs_bw_client_id: "{{ vault_vaultwarden_client_id | default('') }}"
+nodejs_bw_client_secret: "{{ vault_vaultwarden_client_secret | default('') }}"
+
+# Test item for lookup plugin verification (optional)
+# Set to an existing item name in your vault to test the lookup plugin
+nodejs_bw_test_item: "AuroraOps/Database/postgresql"
+
+# =============================================================================
+# Vault to Vaultwarden Sync (nodejs_bw_sync)
+# =============================================================================
+# Sync secrets from vault.yml to Vaultwarden
+# Usage: make deploy-services.nodejs.nodejs_bw_sync
+#
+nodejs_bw_sync_dry_run: false
+# 项目根目录 - 使用 ansible_env.HOME 支持非 root 用户
+nodejs_bw_sync_project_root: "{{ ansible_env.HOME | default('/root') }}/AuroraOps"
+
+# =============================================================================
+# Node.js application variable contracts
+# =============================================================================
+# Role 内部只消费 nodejs_*；旧 inventory 输入保留单向兼容回退。
+
+# OpenCode
+nodejs_opencode_enabled: "{{ opencode_enabled | default(false) }}"
+nodejs_opencode_project_enabled: "{{ opencode_project_enabled | default(false) }}"
+nodejs_opencode_server_enabled: "{{ opencode_server_enabled | default(false) }}"
+nodejs_opencode_antigravity_enabled: >-
+  {{ opencode_antigravity_enabled | default(false) }}
+nodejs_opencode_config_dir_root: >-
+  {{ opencode_config_dir_root | default('/root/.config/opencode') }}
+nodejs_opencode_config_dir_admin: >-
+  {{ opencode_config_dir_admin | default('/home/' ~ admin_user ~ '/.config/opencode') }}
+nodejs_opencode_project_dir: "{{ opencode_project_dir | default('/root/AuroraOps') }}"
+nodejs_opencode_install_method: "{{ opencode_install_method | default('script') }}"
+nodejs_opencode_version: "{{ opencode_version | default('1.1.56') }}"
+nodejs_opencode_install_user: "{{ opencode_install_user | default('root') }}"
+nodejs_opencode_add_to_path: "{{ opencode_add_to_path | default(true) }}"
+nodejs_opencode_server_port: "{{ opencode_server_port | default(4096) }}"
+nodejs_opencode_server_hostname: >-
+  {{ opencode_server_hostname | default('127.0.0.1') }}
+nodejs_opencode_server_user: "{{ opencode_server_user | default('root') }}"
+nodejs_opencode_server_working_directory: >-
+  {{ opencode_server_working_directory | default('/root') }}
+nodejs_opencode_server_binary: >-
+  {{ opencode_server_binary | default('/usr/bin/opencode') }}
+nodejs_opencode_server_password: "{{ opencode_server_password | default('') }}"
+nodejs_opencode_server_service_name: >-
+  {{ opencode_server_service_name | default('opencode-server') }}
+nodejs_opencode_server_service_description: >-
+  {{ opencode_server_service_description | default('OpenCode Headless Server') }}
+nodejs_opencode_server_service_enabled: >-
+  {{ opencode_server_service_enabled | default(true) }}
+nodejs_opencode_server_service_state: >-
+  {{ opencode_server_service_state | default('started') }}
+nodejs_opencode_server_config: >-
+  {{
+    opencode_server_config
+    | default({
+        'port': nodejs_opencode_server_port | string,
+        'hostname': nodejs_opencode_server_hostname,
+        'mdns': false,
+        'cors': []
+      })
+  }}
+nodejs_opencode_personal_enabled: >-
+  {{ opencode_personal_enabled | default(false) }}
+nodejs_opencode_personal_config: "{{ opencode_personal_config | default({}) }}"
+
+# OpenClaw technical defaults are loaded before OpenClaw consumers execute.
+nodejs_openclaw_user: "{{ openclaw_user | default(nodejs_openclaw_default_user) }}"
+nodejs_openclaw_home: "{{ openclaw_home | default(nodejs_openclaw_default_home) }}"
+nodejs_openclaw_config_dir: >-
+  {{ openclaw_config_dir | default(nodejs_openclaw_default_config_dir) }}
+nodejs_openclaw_gateway_port: >-
+  {{ openclaw_gateway_port | default(nodejs_openclaw_default_gateway_port) }}
+nodejs_openclaw_gateway_bind: >-
+  {{ openclaw_gateway_bind | default(nodejs_openclaw_default_gateway_bind) }}
+nodejs_openclaw_gateway_mode: >-
+  {{ openclaw_gateway_mode | default(nodejs_openclaw_default_gateway_mode) }}
+nodejs_openclaw_logging_level: >-
+  {{ openclaw_logging_level | default(nodejs_openclaw_default_logging_level) }}
+nodejs_openclaw_logging_redact: >-
+  {{ openclaw_logging_redact | default(nodejs_openclaw_default_logging_redact) }}
+nodejs_openclaw_logging_console_level: >-
+  {{ openclaw_logging_console_level | default(nodejs_openclaw_default_logging_console_level) }}
+nodejs_openclaw_model_primary: >-
+  {{ openclaw_model_primary | default(nodejs_openclaw_default_model_primary) }}
+nodejs_openclaw_model_fallbacks: >-
+  {{ openclaw_model_fallbacks | default(nodejs_openclaw_default_model_fallbacks) }}
+nodejs_openclaw_agent_models: >-
+  {{ openclaw_agent_models | default(nodejs_openclaw_default_agent_models) }}
+nodejs_openclaw_agent_max_concurrent: >-
+  {{ openclaw_agent_max_concurrent | default(nodejs_openclaw_default_agent_max_concurrent) }}
+nodejs_openclaw_agent_subagents_max: >-
+  {{ openclaw_agent_subagents_max | default(nodejs_openclaw_default_agent_subagents_max) }}
+nodejs_openclaw_agent_compaction_mode: >-
+  {{ openclaw_agent_compaction_mode | default(nodejs_openclaw_default_agent_compaction_mode) }}
+nodejs_openclaw_agent_compaction_threshold: >-
+  {{ openclaw_agent_compaction_threshold | default(nodejs_openclaw_default_agent_compaction_threshold) }}
+nodejs_openclaw_agent_compaction_target: >-
+  {{ openclaw_agent_compaction_target | default(nodejs_openclaw_default_agent_compaction_target) }}
+nodejs_openclaw_agent_workspace: >-
+  {{ openclaw_agent_workspace | default(nodejs_openclaw_default_agent_workspace) }}
+nodejs_openclaw_memory_search_enabled: >-
+  {{ openclaw_memory_search_enabled | default(nodejs_openclaw_default_memory_search_enabled) }}
+nodejs_openclaw_memory_search_provider: >-
+  {{ openclaw_memory_search_provider | default(nodejs_openclaw_default_memory_search_provider) }}
+nodejs_openclaw_memory_search_session_enabled: >-
+  {{ openclaw_memory_search_session_enabled | default(nodejs_openclaw_default_memory_search_session_enabled) }}
+nodejs_openclaw_compaction_reserve_floor: >-
+  {{ openclaw_compaction_reserve_floor | default(nodejs_openclaw_default_compaction_reserve_floor) }}
+nodejs_openclaw_compaction_memory_flush: >-
+  {{ openclaw_compaction_memory_flush | default(nodejs_openclaw_default_compaction_memory_flush) }}
+nodejs_openclaw_compaction_flush_threshold: >-
+  {{ openclaw_compaction_flush_threshold | default(nodejs_openclaw_default_compaction_flush_threshold) }}
+nodejs_openclaw_mcp_openviking_enabled: >-
+  {{ openclaw_mcp_openviking_enabled | default(nodejs_openclaw_default_mcp_openviking_enabled) }}
+nodejs_openclaw_mcp_openviking_python: >-
+  {{ openclaw_mcp_openviking_python | default(nodejs_openclaw_default_mcp_openviking_python) }}
+nodejs_openclaw_mcp_openviking_script: >-
+  {{ openclaw_mcp_openviking_script | default(nodejs_openclaw_default_mcp_openviking_script) }}
+nodejs_openclaw_messages_ack_reaction_scope: >-
+  {{ openclaw_messages_ack_reaction_scope | default(nodejs_openclaw_default_messages_ack_reaction_scope) }}
+nodejs_openclaw_commands_native: >-
+  {{ openclaw_commands_native | default(nodejs_openclaw_default_commands_native) }}
+nodejs_openclaw_commands_native_skills: >-
+  {{ openclaw_commands_native_skills | default(nodejs_openclaw_default_commands_native_skills) }}
+nodejs_openclaw_hooks_internal_enabled: >-
+  {{ openclaw_hooks_internal_enabled | default(nodejs_openclaw_default_hooks_internal_enabled) }}
+nodejs_openclaw_hooks_boot_md: >-
+  {{ openclaw_hooks_boot_md | default(nodejs_openclaw_default_hooks_boot_md) }}
+nodejs_openclaw_hooks_command_logger: >-
+  {{ openclaw_hooks_command_logger | default(nodejs_openclaw_default_hooks_command_logger) }}
+nodejs_openclaw_hooks_session_memory: >-
+  {{ openclaw_hooks_session_memory | default(nodejs_openclaw_default_hooks_session_memory) }}
+nodejs_openclaw_telegram_enabled: >-
+  {{ openclaw_telegram_enabled | default(nodejs_openclaw_default_telegram_enabled) }}
+nodejs_openclaw_telegram_dm_policy: >-
+  {{ openclaw_telegram_dm_policy | default(nodejs_openclaw_default_telegram_dm_policy) }}
+nodejs_openclaw_telegram_group_policy: >-
+  {{ openclaw_telegram_group_policy | default(nodejs_openclaw_default_telegram_group_policy) }}
+nodejs_openclaw_telegram_stream_mode: >-
+  {{ openclaw_telegram_stream_mode | default(nodejs_openclaw_default_telegram_stream_mode) }}
+nodejs_openclaw_discord_dm_policy: >-
+  {{ openclaw_discord_dm_policy | default(nodejs_openclaw_default_discord_dm_policy) }}
+nodejs_openclaw_skills_node_manager: >-
+  {{ openclaw_skills_node_manager | default(nodejs_openclaw_default_skills_node_manager) }}
+nodejs_openclaw_tailscale_mode: >-
+  {{ openclaw_tailscale_mode | default(nodejs_openclaw_default_tailscale_mode) }}
+nodejs_openclaw_tailscale_reset_on_exit: >-
+  {{ openclaw_tailscale_reset_on_exit | default(nodejs_openclaw_default_tailscale_reset_on_exit) }}
+nodejs_openclaw_models_mode: >-
+  {{ openclaw_models_mode | default(nodejs_openclaw_default_models_mode) }}
+nodejs_openclaw_models_providers: >-
+  {{ openclaw_models_providers | default(nodejs_openclaw_default_models_providers) }}
+
+# Hermes technical defaults are loaded before Hermes consumers execute.
+nodejs_hermes_install_dir: >-
+  {{ hermes_install_dir | default(nodejs_hermes_defaults.hermes_install_dir) }}
+nodejs_hermes_home: "{{ hermes_home | default(nodejs_hermes_defaults.hermes_home) }}"
+nodejs_hermes_user: "{{ hermes_user | default(nodejs_hermes_defaults.hermes_user) }}"
+nodejs_hermes_model_default: >-
+  {{ hermes_model_default | default(nodejs_hermes_defaults.hermes_model_default) }}
+nodejs_hermes_model_provider: >-
+  {{ hermes_model_provider | default(nodejs_hermes_defaults.hermes_model_provider) }}
+nodejs_hermes_model_base_url: >-
+  {{ hermes_model_base_url | default(nodejs_hermes_defaults.hermes_model_base_url) }}
+nodejs_hermes_model_max_tokens: >-
+  {{ hermes_model_max_tokens | default(nodejs_hermes_defaults.hermes_model_max_tokens) }}
+nodejs_hermes_model_fallbacks: >-
+  {{ hermes_model_fallbacks | default(nodejs_hermes_defaults.hermes_model_fallbacks) }}
+nodejs_hermes_terminal_backend: >-
+  {{ hermes_terminal_backend | default(nodejs_hermes_defaults.hermes_terminal_backend) }}
+nodejs_hermes_terminal_timeout: >-
+  {{ hermes_terminal_timeout | default(nodejs_hermes_defaults.hermes_terminal_timeout) }}
+nodejs_hermes_terminal_cwd: >-
+  {{ hermes_terminal_cwd | default(nodejs_hermes_defaults.hermes_terminal_cwd) }}
+nodejs_hermes_telegram_enabled: >-
+  {{ hermes_telegram_enabled | default(nodejs_hermes_defaults.hermes_telegram_enabled) }}
+nodejs_hermes_telegram_dm_policy: >-
+  {{ hermes_telegram_dm_policy | default(nodejs_hermes_defaults.hermes_telegram_dm_policy) }}
+nodejs_hermes_telegram_group_policy: >-
+  {{ hermes_telegram_group_policy | default(nodejs_hermes_defaults.hermes_telegram_group_policy) }}
+nodejs_hermes_discord_enabled: >-
+  {{ hermes_discord_enabled | default(nodejs_hermes_defaults.hermes_discord_enabled) }}
+nodejs_hermes_discord_dm_policy: >-
+  {{ hermes_discord_dm_policy | default(nodejs_hermes_defaults.hermes_discord_dm_policy) }}
+nodejs_hermes_discord_group_policy: >-
+  {{ hermes_discord_group_policy | default(nodejs_hermes_defaults.hermes_discord_group_policy) }}
+nodejs_hermes_memory_enabled: >-
+  {{ hermes_memory_enabled | default(nodejs_hermes_defaults.hermes_memory_enabled) }}
+nodejs_hermes_user_profile_enabled: >-
+  {{ hermes_user_profile_enabled | default(nodejs_hermes_defaults.hermes_user_profile_enabled) }}
+nodejs_hermes_memory_char_limit: >-
+  {{ hermes_memory_char_limit | default(nodejs_hermes_defaults.hermes_memory_char_limit) }}
+nodejs_hermes_user_char_limit: >-
+  {{ hermes_user_char_limit | default(nodejs_hermes_defaults.hermes_user_char_limit) }}
+nodejs_hermes_agent_max_turns: >-
+  {{ hermes_agent_max_turns | default(nodejs_hermes_defaults.hermes_agent_max_turns) }}
+nodejs_hermes_agent_reasoning_effort: >-
+  {{ hermes_agent_reasoning_effort | default(nodejs_hermes_defaults.hermes_agent_reasoning_effort) }}
+nodejs_hermes_agent_verbose: >-
+  {{ hermes_agent_verbose | default(nodejs_hermes_defaults.hermes_agent_verbose) }}
+nodejs_hermes_display_compact: >-
+  {{ hermes_display_compact | default(nodejs_hermes_defaults.hermes_display_compact) }}
+nodejs_hermes_display_streaming: >-
+  {{ hermes_display_streaming | default(nodejs_hermes_defaults.hermes_display_streaming) }}
+nodejs_hermes_compression_enabled: >-
+  {{ hermes_compression_enabled | default(nodejs_hermes_defaults.hermes_compression_enabled) }}
+nodejs_hermes_compression_threshold: >-
+  {{ hermes_compression_threshold | default(nodejs_hermes_defaults.hermes_compression_threshold) }}
+nodejs_hermes_compression_target_ratio: >-
+  {{ hermes_compression_target_ratio | default(nodejs_hermes_defaults.hermes_compression_target_ratio) }}
+nodejs_hermes_compression_protect_last_n: >-
+  {{ hermes_compression_protect_last_n | default(nodejs_hermes_defaults.hermes_compression_protect_last_n) }}
+nodejs_hermes_aux_compression_provider: >-
+  {{ hermes_aux_compression_provider | default(nodejs_hermes_defaults.hermes_aux_compression_provider) }}
+nodejs_hermes_aux_compression_model: >-
+  {{ hermes_aux_compression_model | default(nodejs_hermes_defaults.hermes_aux_compression_model) }}
+nodejs_hermes_aux_compression_timeout: >-
+  {{ hermes_aux_compression_timeout | default(nodejs_hermes_defaults.hermes_aux_compression_timeout) }}

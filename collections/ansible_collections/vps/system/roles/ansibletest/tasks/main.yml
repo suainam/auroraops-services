@@ -1,0 +1,121 @@
+---
+- name: Preflight AnsibleTest runtime capabilities
+  ansible.builtin.import_tasks: preflight.yml
+  tags:
+    - deploy
+    - system
+    - ansibletest
+    - ansibletest_preflight
+    - phase3
+
+- name: Display test mode configuration
+  ansible.builtin.debug:
+    msg: |
+      AnsibleTest Configuration:
+      - Mode: {{ ansibletest_mode }}
+      - Target: {{ ansibletest_target }}
+      - Build Image: {{ ansibletest_build_image }}
+      - Force Rebuild: {{ ansibletest_force_rebuild }}
+  tags:
+    - deploy
+    - verify
+    - rollback
+    - system
+    - ansibletest
+    - phase3
+- name: Include local test install tasks
+  ansible.builtin.include_tasks: local/install.yml
+  when: ansibletest_mode == "local"
+  tags:
+    - deploy
+    - system
+    - ansibletest
+    - ansibletest_install
+    - phase3
+- name: Include remote test install tasks
+  ansible.builtin.include_tasks: remote/install.yml
+  when: ansibletest_mode == "remote"
+  tags:
+    - deploy
+    - system
+    - ansibletest
+    - ansibletest_install
+    - phase3
+- name: Include local test run tasks
+  ansible.builtin.include_tasks: local/run.yml
+  when: ansibletest_mode == "local"
+  tags:
+    - deploy
+    - system
+    - ansibletest
+    - ansibletest_run
+    - phase3
+- name: Include remote test run tasks
+  ansible.builtin.include_tasks: remote/run.yml
+  when: ansibletest_mode == "remote"
+  tags:
+    - deploy
+    - system
+    - ansibletest
+    - ansibletest_run
+    - phase3
+- name: Include local test status tasks
+  ansible.builtin.include_tasks: local/status.yml
+  when: ansibletest_mode == "local"
+  tags:
+    - verify
+    - system
+    - ansibletest
+    - ansibletest_status
+    - phase3
+    - deploy
+- name: Include remote test status tasks
+  ansible.builtin.include_tasks: remote/status.yml
+  when: ansibletest_mode == "remote"
+  tags:
+    - verify
+    - system
+    - ansibletest
+    - ansibletest_status
+    - phase3
+    - deploy
+- name: Include remote test result tasks
+  ansible.builtin.include_tasks: remote/result.yml
+  when: ansibletest_mode == "remote"
+  tags:
+    - verify
+    - system
+    - ansibletest
+    - ansibletest_result
+    - phase3
+    - deploy
+- name: Include remote test verify tasks
+  ansible.builtin.include_tasks: remote/verify.yml
+  when: ansibletest_mode == "remote"
+  tags:
+    - verify
+    - system
+    - ansibletest
+    - ansibletest_verify
+    - phase3
+    - deploy
+- name: Include local test cleanup tasks
+  ansible.builtin.include_tasks: local/cleanup.yml
+  when: ansibletest_mode == "local"
+  tags:
+    - rollback
+    - system
+    - ansibletest
+    - ansibletest_cleanup
+    - phase3
+    - deploy
+- name: Include remote test cleanup tasks
+  ansible.builtin.include_tasks: remote/cleanup.yml
+  when: ansibletest_mode == "remote"
+  tags:
+    - rollback
+    - system
+    - ansibletest
+    - ansibletest_cleanup
+    - phase3
+    - deploy

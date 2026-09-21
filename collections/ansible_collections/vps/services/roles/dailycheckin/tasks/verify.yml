@@ -1,0 +1,59 @@
+---
+- name: "[DailyCheckin] Verify timer state"
+  become: true
+  ansible.builtin.systemd:
+    name: dailycheckin.timer
+  register: dailycheckin_timer_status
+  tags: &dailycheckin_verify_tags
+    - verify
+    - services
+    - dailycheckin
+    - phase5
+
+- name: "[DailyCheckin] Verify service state"
+  become: true
+  ansible.builtin.systemd:
+    name: dailycheckin.service
+  register: dailycheckin_service_status
+  tags: *dailycheckin_verify_tags
+
+- name: "[DailyCheckin] Inspect residual container"
+  become: true
+  community.docker.docker_container_info:
+    name: dailycheckin
+  register: dailycheckin_container_status
+  tags: *dailycheckin_verify_tags
+
+- name: "[DailyCheckin] Verify config file"
+  become: true
+  ansible.builtin.stat:
+    path: "{{ dailycheckin_config_dir }}/config.json"
+  register: dailycheckin_config_stat
+  tags: *dailycheckin_verify_tags
+
+- name: "[DailyCheckin] Verify pinned image"
+  become: true
+  community.docker.docker_image_info:
+    name: "{{ dailycheckin_docker_image }}"
+  register: dailycheckin_image_status
+  tags: *dailycheckin_verify_tags
+
+- name: "[DailyCheckin] Assert bounded oneshot terminal state"
+  ansible.builtin.assert:
+    that:
+      - >-
+        dailycheckin_timer_status.status.ActiveState ==
+        ((dailycheckin_timer_enabled | bool) | ternary('active', 'inactive'))
+      - >-
+        dailycheckin_timer_status.status.UnitFileState ==
+        ((dailycheckin_timer_enabled | bool) | ternary('enabled', 'disabled'))
+      - dailycheckin_service_status.status.ActiveState == 'inactive'
+      - not dailycheckin_container_status.exists
+      - dailycheckin_config_stat.stat.exists
+      - dailycheckin_config_stat.stat.mode == '0600'
+      - dailycheckin_image_status.images | length > 0
+    fail_msg: >-
+      DailyCheckIn must keep the timer in its declared state, leave the oneshot
+      service inactive, remove the execution container, retain private config.json,
+      and keep the pinned image available.
+  tags: *dailycheckin_verify_tags
