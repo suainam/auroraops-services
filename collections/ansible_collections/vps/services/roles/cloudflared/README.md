@@ -27,4 +27,4 @@ Rollback removes only the managed package/binary, connector and watchdog units, 
 
 DNS mutation is disabled by default. An explicitly configured `cloudflared_dns_hostname` and `cloudflared_dns_zone` enroll one proxied CNAME for an existing custom ingress through the normal Make lifecycle. Preflight refuses unrelated existing records, and a separate ownership baseline lets rollback remove only a record originally created by the role. Credentials remain in Vault and API operations use `no_log`. The separate Vaultwarden test-domain drill remains restricted to `bws-dr-test.msuai.top` and retains its explicit authorization and backup guards.
 
-The legacy `https://bws-vps-health.msuai.top/alive` endpoint belongs to cc15, not the current qqg1299 primary. For current primary health checks and promotion eligibility, follow the [Vaultwarden standby contract](../../../operations_loop/roles/vaultwarden_standby/README.md#人工接管-cli).
+The legacy `https://bws-vps-health.msuai.top/alive` endpoint belongs to cc15, not the current qqg1299 primary. For current primary health checks and promotion eligibility, follow the [Docker retirement standby guard](../docker/README.md).

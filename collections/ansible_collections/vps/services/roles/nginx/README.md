@@ -257,4 +257,4 @@ grep "token=" /etc/nginx/sites-available/api-gcli.msuai.top.conf
 
 - [Nginx 官方文档](https://nginx.org/en/docs/)
 - [AGENTS.md - Agent 规则](../../../../../../AGENTS.md)
-- [Nginx 运维指南](../../../../../../wiki/phase2_services/Nginx_Configuration_Guide.md)
+- [Nginx 角色部署与验证](#7-部署命令)

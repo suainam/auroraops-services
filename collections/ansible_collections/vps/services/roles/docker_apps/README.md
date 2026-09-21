@@ -268,10 +268,10 @@ CLIProxyAPI 的 Antigravity 请求同时存在两个相互独立的概念：
         - 部署时通过 `command.argv + stdin` 将明文交给远端交互式 `vaultwarden hash`，校验 Argon2id PHC 输出后再写入 `vaultwarden.env`；明文不进入 shell 命令文本或日志。
         - `vault_vaultwarden_smtp_username` / `vault_vaultwarden_smtp_password` 也从 `secrets/vault.yml` 注入。
         - `vaultwarden_version` 是版本唯一权威；主机只覆盖 `vaultwarden_registry`，避免主服务与 standby 镜像版本漂移。
-        - 客户端最低版本与验证证据由 [`docs/compatibility/vaultwarden.json`](../../../../../../docs/compatibility/vaultwarden.json) 统一维护；focused verify 会读取容器运行版本、确认声明镜像并检查本地 `/alive`。
+        - 客户端最低版本与验证证据以本 role 的 focused verify 为准；它会读取容器运行版本、确认声明镜像并检查本地 `/alive`。仓库不再维护独立的 compatibility JSON 镜像。
         - Vaultwarden 1.29+ 将 WebSocket 集成到主 HTTP 端口；主容器不再映射旧的独立 3012 端口，Nginx `/notifications/hub` 仍启用 WebSocket 转发。
         - `docker_apps_vaultwarden_pull` 默认 `false`，保持日常部署不访问 registry；版本升级时通过 `ANSIBLE_EXTRA_ARGS='-e docker_apps_vaultwarden_pull=true'` 仅为 Vaultwarden 显式开启拉取。
-        - Release 检查、专用 canary 账号和客户端缓存处理见 [`Vaultwarden_Compatibility_Guide.md`](../../../../../../wiki/phase2_services/Vaultwarden_Compatibility_Guide.md)。
+        - Release 检查、专用 canary 账号和客户端缓存处理以本 role 的 focused verify 输出为准；历史 Compatibility Guide 已不在本仓库维护。
     *   **Singbox**: 整合核心代理服务，支持 VLESS-Reality、Hysteria2、Trojan-WS、AnyTLS 和 TUIC v5。出站集成 Cloudflare WARP Local Proxy (`127.0.0.1:40000`) 解耦 AI 流量（OpenAI / Anthropic / Google），顶层强化 RFC1918/Loopback/CGNAT 私网防御，并对高敏路由实行 Fail-Closed 防漏底。TUIC 启用 `bbr` 拥塞控制、`alpn: h3` 与 `heartbeat: 10s` 保活，gRPC 启用 `idle_timeout: 15s` 与 `ping_timeout: 5s` 保活以消除超时。Reality key 与 short ID 仅在缺失时生成并持久化；Base64 URI 文本由独立模板渲染，YAML/JSON 客户端配置继续使用既有字段合同。低内存 NAT 主机可使用原生 Alpine/OpenRC 模式；原生配置变更通过独立 handler 重启服务；平台判断使用 Ansible facts。定向部署只更新 Singbox 自身，不再隐式执行 Nginx Role；需要调整订阅路由时显式执行 `make deploy-services.nginx.nginx_site_config`。
         - Relay 模式支持通过 `singbox_relay_upstreams` 与 `singbox_extra_nodes` 扩展跨地域中转能力。对于 HK NAT 节点（`nat-hk084`、`nat-hk2d16`），在 `inventories/prod.ini` 中聚合至 `[nat_hk]` 子组，统一由共享配置 owner 路径 `inventories/group_vars/nat_hk.yml` 管理；通过共享开关 `nat_hk_jp_relay_enabled`（`true`/`false`）控制额外节点与上游列表，无需在各单机 `host_vars` 重复声明。端口合同明确遵循：直连出站保留原端口不变（VLESS-Reality TCP `30052`、Hysteria2 UDP `30051`），新增中转端口为 VLESS-Reality TCP `30054` 与 Hysteria2 UDP `30053`，经公网落地到 `nat-jp3` 的 Hysteria2（UDP `30051`）。Make 部署顺序必须遵循“落地优先再到入口”，在 `nat-jp3` 就绪后，再切至 HK 节点执行定向生命周期：`make switch_remote.<host>` → `make check-services.docker_apps.singbox` → `make deploy-services.docker_apps.singbox` → `make verify-services.docker_apps.singbox`（或通过 NAT 统一入口 `make nat-deploy` / `make nat-verify`）。注意：macOS 环境下 `curl --noproxy '*'` 仍会受系统 TUN 虚拟网卡劫持，此前依赖它的测试证据作废；物理直连对照必须显式绑定物理网卡（如 `en0`，`IP_BOUND_IF=25`）或使用隔离 listener，UDP `nc -u` 成功仅代表本地 send 成功，不能作为远端握手依据。
         - NAT provider 的 compact YAML 与完整订阅使用同一节点集合，均包含本机 `singbox_nodes` 及启用的 `singbox_extra_nodes`；因此 HK→JP relay 节点会随 NAT provider 进入 Sub-Store 聚合。
@@ -725,8 +725,7 @@ curl -s https://your-domain/x9a8b7c6d5e4f3 | base64 -d | grep hysteria2
     ```
 
 ## 6. 相关文档
-* **[Singbox 订阅使用指南](../../../../../../wiki/phase2_services/Singbox_Subscription_Guide.md)**: 客户端配置与常见问题
-* **[Singbox 订阅修复总结](../../../../../../docs/Retrospectives/Singbox_Subscription_Fix_Summary.md)**: 技术问题与解决方案
+* Singbox 订阅生命周期、Nginx 刷新和验证步骤以本 README 的 `## 3.1 Singbox 订阅系统` 章节为唯一来源；历史 Wiki/Retrospectives 页面已不在本仓库维护。
 
 ## 7. 数据库恢复指南
 
