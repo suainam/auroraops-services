@@ -48,3 +48,11 @@ def test_roles_have_dedicated_rollback_verification():
         path = role / "tasks/rollback_verify.yml"
         assert path.is_file()
         assert "rollback_verify" in path.read_text(encoding="utf-8")
+
+
+def test_mihomo_rollback_verification_checks_systemd_load_state():
+    rollback_verify = (MIHOMO / "tasks/rollback_verify.yml").read_text(encoding="utf-8")
+
+    assert "ansible.builtin.systemd:" in rollback_verify
+    assert "LoadState" in rollback_verify
+    assert "default('not-found') == 'not-found'" in rollback_verify

@@ -1,17 +1,24 @@
 ---
-- name: Collect systemd facts after Mihomo rollback
+- name: Query Mihomo runtime unit load states after rollback
   become: true
-  ansible.builtin.service_facts:
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+  loop:
+    - mihomo-native.service
+    - mihomo-native-refresh.service
+    - mihomo-native-refresh.timer
+  register: mihomo_native_rollback_unit_states
+  changed_when: false
+  failed_when: false
   tags: [rollback_verify, services, mihomo_native, mihomo_native_rollback_verify, phase3]
 
 - name: Assert Mihomo runtime units are absent after rollback
   ansible.builtin.assert:
     that:
-      - "'mihomo-native.service' not in ansible_facts.services"
-      - "'mihomo-native-refresh.service' not in ansible_facts.services"
-      - "'mihomo-native-refresh.timer' not in ansible_facts.services"
+      - (item.status | default({})).LoadState | default('not-found') == 'not-found'
     fail_msg: "Mihomo runtime units still exist after rollback"
     success_msg: "Mihomo runtime units are absent after rollback"
+  loop: "{{ mihomo_native_rollback_unit_states.results }}"
   tags: [rollback_verify, services, mihomo_native, mihomo_native_rollback_verify, phase3]
 
 - name: Check preserved Mihomo profile and provider state

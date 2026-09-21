@@ -20,6 +20,8 @@ proxy-groups、rules 与节点内容仍由 Sub-Store 负责，Role 不解析或�
 - profile URL 放在 root-only 的 `/etc/mihomo-native/refresh.env`，Ansible 相关任务关闭日志。
 - verify 会检查 Mihomo provider cache 非空、7890 由 Mihomo 进程占用且只绑定 `127.0.0.1`。
 - rollback 移除运行时 unit、脚本和二进制，保留 LKG profile 与 provider state。
+- rollback_verify 通过 systemd `LoadState=not-found` 确认运行时 unit 已移除，避免把已删除
+  unit 的历史 facts 条目误判为仍在运行。
 
 ## 生命周期
 
@@ -31,6 +33,8 @@ make deploy-services.mihomo_native
 make verify-services.mihomo_native
 make rollback-services.mihomo_native
 make rollback_verify-services.mihomo_native
+make redeploy-services.mihomo_native
+make recovery_verify-services.mihomo_native
 ```
 
 Profile 显式启用 `mihomo_native`，其他主机默认关闭。profile 下载代理由
