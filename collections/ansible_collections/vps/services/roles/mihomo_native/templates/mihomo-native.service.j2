@@ -1,0 +1,23 @@
+[Unit]
+Description=Mihomo Native Proxy Service (AuroraOps)
+Documentation=https://wiki.metacubex.one/
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ mihomo_native_user }}
+Group={{ mihomo_native_group }}
+WorkingDirectory={{ mihomo_native_install_dir }}
+ExecStart={{ mihomo_native_binary_path }} -d {{ mihomo_native_install_dir }} -f {{ mihomo_native_profile_path }}
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths={{ mihomo_native_install_dir }}
+
+[Install]
+WantedBy=multi-user.target

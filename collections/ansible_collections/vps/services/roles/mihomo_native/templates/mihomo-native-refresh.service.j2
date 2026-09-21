@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh the complete Sub-Store Mihomo profile
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile={{ mihomo_native_refresh_env_path }}
+ExecStart={{ mihomo_native_refresh_script_path }}

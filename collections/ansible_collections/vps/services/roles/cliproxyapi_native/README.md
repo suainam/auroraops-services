@@ -2,9 +2,10 @@
 
 ## 1. 概述
 
-本 Role 负责在低内存或边缘计算节点（如 Raspberry Pi 5）上部署原生 systemd 管理的 [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) 服务。通过消除 Docker 守护进程与容器运行时的常驻开销，显著节约主机系统内存。
+本 Role 负责在低内存或边缘计算节点上部署原生 systemd 管理的 [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) 服务。通过消除 Docker 守护进程与容器运行时的常驻开销，显著节约主机系统内存。
 
-服务监听回环地址 `127.0.0.1:30011`，作为应用层 API 代理（Phase 5），通过前置网络服务（如透明网关混合代理 `http://127.0.0.1:12346`）与各类上游 AI 提供商通信。
+服务监听回环地址 `127.0.0.1:30011`，作为应用层 API 代理（Phase 5）。边缘节点的应用请求统一通过
+Mihomo 混合代理 `http://127.0.0.1:7890`；旧透明网关和 Hysteria2 不再作为应用出口。
 
 ## 2. 版本锁定与上游校验证据
 
@@ -20,7 +21,8 @@
 - **无 SQLite 依赖**: 上游 CLIProxyAPI 采用基于文件系统的认证存储架构。通过 `auth-dir` (`/opt/cliproxyapi/data`) 目录持久化各类提供商的 OAuth 授权凭证、Token 与会话。
 - **内存调优**: 设置 `GOMEMLIMIT=220MiB` 软性上限，驱动 Go 运行时更主动地进行垃圾回收，防止在长时间运行下堆内存无限膨胀。
 - **定时重启释放内存**: 配套部署 `cliproxyapi-restart.timer` 与 companion oneshot service `cliproxyapi-restart.service`，在每日凌晨 `04:00` 自动重启服务，释放内存碎片。
-- **出站代理下载**: 安装包下载显式经由 `http://127.0.0.1:12346` 代理出站，避免边缘节点直连 GitHub release 失败。
+- **出站代理下载**: 默认下载代理仍保持兼容性；部署 profile 通过 host vars 显式使用 Mihomo
+  `http://127.0.0.1:7890`。
 
 ## 4. 关键变量说明
 
@@ -34,8 +36,8 @@
 | `cliproxyapi_native_restart_hour`| `"04"` | 每日定时重启小时数 (24h) |
 | `cliproxyapi_native_gomemlimit`  | `"220MiB"` | Go 运行时内存限制 |
 | `cliproxyapi_native_http_proxy`  | `""` | 注入 systemd 的出站 HTTP 代理（留空避免劫持进程内直连） |
-| `cliproxyapi_native_proxy_url`   | `"http://127.0.0.1:12346"` | 应用层出站代理（走带自动容灾的混合代理端口） |
-| `cliproxyapi_native_download_proxy`| `"http://127.0.0.1:12346"` | 下载发布包所用出站代理 |
+| `cliproxyapi_native_proxy_url`   | `"http://127.0.0.1:7890"` | 应用层出站代理，默认使用本机 Mihomo mixed port |
+| `cliproxyapi_native_download_proxy`| `"http://127.0.0.1:7890"` | 下载发布包所用出站代理 |
 | `cliproxyapi_native_management_key` | `cliproxyapi_management_key` | 管理接口密钥（来自 Vault） |
 | `cliproxyapi_native_api_keys`    | `docker_apps_cliproxyapi_api_keys` | 外部调用鉴权 API Keys（来自 Vault） |
 

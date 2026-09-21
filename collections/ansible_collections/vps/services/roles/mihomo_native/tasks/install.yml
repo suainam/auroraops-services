@@ -1,0 +1,152 @@
+---
+- name: Inspect Mihomo binary and release marker
+  become: true
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    checksum_algorithm: sha256
+  loop:
+    - "{{ mihomo_native_binary_path }}"
+    - "{{ mihomo_native_binary_marker_path }}"
+  register: mihomo_native_install_stats
+  tags: [deploy, services, mihomo_native, mihomo_native_install, phase3]
+
+- name: Read Mihomo release marker when present
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ mihomo_native_binary_marker_path }}"
+  register: mihomo_native_marker_content
+  when: mihomo_native_install_stats.results[1].stat.exists | default(false)
+  tags: [deploy, services, mihomo_native, mihomo_native_install, phase3]
+
+- name: Determine whether the pinned Mihomo binary needs installation
+  ansible.builtin.set_fact:
+    mihomo_native_needs_install: >-
+      {{
+        not (mihomo_native_install_stats.results[0].stat.exists | default(false) | bool)
+        or not (mihomo_native_install_stats.results[0].stat.executable | default(false) | bool)
+        or not (mihomo_native_install_stats.results[1].stat.exists | default(false) | bool)
+        or (
+          mihomo_native_marker_content.content | default('') | b64decode | trim
+        ) != mihomo_native_expected_sha256
+      }}
+  tags: [deploy, services, mihomo_native, mihomo_native_install, phase3]
+
+- name: Ensure Mihomo installation directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ mihomo_native_install_dir }}"
+    state: directory
+    owner: "{{ mihomo_native_user }}"
+    group: "{{ mihomo_native_group }}"
+    mode: "{{ mihomo_native_dir_mode }}"
+  tags: [deploy, services, mihomo_native, mihomo_native_install, phase3]
+
+- name: Ensure controller staging directory exists
+  ansible.builtin.file:
+    path: "{{ mihomo_native_controller_staging_dir }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  run_once: true
+  become: false
+  when:
+    - mihomo_native_needs_install | bool
+    - mihomo_native_use_controller_staging | bool
+    - not ansible_check_mode
+  tags: [deploy, services, mihomo_native, mihomo_native_install, phase3]
+
+- name: Download pinned Mihomo archive on controller
+  ansible.builtin.get_url:
+    url: "{{ mihomo_native_binary_url }}"
+    dest: "{{ mihomo_native_controller_staging_dir }}/{{ mihomo_native_binary_filename }}"
+    checksum: "{{ mihomo_native_checksum }}"
+    mode: "0644"
+  delegate_to: localhost
+  run_once: true
+  become: false
+  when:
+    - mihomo_native_needs_install | bool
+    - mihomo_native_use_controller_staging | bool
+    - not ansible_check_mode
+  tags: [deploy, services, mihomo_native, mihomo_native_install, phase3]
+
+- name: Copy pinned Mihomo archive to target
+  become: true
+  ansible.builtin.copy:
+    src: "{{ mihomo_native_controller_staging_dir }}/{{ mihomo_native_binary_filename }}"
+    dest: "{{ mihomo_native_archive_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - mihomo_native_needs_install | bool
+    - mihomo_native_use_controller_staging | bool
+    - not ansible_check_mode
+  tags: [deploy, services, mihomo_native, mihomo_native_install, phase3]
+
+- name: Download pinned Mihomo archive on target when staging is disabled
+  become: true
+  ansible.builtin.get_url:
+    url: "{{ mihomo_native_binary_url }}"
+    dest: "{{ mihomo_native_archive_path }}"
+    checksum: "{{ mihomo_native_checksum }}"
+    owner: root
+    group: root
+    mode: "0600"
+  environment: "{{ mihomo_native_download_environment }}"
+  when:
+    - mihomo_native_needs_install | bool
+    - not mihomo_native_use_controller_staging | bool
+    - not ansible_check_mode
+  tags: [deploy, services, mihomo_native, mihomo_native_install, phase3]
+
+- name: Atomically install decompressed Mihomo binary
+  become: true
+  ansible.builtin.shell:
+    cmd: >-
+      set -o errexit -o nounset -o pipefail;
+      temporary='{{ mihomo_native_binary_path }}.new';
+      rm -f "$temporary";
+      gzip -dc '{{ mihomo_native_archive_path }}' > "$temporary";
+      chmod 0755 "$temporary";
+      chown '{{ mihomo_native_user }}:{{ mihomo_native_group }}' "$temporary";
+      mv -f "$temporary" '{{ mihomo_native_binary_path }}'
+    executable: /bin/bash
+  changed_when: true
+  when:
+    - mihomo_native_needs_install | bool
+    - not ansible_check_mode
+  tags: [deploy, services, mihomo_native, mihomo_native_install, phase3]
+
+- name: Record installed Mihomo release checksum
+  become: true
+  ansible.builtin.copy:
+    content: "{{ mihomo_native_expected_sha256 }}\n"
+    dest: "{{ mihomo_native_binary_marker_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - mihomo_native_needs_install | bool
+    - not ansible_check_mode
+  tags: [deploy, services, mihomo_native, mihomo_native_install, phase3]
+
+- name: Remove temporary Mihomo archive after installation
+  become: true
+  ansible.builtin.file:
+    path: "{{ mihomo_native_archive_path }}"
+    state: absent
+  when:
+    - mihomo_native_needs_install | bool
+    - not ansible_check_mode
+  tags: [deploy, services, mihomo_native, mihomo_native_install, phase3]
+
+- name: Ensure Mihomo binary permissions
+  become: true
+  ansible.builtin.file:
+    path: "{{ mihomo_native_binary_path }}"
+    owner: "{{ mihomo_native_user }}"
+    group: "{{ mihomo_native_group }}"
+    mode: "0755"
+  when: not ansible_check_mode
+  tags: [deploy, services, mihomo_native, mihomo_native_install, phase3]

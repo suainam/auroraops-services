@@ -1,0 +1,159 @@
+---
+- name: Verify Mihomo native binary exists
+  become: true
+  ansible.builtin.stat:
+    path: "{{ mihomo_native_binary_path }}"
+  register: mihomo_native_verify_binary
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Assert Mihomo native binary is executable
+  ansible.builtin.assert:
+    that:
+      - mihomo_native_verify_binary.stat.exists
+      - mihomo_native_verify_binary.stat.executable
+    fail_msg: "Mihomo native binary is missing or not executable at {{ mihomo_native_binary_path }}"
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Verify full Mihomo profile and release marker permissions
+  become: true
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ mihomo_native_profile_path }}"
+    - "{{ mihomo_native_binary_marker_path }}"
+    - "{{ mihomo_native_refresh_env_path }}"
+  register: mihomo_native_verify_files
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Assert full profile is present and secret-bearing files are private
+  ansible.builtin.assert:
+    that:
+      - mihomo_native_verify_files.results[0].stat.exists
+      - mihomo_native_verify_files.results[0].stat.mode == '0600'
+      - mihomo_native_verify_files.results[1].stat.exists
+      - mihomo_native_verify_files.results[1].stat.mode == '0600'
+      - mihomo_native_verify_files.results[2].stat.exists
+      - mihomo_native_verify_files.results[2].stat.mode == '0600'
+    fail_msg: Mihomo full profile, release marker, and refresh environment must exist with mode 0600
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Validate Mihomo proxy-providers, proxy-groups, and rules using native parser
+  become: true
+  no_log: true
+  ansible.builtin.command:
+    argv:
+      - "{{ mihomo_native_binary_path }}"
+      - -d
+      - "{{ mihomo_native_install_dir }}"
+      - -f
+      - "{{ mihomo_native_profile_path }}"
+      - -t
+  changed_when: false
+  register: mihomo_native_config_validation
+  failed_when: mihomo_native_config_validation.rc != 0
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Check Mihomo native service status
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ mihomo_native_service_name }}.service"
+  register: mihomo_native_service_status
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Assert Mihomo native service is active and enabled
+  ansible.builtin.assert:
+    that:
+      - mihomo_native_service_status.status.ActiveState == 'active'
+      - mihomo_native_service_status.status.UnitFileState == 'enabled'
+    fail_msg: >-
+      Mihomo native service is not active and enabled
+      (ActiveState={{ mihomo_native_service_status.status.ActiveState | default('unknown') }},
+      UnitFileState={{ mihomo_native_service_status.status.UnitFileState | default('unknown') }}).
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Inspect Mihomo mixed listener ownership and bindings
+  become: true
+  ansible.builtin.command:
+    argv: [ss, -ltnpH]
+  changed_when: false
+  register: mihomo_native_listener
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Assert Mihomo owns the loopback-only mixed listener
+  ansible.builtin.assert:
+    that:
+      - mihomo_native_service_status.status.MainPID | int > 0
+      - ("127.0.0.1:" ~ (mihomo_native_mixed_port | string)) in mihomo_native_listener.stdout
+      - ("0.0.0.0:" ~ (mihomo_native_mixed_port | string)) not in mihomo_native_listener.stdout
+      - ("[::]:" ~ (mihomo_native_mixed_port | string)) not in mihomo_native_listener.stdout
+      - ("pid=" ~ (mihomo_native_service_status.status.MainPID | string) ~ ",") in mihomo_native_listener.stdout
+    fail_msg: >-
+      Mihomo must own mixed port {{ mihomo_native_mixed_port }} on
+      127.0.0.1 only; socket output was withheld from the failure message.
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Check Mihomo profile refresh timer status
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ mihomo_native_refresh_timer_name }}"
+  register: mihomo_native_timer_status
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Assert Mihomo profile refresh timer is active and enabled
+  ansible.builtin.assert:
+    that:
+      - mihomo_native_timer_status.status.ActiveState == 'active'
+      - mihomo_native_timer_status.status.UnitFileState == 'enabled'
+    fail_msg: Mihomo profile refresh timer must be active and enabled
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Wait for Mihomo loopback mixed listener
+  ansible.builtin.wait_for:
+    host: "{{ mihomo_native_mixed_host }}"
+    port: "{{ mihomo_native_mixed_port }}"
+    timeout: 20
+    state: started
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Probe Mihomo full-profile egress
+  become: true
+  ansible.builtin.command:
+    argv:
+      - curl
+      - --fail
+      - --silent
+      - --show-error
+      - --proxy
+      - "http://{{ mihomo_native_mixed_host }}:{{ mihomo_native_mixed_port }}"
+      - --connect-timeout
+      - "5"
+      - --max-time
+      - "20"
+      - https://www.cloudflare.com/cdn-cgi/trace
+  changed_when: false
+  register: mihomo_native_egress_probe
+  retries: 3
+  delay: 5
+  until: mihomo_native_egress_probe.rc == 0
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Inspect Mihomo provider cache without reading node data
+  become: true
+  no_log: true
+  ansible.builtin.find:
+    paths: "{{ mihomo_native_install_dir }}/proxy_providers"
+    file_type: file
+    recurse: true
+    size: 1b
+  register: mihomo_native_provider_cache
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
+
+- name: Report Mihomo provider availability without node data
+  ansible.builtin.assert:
+    that:
+      - mihomo_native_provider_cache.matched | int > 0
+    fail_msg: Mihomo provider cache is empty; provider availability was not proven
+    success_msg: >-
+      Mihomo provider availability: {{ mihomo_native_provider_cache.matched }}
+      non-empty provider cache file(s)
+  tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]

@@ -74,7 +74,9 @@ ROLE_PHASE_MAP = {
 
     # Phase 3: Runtime (运行时环境) - 对应 domain: services
     'ansibletest': 'phase3',
+    'cliproxyapi_native': 'phase5',
     'docker': 'phase3',
+    'mihomo_native': 'phase3',
     'nodejs': 'phase3',
     'prereq_checks': 'phase3',
     'python_environment': 'phase1',

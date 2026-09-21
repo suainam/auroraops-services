@@ -1,0 +1,36 @@
+---
+- name: Collect systemd facts after Mihomo rollback
+  become: true
+  ansible.builtin.service_facts:
+  tags: [rollback_verify, services, mihomo_native, mihomo_native_rollback_verify, phase3]
+
+- name: Assert Mihomo runtime units are absent after rollback
+  ansible.builtin.assert:
+    that:
+      - "'mihomo-native.service' not in ansible_facts.services"
+      - "'mihomo-native-refresh.service' not in ansible_facts.services"
+      - "'mihomo-native-refresh.timer' not in ansible_facts.services"
+    fail_msg: "Mihomo runtime units still exist after rollback"
+    success_msg: "Mihomo runtime units are absent after rollback"
+  tags: [rollback_verify, services, mihomo_native, mihomo_native_rollback_verify, phase3]
+
+- name: Check preserved Mihomo profile and provider state
+  become: true
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ mihomo_native_profile_path }}"
+    - "{{ mihomo_native_install_dir }}/proxy_providers"
+  register: mihomo_native_rollback_protected_state
+  tags: [rollback_verify, services, mihomo_native, mihomo_native_rollback_verify, phase3]
+
+- name: Assert Mihomo protected state survived rollback
+  ansible.builtin.assert:
+    that:
+      - mihomo_native_rollback_protected_state.results[0].stat.exists
+      - mihomo_native_rollback_protected_state.results[0].stat.mode == '0600'
+      - mihomo_native_rollback_protected_state.results[1].stat.exists
+      - mihomo_native_rollback_protected_state.results[1].stat.isdir
+    fail_msg: "Mihomo profile or provider state was not preserved"
+    success_msg: "Mihomo profile and provider state were preserved"
+  tags: [rollback_verify, services, mihomo_native, mihomo_native_rollback_verify, phase3]

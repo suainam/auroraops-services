@@ -1,0 +1,42 @@
+---
+- name: Gather minimal Mihomo architecture facts
+  ansible.builtin.setup:
+    gather_subset:
+      - "!all"
+      - min
+  tags: [deploy, services, mihomo_native, mihomo_native_preflight, phase3]
+
+- name: Validate Mihomo native architecture
+  ansible.builtin.assert:
+    that:
+      - mihomo_native_arch == 'arm64'
+      - (ansible_facts | default({})).get('architecture', ansible_architecture | default('')) in ['aarch64', 'arm64']
+      - mihomo_native_arch in mihomo_native_checksums
+      - mihomo_native_checksum | length > 0
+      - mihomo_native_expected_sha256 | length == 64
+    fail_msg: >-
+      Unsupported or unpinned Mihomo architecture '{{ (ansible_facts | default({})).get('architecture', ansible_architecture | default('unknown')) }}'
+      mapped to '{{ mihomo_native_arch }}'.
+  tags: [deploy, services, mihomo_native, mihomo_native_preflight, phase3]
+
+- name: Validate Mihomo native full-profile authority
+  ansible.builtin.assert:
+    that:
+      - mihomo_native_profile_url is defined
+      - mihomo_native_profile_url | length > 0
+      - sub_store_mihomo_suffix is defined
+      - mihomo_native_mixed_host == '127.0.0.1'
+      - mihomo_native_mixed_port | int > 0
+    fail_msg: >-
+      Mihomo requires a complete Sub-Store profile URL and a loopback mixed port;
+      provider-only URLs and LAN listeners are not accepted.
+  no_log: true
+  tags: [deploy, services, mihomo_native, mihomo_native_preflight, phase3]
+
+- name: Check Mihomo native bootstrap tools
+  become: true
+  ansible.builtin.command:
+    argv: ["/bin/sh", "-c", "command -v curl && command -v gzip && command -v ss && command -v systemctl"]
+  check_mode: false
+  changed_when: false
+  tags: [deploy, services, mihomo_native, mihomo_native_preflight, phase3]

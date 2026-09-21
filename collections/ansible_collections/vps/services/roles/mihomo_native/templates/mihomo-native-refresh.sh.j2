@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+umask 077
+
+temporary_path="${MIHOMO_PROFILE_PATH}.tmp.$$"
+
+cleanup() {
+  rm -f "$temporary_path"
+}
+
+trap cleanup EXIT HUP INT TERM
+
+if [ -n "${MIHOMO_DOWNLOAD_PROXY:-}" ]; then
+  export http_proxy="$MIHOMO_DOWNLOAD_PROXY"
+  export https_proxy="$MIHOMO_DOWNLOAD_PROXY"
+  export HTTP_PROXY="$MIHOMO_DOWNLOAD_PROXY"
+  export HTTPS_PROXY="$MIHOMO_DOWNLOAD_PROXY"
+fi
+
+# Do not print the URL or response body: the complete profile URL is tokenized.
+curl \
+  --fail \
+  --silent \
+  --show-error \
+  --location \
+  --connect-timeout 15 \
+  --max-time "$MIHOMO_FETCH_TIMEOUT" \
+  --output "$temporary_path" \
+  "$MIHOMO_PROFILE_URL"
+
+test -s "$temporary_path"
+"$MIHOMO_BINARY_PATH" -d "$MIHOMO_HOME" -f "$temporary_path" -t
+
+if [ -f "$MIHOMO_PROFILE_PATH" ] && cmp -s "$temporary_path" "$MIHOMO_PROFILE_PATH"; then
+  exit 0
+fi
+
+chmod 0600 "$temporary_path"
+chown root:root "$temporary_path"
+mv -f "$temporary_path" "$MIHOMO_PROFILE_PATH"
+
+# A changed valid profile takes effect immediately; an inactive service is left alone.
+systemctl try-restart "${MIHOMO_SERVICE_NAME}.service" >/dev/null 2>&1 || true

@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  author: AuroraOps
+  description: Native Mihomo systemd client with atomic full-profile refresh
+  company: AuroraOps
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+        - bullseye
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+  galaxy_tags:
+    - proxy
+    - network
+    - mihomo
+    - systemd
+
+dependencies: []
