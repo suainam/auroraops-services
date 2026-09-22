@@ -196,9 +196,7 @@ Plugins:     ./plugins (含 session-audit.js, permission-gate.js)
 
 ## 📚 相关文档
 
-- [ECC 集成方案](../../../../../../docs/plans/archive/ecc_integration_plan.md) - 历史实施方案
-- [.opencode/README.md](../../../../../../.opencode/README.md) - Skill 使用说明
-- [.opencode/SETUP.md](../../../../../../.opencode/SETUP.md) - 环境配置指南
+- 当前 Node.js/OpenCode role 合同见同目录的 [Node.js role README](README.md)；旧 ECC 与 `.opencode` 页面已不在本仓库维护。
 - [AGENTS.md](../../../../../../AGENTS.md) - Agent 操作指南
 
 ## 🎯 最佳实践
