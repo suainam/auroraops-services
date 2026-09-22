@@ -1,0 +1,83 @@
+---
+- name: Synchronize shared CLIProxyAPI credentials
+  ansible.builtin.import_tasks: shared_credentials.yml
+  tags: [deploy, services, cliproxyapi, cliproxyapi_credentials, phase5]
+
+- name: Deploy CLIProxyAPI runtime configuration
+  become: true
+  no_log: true
+  ansible.builtin.template:
+    src: cliproxyapi_config_native.yaml.j2
+    dest: "{{ cliproxyapi_install_dir }}/config.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+    force: "{{ cliproxyapi_force_overwrite | bool }}"
+  notify: restart cliproxyapi
+  tags: [deploy, services, cliproxyapi, cliproxyapi_config, phase5]
+
+- name: Deploy CLIProxyAPI systemd service unit
+  become: true
+  ansible.builtin.template:
+    src: cliproxyapi-native.service.j2
+    dest: /etc/systemd/system/cliproxyapi-native.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart cliproxyapi
+  tags: [deploy, services, cliproxyapi, cliproxyapi_config, phase5]
+
+- name: Deploy CLIProxyAPI scheduled restart companion service unit
+  become: true
+  ansible.builtin.template:
+    src: cliproxyapi-restart.service.j2
+    dest: /etc/systemd/system/cliproxyapi-restart.service
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [deploy, services, cliproxyapi, cliproxyapi_config, phase5]
+
+- name: Deploy CLIProxyAPI scheduled restart timer unit
+  become: true
+  ansible.builtin.template:
+    src: cliproxyapi-restart.timer.j2
+    dest: /etc/systemd/system/cliproxyapi-restart.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart cliproxyapi scheduler timer
+  tags: [deploy, services, cliproxyapi, cliproxyapi_config, phase5]
+
+- name: Ensure CLIProxyAPI service is enabled and started
+  become: true
+  ansible.builtin.systemd:
+    name: cliproxyapi-native.service
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: not ansible_check_mode
+  tags: [deploy, services, cliproxyapi, cliproxyapi_config, phase5]
+
+- name: Ensure CLIProxyAPI restart timer is enabled and started
+  become: true
+  ansible.builtin.systemd:
+    name: cliproxyapi-restart.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: not ansible_check_mode
+  tags: [deploy, services, cliproxyapi, cliproxyapi_config, phase5]
+
+- name: Restart CLIProxyAPI service if binary was upgraded or newly installed
+  become: true
+  ansible.builtin.systemd:
+    name: cliproxyapi-native.service
+    state: restarted
+  when:
+    - not ansible_check_mode
+    - cliproxyapi_needs_install | default(false) | bool
+  tags: [deploy, services, cliproxyapi, cliproxyapi_config, phase5]
+
+- name: Flush handlers to ensure restart completes before verification
+  ansible.builtin.meta: flush_handlers
+  tags: [deploy, services, cliproxyapi, cliproxyapi_config, phase5]

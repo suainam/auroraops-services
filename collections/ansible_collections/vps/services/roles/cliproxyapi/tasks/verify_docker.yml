@@ -1,0 +1,100 @@
+---
+- name: Inspect CLIProxyAPI Docker container
+  become: true
+  community.docker.docker_container_info:
+    name: cliproxyapi
+  register: cliproxyapi_docker_info
+  tags: [verify, services, cliproxyapi, cliproxyapi_verify, phase5]
+
+- name: Assert CLIProxyAPI Docker container is running
+  ansible.builtin.assert:
+    that:
+      - cliproxyapi_docker_info.exists
+      - cliproxyapi_docker_info.container.State.Running
+    fail_msg: "CLIProxyAPI Docker container must exist and be running"
+    success_msg: "CLIProxyAPI Docker container is running"
+  tags: [verify, services, cliproxyapi, cliproxyapi_verify, phase5]
+
+- name: Verify CLIProxyAPI Docker configuration file
+  become: true
+  ansible.builtin.stat:
+    path: /opt/dockers/cliproxyapi/config.yaml
+  register: cliproxyapi_docker_config_stat
+  tags: [verify, services, cliproxyapi, cliproxyapi_verify, phase5]
+
+- name: Assert CLIProxyAPI Docker configuration permissions
+  ansible.builtin.assert:
+    that:
+      - cliproxyapi_docker_config_stat.stat.exists
+      - cliproxyapi_docker_config_stat.stat.mode == '0600'
+    fail_msg: "CLIProxyAPI Docker config.yaml must exist with 0600 permissions"
+  tags: [verify, services, cliproxyapi, cliproxyapi_verify, phase5]
+
+- name: Wait for CLIProxyAPI Docker port
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ cliproxyapi_docker_app_port }}"
+    timeout: 15
+    state: started
+  tags: [verify, services, cliproxyapi, cliproxyapi_verify, phase5]
+
+- name: Verify authenticated CLIProxyAPI Docker models endpoint
+  no_log: true
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ cliproxyapi_docker_app_port }}/v1/models"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ cliproxyapi_test_api_key }}"
+    status_code: 200
+    return_content: false
+  when: cliproxyapi_test_api_key | default('') | length > 0
+  tags: [verify, services, cliproxyapi, cliproxyapi_verify, phase5]
+- name: Verify CLIProxyAPI required provider and model policy
+  become: true
+  no_log: true
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ cliproxyapi_docker_app_port }}/v0/management/config"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ cliproxyapi_management_key }}"
+    status_code: 200
+    return_content: true
+  register: cliproxyapi_runtime_config
+  when: cliproxyapi_management_key | default('') | length > 0
+  tags: [verify, services, cliproxyapi, cliproxyapi_verify, phase5]
+
+- name: Assert CLIProxyAPI provider and model policy
+  ansible.builtin.assert:
+    that:
+      - (cliproxyapi_runtime_config.json['claude-api-key'] | default([]) | length) == 3
+      - >-
+        (
+          cliproxyapi_runtime_config.json['openai-compatibility']
+          | default([])
+          | selectattr('name', 'equalto', 'vertex')
+          | list
+          | length
+        ) == 0
+      - >-
+        (
+          cliproxyapi_runtime_config.json['oauth-excluded-models']
+          | default({})
+          | dict2items
+          | selectattr('key', 'in', ['claude', 'codex', 'antigravity'])
+          | list
+          | length
+        ) == 3
+      - >-
+        (
+          cliproxyapi_runtime_config.json['oauth-model-alias']['antigravity']
+          | default([])
+          | selectattr('name', 'equalto', 'gemini-3.8-flash-high')
+          | selectattr('alias', 'equalto', 'gemini-3.8-flash')
+          | list
+          | length
+        ) == 1
+    fail_msg: >-
+      CLIProxyAPI runtime config must contain 3 Claude providers, no Vertex provider,
+      three excluded-model channels, and the gemini-3.8-flash-high alias.
+  when: cliproxyapi_management_key | default('') | length > 0
+  tags: [verify, services, cliproxyapi, cliproxyapi_verify, phase5]

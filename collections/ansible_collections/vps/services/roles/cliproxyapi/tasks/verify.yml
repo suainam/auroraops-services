@@ -1,0 +1,16 @@
+---
+- name: Resolve CLIProxyAPI verification branch
+  ansible.builtin.include_tasks: resolve.yml
+  tags: [verify, services, cliproxyapi, phase5]
+
+- name: Verify native CLIProxyAPI branch
+  ansible.builtin.include_tasks: verify_native.yml
+  when:
+    - cliproxyapi_role_enabled | bool
+    - cliproxyapi_effective_mode == 'native'
+
+- name: Verify Docker CLIProxyAPI branch
+  ansible.builtin.include_tasks: verify_docker.yml
+  when:
+    - cliproxyapi_role_enabled | bool
+    - cliproxyapi_effective_mode == 'docker'

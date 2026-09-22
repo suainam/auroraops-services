@@ -31,6 +31,10 @@ docker_apps_hysteria2_client_networks: >-
 # Sub-Store
 docker_apps_sub_store_pull: false
 
+# Shared Docker data root used by backup-aware setup tasks.  Keep the role
+# runnable when the parent inventory does not import the optional backup.yml.
+backup_source_docker_dir: "/opt/dockers"
+
 # GCLI2API
 docker_apps_app_port_gcli2api_api: "{{ app_port_gcli2api_api | default(30006) }}"
 docker_apps_app_port_gcli2api_web: "{{ app_port_gcli2api_web | default(30005) }}"
@@ -134,7 +138,6 @@ docker_apps_vaultwarden_check_mode_hash: >-
   $argon2id$v=19$m=65540,t=3,p=4$Y2hlY2ttb2Rl$Y2hlY2ttb2RlY2hlY2ttb2RlY2hlY2ttb2Rl
 docker_apps_flare_enabled: true
 docker_apps_singbox_enabled: true
-docker_apps_cliproxyapi_enabled: true
 docker_apps_newapi_suite_enabled: true
 
 # SillyTavern
@@ -189,29 +192,6 @@ docker_apps_app_port_flare: "{{ app_port_flare | default(30004) }}"
 docker_apps_app_port_newapi: "{{ app_port_newapi | default(30001) }}"
 docker_apps_newapi_deploy_neko: "{{ newapi_deploy_neko | default(false) }}"
 
-# CLIProxyAPI authentication keys are sensitive and must be supplied by Vault.
-docker_apps_cliproxyapi_api_keys: >-
-  {{
-    cliproxyapi_api_keys
-    | default(vault_cliproxyapi_api_keys | default([]), true)
-  }}
-docker_apps_cliproxyapi_ai_providers_file: >-
-  {{ cliproxyapi_ai_providers_file | default('') }}
-# Optional full runtime config seed, encrypted in the repository.
-docker_apps_cliproxyapi_config_seed_file: >-
-  {{ cliproxyapi_config_seed_file | default('') }}
-docker_apps_app_port_cliproxyapi: "{{ app_port_cliproxyapi | default(30011) }}"
-docker_apps_cliproxyapi_bind_address: "{{ cliproxyapi_bind_address | default('127.0.0.1') }}"
-docker_apps_cliproxyapi_networks: >-
-  {{ cliproxyapi_networks | default([{'name': 'sweb'}]) }}
-docker_apps_cliproxyapi_use_postgres: "{{ cliproxyapi_use_postgres | default(true) }}"
-docker_apps_cliproxyapi_pg_host: >-
-  {{ cliproxyapi_pg_host | default('host.docker.internal') }}
-docker_apps_cliproxyapi_pg_port: "{{ cliproxyapi_pg_port | default(5432) }}"
-docker_apps_cliproxyapi_pg_db: "{{ cliproxyapi_pg_db | default('cliproxyapi') }}"
-docker_apps_cliproxyapi_pg_user: "{{ cliproxyapi_pg_user | default('cliproxyapi') }}"
-docker_apps_cliproxyapi_pg_pass: >-
-  {{ cliproxyapi_pg_pass | default(cliproxyapi_db_password | default('')) }}
 
 # Manifest
 docker_apps_app_port_manifest: "{{ app_port_manifest | default(30013) }}"

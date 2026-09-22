@@ -1,7 +1,0 @@
----
-galaxy_info:
-  author: AuroraOps
-  description: Native systemd CLIProxyAPI service with scheduled memory-release restart timer
-  license: MIT
-  min_ansible_version: "2.17"
-dependencies: []

@@ -1,0 +1,84 @@
+---
+- name: Verify CLIProxyAPI configuration file exists
+  become: true
+  ansible.builtin.stat:
+    path: "{{ cliproxyapi_install_dir }}/config.yaml"
+  register: cliproxyapi_cfg_stat
+  tags: [verify, services, cliproxyapi_native, cliproxyapi_verify, phase5]
+
+- name: Validate CLIProxyAPI configuration file permissions
+  ansible.builtin.assert:
+    that:
+      - cliproxyapi_cfg_stat.stat.exists
+      - cliproxyapi_cfg_stat.stat.mode == '0600'
+    fail_msg: "CLIProxyAPI config.yaml must exist with 0600 permissions"
+    success_msg: "CLIProxyAPI config.yaml verified with 0600 permissions"
+  tags: [verify, services, cliproxyapi_native, cliproxyapi_verify, phase5]
+
+- name: Verify CLIProxyAPI data directory exists for credential persistence
+  become: true
+  ansible.builtin.stat:
+    path: "{{ cliproxyapi_data_dir }}"
+  register: cliproxyapi_data_stat
+  tags: [verify, services, cliproxyapi_native, cliproxyapi_verify, phase5]
+
+- name: Validate CLIProxyAPI data directory
+  ansible.builtin.assert:
+    that:
+      - cliproxyapi_data_stat.stat.exists
+      - cliproxyapi_data_stat.stat.isdir
+    fail_msg: "CLIProxyAPI data directory must exist"
+    success_msg: "CLIProxyAPI data directory verified"
+  tags: [verify, services, cliproxyapi_native, cliproxyapi_verify, phase5]
+
+- name: Gather systemd service facts for CLIProxyAPI
+  ansible.builtin.service_facts:
+  tags: [verify, services, cliproxyapi_native, cliproxyapi_verify, phase5]
+
+- name: Validate CLIProxyAPI systemd service state
+  ansible.builtin.assert:
+    that:
+      - "'cliproxyapi-native.service' in ansible_facts.services"
+      - ansible_facts.services['cliproxyapi-native.service'].state == 'running'
+      - ansible_facts.services['cliproxyapi-native.service'].status == 'enabled'
+    fail_msg: "cliproxyapi-native.service must be running and enabled"
+    success_msg: "cliproxyapi-native.service is running and enabled"
+  tags: [verify, services, cliproxyapi_native, cliproxyapi_verify, phase5]
+
+- name: Validate CLIProxyAPI scheduled restart timer state
+  become: true
+  ansible.builtin.command:
+    argv: [systemctl, is-active, cliproxyapi-restart.timer]
+  register: cliproxyapi_restart_timer_active
+  changed_when: false
+  failed_when: cliproxyapi_restart_timer_active.stdout | trim != 'active'
+  tags: [verify, services, cliproxyapi_native, cliproxyapi_verify, phase5]
+
+- name: Wait for CLIProxyAPI loopback port to be listening
+  ansible.builtin.wait_for:
+    host: "{{ cliproxyapi_bind_host }}"
+    port: "{{ cliproxyapi_bind_port }}"
+    timeout: 15
+    state: started
+  tags: [verify, services, cliproxyapi_native, cliproxyapi_verify, phase5]
+
+- name: Verify authenticated CLIProxyAPI models endpoint
+  no_log: true
+  ansible.builtin.uri:
+    url: "http://{{ cliproxyapi_bind_address }}/v1/models"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ cliproxyapi_test_api_key }}"
+    status_code: 200
+    return_content: false
+  when: cliproxyapi_test_api_key | default('') | length > 0
+  tags: [verify, services, cliproxyapi_native, cliproxyapi_verify, phase5]
+
+- name: Verify CLIProxyAPI endpoint reachability when unauthenticated
+  ansible.builtin.uri:
+    url: "http://{{ cliproxyapi_bind_address }}/v1/models"
+    method: GET
+    status_code: [200, 401]
+    return_content: false
+  when: cliproxyapi_test_api_key | default('') | length == 0
+  tags: [verify, services, cliproxyapi_native, cliproxyapi_verify, phase5]

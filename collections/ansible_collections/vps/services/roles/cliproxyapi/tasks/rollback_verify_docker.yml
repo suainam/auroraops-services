@@ -1,0 +1,29 @@
+---
+- name: Inspect CLIProxyAPI Docker container after rollback
+  become: true
+  community.docker.docker_container_info:
+    name: cliproxyapi
+  register: cliproxyapi_docker_rollback_info
+  tags: [rollback_verify, services, cliproxyapi, cliproxyapi_rollback_verify, phase5]
+
+- name: Assert CLIProxyAPI Docker container is absent after rollback
+  ansible.builtin.assert:
+    that:
+      - not cliproxyapi_docker_rollback_info.exists
+    fail_msg: "CLIProxyAPI Docker container still exists after rollback"
+  tags: [rollback_verify, services, cliproxyapi, cliproxyapi_rollback_verify, phase5]
+
+- name: Verify CLIProxyAPI Docker data survived rollback
+  become: true
+  ansible.builtin.stat:
+    path: /opt/dockers/cliproxyapi
+  register: cliproxyapi_docker_rollback_data
+  tags: [rollback_verify, services, cliproxyapi, cliproxyapi_rollback_verify, phase5]
+
+- name: Assert CLIProxyAPI Docker data survived rollback
+  ansible.builtin.assert:
+    that:
+      - cliproxyapi_docker_rollback_data.stat.exists
+      - cliproxyapi_docker_rollback_data.stat.isdir
+    fail_msg: "CLIProxyAPI Docker data was not preserved"
+  tags: [rollback_verify, services, cliproxyapi, cliproxyapi_rollback_verify, phase5]

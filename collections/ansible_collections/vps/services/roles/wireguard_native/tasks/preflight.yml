@@ -1,0 +1,17 @@
+---
+- name: Validate WireGuard platform support
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family in ['Debian', 'Ubuntu', 'Alpine']
+    fail_msg: "WireGuard native role supports Debian, Ubuntu, and Alpine Linux only."
+  when: wireguard_native_enabled | bool
+  tags: [deploy, services, wireguard_native, wireguard_native_preflight, phase3]
+
+- name: Validate WireGuard parameters
+  ansible.builtin.assert:
+    that:
+      - wireguard_native_address | length > 0
+      - wireguard_native_private_key | length > 0
+    fail_msg: "wireguard_native_address and wireguard_native_private_key must be configured."
+  when: wireguard_native_enabled | bool
+  tags: [deploy, services, wireguard_native, wireguard_native_preflight, phase3]

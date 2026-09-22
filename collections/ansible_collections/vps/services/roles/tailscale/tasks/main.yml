@@ -1,0 +1,124 @@
+---
+- name: Resolve Tailscale service manager
+  ansible.builtin.set_fact:
+    tailscale_service_manager: >-
+      {{ 'openrc' if (ansible_facts.os_family | default(ansible_os_family | default(''))) == 'Alpine'
+         else (ansible_service_mgr | default('systemd')) }}
+  tags: [deploy, services, tailscale, phase3]
+
+- name: Validate Tailscale platform
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family in ['Debian', 'Alpine']
+      - tailscale_service_manager in ['systemd', 'openrc']
+    fail_msg: "Tailscale pilot supports Debian/systemd and Alpine/OpenRC only"
+  when: tailscale_enabled | bool
+  tags: [deploy, services, tailscale, tailscale_preflight, phase3]
+
+- name: Install Tailscale package on Debian
+  become: true
+  ansible.builtin.apt:
+    name: "{{ tailscale_package_name }}"
+    state: present
+    update_cache: true
+  environment: "{{ tailscale_download_environment }}"
+  when:
+    - tailscale_enabled | bool
+    - ansible_os_family == 'Debian'
+    - not ansible_check_mode
+  tags: [deploy, services, tailscale, tailscale_install, phase3]
+
+- name: Install Tailscale package on Alpine
+  become: true
+  community.general.apk:
+    name: "{{ tailscale_package_name }}"
+    state: present
+    update_cache: true
+  when:
+    - tailscale_enabled | bool
+    - ansible_os_family == 'Alpine'
+    - not ansible_check_mode
+  tags: [deploy, services, tailscale, tailscale_install, phase3]
+
+- name: Ensure Tailscale daemon is enabled and started on systemd
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ tailscale_service_name }}.service"
+    enabled: true
+    state: started
+  when:
+    - tailscale_enabled | bool
+    - tailscale_service_manager == 'systemd'
+    - not ansible_check_mode
+  tags: [deploy, services, tailscale, tailscale_service, phase3]
+
+- name: Ensure Tailscale daemon is enabled and started on OpenRC
+  become: true
+  ansible.builtin.service:
+    name: "{{ tailscale_openrc_service_name }}"
+    enabled: true
+    state: started
+  when:
+    - tailscale_enabled | bool
+    - tailscale_service_manager == 'openrc'
+    - not ansible_check_mode
+  tags: [deploy, services, tailscale, tailscale_service, phase3]
+
+- name: Build Tailscale configuration arguments
+  ansible.builtin.set_fact:
+    tailscale_up_args: >-
+      {{ ['up', '--hostname=' ~ tailscale_hostname]
+         + (['--auth-key=' ~ tailscale_auth_key] if tailscale_auth_key | length > 0 else [])
+         + (['--advertise-tags=' ~ (tailscale_tags | join(','))] if tailscale_tags | length > 0 else [])
+         + (['--advertise-routes=' ~ (tailscale_advertise_routes | join(','))] if tailscale_advertise_routes | length > 0 else [])
+         + (['--accept-routes'] if tailscale_accept_routes | bool else [])
+         + (['--ssh'] if tailscale_ssh_enabled | bool else [])
+         + (['--advertise-exit-node'] if tailscale_exit_node | bool else [])
+         + (['--stateful-filtering'] if tailscale_stateful_filtering | bool else [])
+         + tailscale_extra_up_args }}
+  no_log: true
+  when: tailscale_enabled | bool
+  tags: [deploy, services, tailscale, tailscale_config, phase3]
+
+- name: Apply Tailscale configuration
+  become: true
+  ansible.builtin.command:
+    argv: "{{ tailscale_up_args }}"
+  environment: "{{ tailscale_download_environment }}"
+  no_log: true
+  changed_when: false
+  when:
+    - tailscale_enabled | bool
+    - not ansible_check_mode
+  tags: [deploy, services, tailscale, tailscale_config, phase3]
+
+- name: Persist Tailscale rollback baseline
+  become: true
+  ansible.builtin.copy:
+    dest: "{{ tailscale_fact_path }}"
+    mode: "0644"
+    content: >-
+      {{ {
+        'auroraops_managed': true,
+        'version': 1,
+        'service_manager': tailscale_service_manager,
+        'state_dir': tailscale_state_dir,
+        'preserve_state': tailscale_preserve_state_on_rollback | bool
+      } | to_nice_json }}
+  when:
+    - tailscale_enabled | bool
+    - not ansible_check_mode
+  tags: [deploy, services, tailscale, tailscale_config, phase3]
+
+- name: Clean up Tailscale when disabled on systemd
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ tailscale_service_name }}.service"
+    enabled: false
+    state: stopped
+  failed_when: false
+  when:
+    - not tailscale_enabled | bool
+    - tailscale_service_manager | default('systemd') == 'systemd'
+    - not ansible_check_mode
+  tags: [deploy, services, tailscale, phase3]

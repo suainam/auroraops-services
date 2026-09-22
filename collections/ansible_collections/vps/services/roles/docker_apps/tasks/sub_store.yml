@@ -23,11 +23,11 @@
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Resolve effective Sub-Store providers
-  ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_providers.yml
+  ansible.builtin.import_tasks: "{{ role_path }}/../../../common/tasks/resolve_sub_store_providers.yml"
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Resolve capability provider catalog
-  ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_capability_providers.yml
+  ansible.builtin.import_tasks: "{{ role_path }}/../../../common/tasks/resolve_sub_store_capability_providers.yml"
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Ensure Sub-Store capability registry directory exists
@@ -410,21 +410,28 @@
   no_log: true
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
-- name: Create AuroraOps subscription in Sub-Store
+- name: Upsert AuroraOps subscription in Sub-Store
   become: true
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}/api/subs"
-    method: POST
+    url: >-
+      http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}{{
+        ('/api/sub/' ~ (sub_store_subscription_name | urlencode))
+        if sub_store_subscription_name in docker_apps_sub_store_existing_subscription_names
+        else '/api/subs'
+      }}
+    method: >-
+      {{ 'PATCH'
+         if sub_store_subscription_name in docker_apps_sub_store_existing_subscription_names
+         else 'POST' }}
     body_format: json
     body:
       name: "{{ sub_store_subscription_name }}"
       source: remote
       url: "{{ sub_store_source_url }}"
-    status_code: 201
+    status_code: [200, 201]
     return_content: false
   when:
     - not ansible_check_mode
-    - sub_store_subscription_name not in docker_apps_sub_store_existing_subscription_names
   no_log: true
   tags: [deploy, services, docker_apps, sub_store, phase5]
 

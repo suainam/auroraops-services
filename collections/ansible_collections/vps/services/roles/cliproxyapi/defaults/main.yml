@@ -1,0 +1,133 @@
+---
+# Unified CLIProxyAPI role. The deploy mode is the only platform switch.
+cliproxyapi_enabled: true
+cliproxyapi_deploy_mode: "native"
+cliproxyapi_version: "v7.3.9"
+
+cliproxyapi_install_dir: "/opt/cliproxyapi"
+cliproxyapi_data_dir: "/opt/cliproxyapi/data"
+cliproxyapi_bind_address: "127.0.0.1:30011"
+cliproxyapi_bind_host: "{{ cliproxyapi_bind_address.split(':')[0] | default('127.0.0.1') }}"
+cliproxyapi_bind_port: "{{ (cliproxyapi_bind_address.split(':')[1] | default('30011')) | int }}"
+cliproxyapi_restart_hour: "04"
+cliproxyapi_restart_schedule: "*-*-* {{ cliproxyapi_restart_hour }}:00:00"
+cliproxyapi_gomemlimit: "220MiB"
+cliproxyapi_http_proxy: ""
+cliproxyapi_proxy_url: "http://127.0.0.1:7890"
+cliproxyapi_download_proxy: "http://127.0.0.1:7890"
+cliproxyapi_allow_remote: true
+cliproxyapi_management_key: "{{ vault_cliproxyapi_management_key | default('') }}"
+cliproxyapi_api_keys: "{{ vault_cliproxyapi_api_keys | default([]) }}"
+cliproxyapi_test_api_key: "{{ (cliproxyapi_api_keys | default([]) | first) | default('') }}"
+cliproxyapi_ai_providers_file: "{{ inventory_dir ~ '/../secrets/cliproxyapi_ai_providers.yml' }}"
+cliproxyapi_auths_dir: "{{ inventory_dir ~ '/../secrets/cliproxyapi_auths' }}"
+cliproxyapi_direct_providers: []
+cliproxyapi_direct_claude: false
+cliproxyapi_config_seed_file: ""
+cliproxyapi_force_overwrite: false
+
+cliproxyapi_docker_dir: "/opt/dockers/cliproxyapi"
+cliproxyapi_docker_auth_dir: "{{ cliproxyapi_docker_dir }}/auths"
+cliproxyapi_image: "eceasy/cli-proxy-api:v7.3.2"
+cliproxyapi_docker_image: "{{ cliproxyapi_image }}"
+cliproxyapi_docker_memory: "128m"
+cliproxyapi_docker_memory_reservation: "32m"
+cliproxyapi_docker_networks: "{{ cliproxyapi_networks | default([{'name': 'sweb'}]) }}"
+cliproxyapi_docker_storage_driver: "{{ cliproxyapi_storage_driver | default('file') }}"
+cliproxyapi_docker_use_postgres: "{{ cliproxyapi_use_postgres | default(false) }}"
+cliproxyapi_docker_pg_host: "{{ cliproxyapi_pg_host | default('host.docker.internal') }}"
+cliproxyapi_docker_pg_port: "{{ cliproxyapi_pg_port | default(5432) }}"
+cliproxyapi_docker_pg_db: "{{ cliproxyapi_pg_db | default('cliproxyapi') }}"
+cliproxyapi_docker_pg_user: "{{ cliproxyapi_pg_user | default('cliproxyapi') }}"
+cliproxyapi_docker_pg_pass: "{{ cliproxyapi_pg_pass | default(cliproxyapi_db_password | default('')) }}"
+
+cliproxyapi_docker_s3_endpoint: "{{ cliproxyapi_s3_endpoint | default(cloudflare_s3_objectstore_endpoint | default('')) }}"
+cliproxyapi_docker_s3_bucket: "{{ cliproxyapi_s3_bucket | default('cliproxyapi-prod') }}"
+cliproxyapi_docker_s3_access_key: "{{ cliproxyapi_s3_access_key | default(cloudflare_s3_objectstore_access_key | default('')) }}"
+cliproxyapi_docker_s3_secret_key: "{{ cliproxyapi_s3_secret_key | default(cloudflare_s3_objectstore_secret_key | default('')) }}"
+cliproxyapi_docker_s3_local_path: "{{ cliproxyapi_s3_local_path | default('/CLIProxyAPI') }}"
+cliproxyapi_docker_app_port: "{{ app_port_cliproxyapi | default(30011) }}"
+cliproxyapi_docker_bind_address: "{{ cliproxyapi_bind_host | default('127.0.0.1') }}"
+
+# Compatibility aliases keep the existing branch tasks reusable; callers use only
+# the generic cliproxyapi_* interface above.
+cliproxyapi_native_enabled: "{{ cliproxyapi_enabled }}"
+cliproxyapi_native_version: "{{ cliproxyapi_version }}"
+cliproxyapi_native_install_dir: "{{ cliproxyapi_install_dir }}"
+cliproxyapi_native_data_dir: "{{ cliproxyapi_data_dir }}"
+cliproxyapi_native_bind_address: "{{ cliproxyapi_bind_address }}"
+cliproxyapi_native_bind_host: "{{ cliproxyapi_bind_host }}"
+cliproxyapi_native_bind_port: "{{ cliproxyapi_bind_port }}"
+cliproxyapi_native_restart_hour: "{{ cliproxyapi_restart_hour }}"
+cliproxyapi_native_restart_schedule: "{{ cliproxyapi_restart_schedule }}"
+cliproxyapi_native_gomemlimit: "{{ cliproxyapi_gomemlimit }}"
+cliproxyapi_native_http_proxy: "{{ cliproxyapi_http_proxy }}"
+cliproxyapi_native_proxy_url: "{{ cliproxyapi_proxy_url }}"
+cliproxyapi_native_download_proxy: "{{ cliproxyapi_download_proxy }}"
+cliproxyapi_native_allow_remote: "{{ cliproxyapi_allow_remote }}"
+cliproxyapi_native_management_key: "{{ cliproxyapi_management_key }}"
+cliproxyapi_native_api_keys: "{{ cliproxyapi_api_keys }}"
+cliproxyapi_native_test_api_key: "{{ cliproxyapi_test_api_key }}"
+cliproxyapi_native_ai_providers_file: "{{ cliproxyapi_ai_providers_file }}"
+cliproxyapi_native_auths_dir: "{{ cliproxyapi_auths_dir }}"
+cliproxyapi_native_direct_providers: "{{ cliproxyapi_direct_providers }}"
+cliproxyapi_native_direct_claude: "{{ cliproxyapi_direct_claude }}"
+cliproxyapi_native_commercial_mode: true
+cliproxyapi_native_logs_max_total_size_mb: 5
+cliproxyapi_native_max_retry_interval: 10
+cliproxyapi_native_routing_strategy: "weighted-round-robin"
+cliproxyapi_native_session_affinity: true
+cliproxyapi_native_ws_auth: true
+cliproxyapi_native_disable_image_generation: "passthrough"
+cliproxyapi_native_stabilize_device_profile: true
+cliproxyapi_native_oauth_excluded_models:
+  antigravity:
+    - "claude-opus-4-6-thinking"
+    - "gemini-3.6-flash-high"
+    - "gemini-3.1-flash-lite"
+    - "gpt-oss-120b-medium"
+    - "gemini-3.1-pro-low"
+    - "gemini-3-flash"
+  claude:
+    - "claude-haiku-4-5-20251001"
+    - "claude-sonnet-4-5-20250929"
+    - "claude-opus-4-6"
+    - "claude-opus-4-7"
+    - "claude-opus-4-5-20251101"
+    - "claude-opus-4-1-20250805"
+    - "claude-opus-4-20250514"
+    - "claude-sonnet-4-20250514"
+    - "claude-3-7-sonnet-20250219"
+    - "claude-3-5-haiku-20241022"
+  codex:
+    - "gpt-5.5"
+    - "gpt-5.6-sol"
+    - "gpt-5.6-terra"
+    - "gpt-5.6-luna"
+cliproxyapi_arch_map:
+  aarch64: "linux_aarch64"
+  arm64: "linux_aarch64"
+  x86_64: "linux_amd64"
+  amd64: "linux_amd64"
+cliproxyapi_checksums:
+  aarch64: "sha256:827d7b8fb43a137898f7b68ceb6ff1aefcd0528cd5d59ea61317251171832b75"
+  arm64: "sha256:827d7b8fb43a137898f7b68ceb6ff1aefcd0528cd5d59ea61317251171832b75"
+  x86_64: "sha256:fd45e915d84e40fc09cefaae6b271a59d542bf284fd3dfee38abe5472412427b"
+  amd64: "sha256:fd45e915d84e40fc09cefaae6b271a59d542bf284fd3dfee38abe5472412427b"
+
+# Existing Docker branch variable names; values come from the unified interface.
+docker_apps_cliproxyapi_enabled: "{{ cliproxyapi_enabled }}"
+docker_apps_cliproxyapi_api_keys: "{{ cliproxyapi_api_keys }}"
+docker_apps_cliproxyapi_ai_providers_file: "{{ cliproxyapi_ai_providers_file }}"
+docker_apps_cliproxyapi_config_seed_file: "{{ cliproxyapi_config_seed_file }}"
+docker_apps_app_port_cliproxyapi: "{{ cliproxyapi_docker_app_port }}"
+docker_apps_cliproxyapi_bind_address: "{{ cliproxyapi_docker_bind_address }}"
+docker_apps_cliproxyapi_networks: "{{ cliproxyapi_docker_networks }}"
+docker_apps_cliproxyapi_use_postgres: "{{ cliproxyapi_docker_use_postgres }}"
+docker_apps_cliproxyapi_pg_host: "{{ cliproxyapi_docker_pg_host }}"
+docker_apps_cliproxyapi_pg_port: "{{ cliproxyapi_docker_pg_port }}"
+docker_apps_cliproxyapi_pg_db: "{{ cliproxyapi_docker_pg_db }}"
+docker_apps_cliproxyapi_pg_user: "{{ cliproxyapi_docker_pg_user }}"
+docker_apps_cliproxyapi_pg_pass: "{{ cliproxyapi_docker_pg_pass }}"
+docker_apps_cliproxyapi_memory: "{{ cliproxyapi_docker_memory }}"
+docker_apps_cliproxyapi_memory_reservation: "{{ cliproxyapi_docker_memory_reservation }}"

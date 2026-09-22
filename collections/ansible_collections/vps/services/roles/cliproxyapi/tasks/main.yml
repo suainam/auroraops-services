@@ -1,0 +1,57 @@
+---
+# One public role; native and Docker are implementation branches.
+- name: Resolve CLIProxyAPI role state
+  ansible.builtin.set_fact:
+    cliproxyapi_role_enabled: >-
+      {{ cliproxyapi_enabled | bool and
+         ((auroraops_roles | default({})).get('services', {}).get('cliproxyapi', false) | bool) }}
+  tags: [deploy, services, cliproxyapi, phase5]
+
+- name: Report disabled CLIProxyAPI role
+  ansible.builtin.debug:
+    msg: "Role cliproxyapi is disabled, skipping"
+  when: not cliproxyapi_role_enabled
+  tags: [deploy, services, cliproxyapi, phase5]
+
+- name: Resolve CLIProxyAPI platform branch
+  ansible.builtin.import_tasks: resolve.yml
+  when: cliproxyapi_role_enabled
+  tags: [deploy, services, cliproxyapi, phase5]
+
+- name: Run native CLIProxyAPI preflight
+  ansible.builtin.import_tasks: preflight.yml
+  when:
+    - cliproxyapi_role_enabled
+    - cliproxyapi_effective_mode == 'native'
+  tags: [deploy, services, cliproxyapi, cliproxyapi_preflight, phase5]
+
+- name: Deploy native CLIProxyAPI branch
+  when:
+    - cliproxyapi_role_enabled
+    - cliproxyapi_effective_mode == 'native'
+  block:
+    - ansible.builtin.import_tasks: install.yml
+    - ansible.builtin.import_tasks: configure.yml
+  tags: [deploy, services, cliproxyapi, phase5]
+
+- name: Verify native CLIProxyAPI branch after deployment
+  ansible.builtin.import_tasks: verify_native.yml
+  when:
+    - cliproxyapi_role_enabled
+    - cliproxyapi_effective_mode == 'native'
+    - not ansible_check_mode
+  tags: [verify, services, cliproxyapi, cliproxyapi_verify, phase5]
+- name: Deploy Docker CLIProxyAPI branch
+  ansible.builtin.import_tasks: docker.yml
+  when:
+    - cliproxyapi_role_enabled
+    - cliproxyapi_effective_mode == 'docker'
+  tags: [deploy, services, cliproxyapi, phase5]
+
+- name: Verify Docker CLIProxyAPI branch after deployment
+  ansible.builtin.import_tasks: verify_docker.yml
+  when:
+    - cliproxyapi_role_enabled
+    - cliproxyapi_effective_mode == 'docker'
+    - not ansible_check_mode
+  tags: [verify, services, cliproxyapi, cliproxyapi_verify, phase5]

@@ -1,0 +1,17 @@
+---
+- name: Stop WireGuard service on systemd
+  become: true
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ wireguard_native_interface }}.service"
+    state: stopped
+    enabled: false
+  failed_when: false
+  when: ansible_service_mgr | default('systemd') == 'systemd'
+  tags: [rollback, services, wireguard_native, wireguard_native_rollback, phase3]
+
+- name: Clean up WireGuard interface if still present
+  become: true
+  ansible.builtin.command: "ip link delete {{ wireguard_native_interface }}"
+  failed_when: false
+  changed_when: false
+  tags: [rollback, services, wireguard_native, wireguard_native_rollback, phase3]

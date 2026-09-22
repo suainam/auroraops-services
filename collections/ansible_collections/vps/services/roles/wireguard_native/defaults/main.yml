@@ -1,0 +1,26 @@
+---
+# Defaults for vps.services.wireguard_native
+wireguard_native_enabled: false
+wireguard_native_interface: "wg0"
+wireguard_native_package_name: "wireguard-tools"
+wireguard_native_config_dir: "/etc/wireguard"
+wireguard_native_config_path: "{{ wireguard_native_config_dir }}/{{ wireguard_native_interface }}.conf"
+wireguard_native_service_name: "wg-quick@{{ wireguard_native_interface }}"
+
+# 本机参数
+wireguard_native_role: "client"  # server | client
+wireguard_native_address: "10.144.10.15/32"
+wireguard_native_port: 30059
+wireguard_native_private_key: ""
+wireguard_native_save_config: false
+
+# 对端列表（每一个元素为 dict: public_key, allowed_ips, endpoint(可选), persistent_keepalive(可选)）
+wireguard_native_peers: []
+
+# 代理下载环境
+wireguard_native_download_environment: "{{ {
+  'http_proxy': proxy_http,
+  'https_proxy': proxy_https,
+  'HTTP_PROXY': proxy_http,
+  'HTTPS_PROXY': proxy_https
+} if proxy_enabled | default(false) | bool else {} }}"

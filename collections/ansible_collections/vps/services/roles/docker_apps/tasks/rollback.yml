@@ -44,7 +44,6 @@
     - flare
     - singbox
     - sub_store
-    - cliproxyapi
     - newapi_suite
     - manifest
     - shellcrash
@@ -63,7 +62,6 @@
     - flare
     - sub_store
     - new-api
-    - cliproxyapi
     - docker_apps_manifest
     - ds2api
     - vertex-proxy

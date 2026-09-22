@@ -1,0 +1,75 @@
+---
+- name: Check Tailscale daemon status on systemd
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ tailscale_service_name }}.service"
+  register: tailscale_service_status
+  when:
+    - tailscale_enabled | bool
+    - tailscale_service_manager == 'systemd'
+  tags: [verify, services, tailscale, tailscale_verify, phase3]
+
+- name: Assert Tailscale daemon is active on systemd
+  ansible.builtin.assert:
+    that:
+      - tailscale_service_status.status.ActiveState == 'active'
+      - tailscale_service_status.status.UnitFileState == 'enabled'
+    fail_msg: "Tailscale daemon is not active and enabled"
+  when:
+    - tailscale_enabled | bool
+    - tailscale_service_manager == 'systemd'
+  tags: [verify, services, tailscale, tailscale_verify, phase3]
+
+- name: Check Tailscale daemon status on OpenRC
+  become: true
+  ansible.builtin.command: rc-service {{ tailscale_openrc_service_name }} status
+  register: tailscale_openrc_status
+  changed_when: false
+  when:
+    - tailscale_enabled | bool
+    - tailscale_service_manager == 'openrc'
+  tags: [verify, services, tailscale, tailscale_verify, phase3]
+
+- name: Assert Tailscale daemon is active on OpenRC
+  ansible.builtin.assert:
+    that: tailscale_openrc_status.rc == 0
+    fail_msg: "Tailscale daemon is not active on OpenRC"
+  when:
+    - tailscale_enabled | bool
+    - tailscale_service_manager == 'openrc'
+  tags: [verify, services, tailscale, tailscale_verify, phase3]
+
+- name: Read Tailscale status without exposing credentials
+  become: true
+  ansible.builtin.command: tailscale status --json
+  register: tailscale_status
+  changed_when: false
+  no_log: true
+  when: tailscale_enabled | bool
+  tags: [verify, services, tailscale, tailscale_verify, phase3]
+
+- name: Assert Tailscale reports a local backend
+  ansible.builtin.assert:
+    that:
+      - tailscale_status.rc == 0
+      - (tailscale_status.stdout | from_json).BackendState in ['Running', 'NeedsLogin']
+    fail_msg: "Tailscale backend is unavailable"
+  when: tailscale_enabled | bool
+  tags: [verify, services, tailscale, tailscale_verify, phase3]
+
+- name: Read Tailscale addresses
+  become: true
+  ansible.builtin.command: tailscale ip -4
+  register: tailscale_ipv4
+  changed_when: false
+  when: tailscale_enabled | bool
+  tags: [verify, services, tailscale, tailscale_verify, phase3]
+
+- name: Assert Tailscale has an IPv4 address
+  ansible.builtin.assert:
+    that:
+      - tailscale_ipv4.rc == 0
+      - tailscale_ipv4.stdout | trim is match('^100\\.')
+    fail_msg: "Tailscale did not assign a 100.64.0.0/10 IPv4 address"
+  when: tailscale_enabled | bool
+  tags: [verify, services, tailscale, tailscale_verify, phase3]

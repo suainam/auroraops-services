@@ -1,0 +1,148 @@
+# Server host/interface to bind to. Default is empty ("") to bind all interfaces (IPv4 + IPv6).
+# Use "127.0.0.1" or "localhost" to restrict access to local machine only.
+host: "{{ cliproxyapi_bind_host }}"
+
+# Server port
+port: {{ cliproxyapi_bind_port }}
+
+# TLS settings for HTTPS. When enabled, the server listens with the provided certificate and key.
+tls:
+  enable: false
+  cert: ""
+  key: ""
+
+# Management API settings
+remote-management:
+  # Whether to allow remote (non-localhost) management access.
+  allow-remote: {{ cliproxyapi_allow_remote | default(true) | bool | to_json }}
+
+  # Management key. If a plaintext value is provided here, it will be hashed on startup.
+  # All management requests require this key.
+  secret-key: "{{ cliproxyapi_management_key | default('') }}"
+
+  # Disable the bundled management control panel asset download and HTTP route when true.
+  disable-control-panel: false
+
+  # GitHub repository for the management control panel. Accepts a repository URL or releases API URL.
+  panel-github-repository: "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
+
+# Authentication directory (supports ~ for home directory)
+auth-dir: "{{ cliproxyapi_data_dir }}"
+
+# API keys for authentication. Keep the complete set in Ansible Vault.
+api-keys:
+{% for api_key in cliproxyapi_api_keys | default([]) %}
+  - {{ api_key | to_json }}
+{% endfor %}
+
+{% if cliproxyapi_claude_api_key | default([]) | length > 0 %}
+claude-api-key:
+{% for item in cliproxyapi_claude_api_key %}
+  - api-key: {{ item['api-key'] | to_json }}
+{% if cliproxyapi_direct_claude | default(false) | bool %}
+    proxy-url: "direct"
+{% elif item['proxy-url'] is defined %}
+    proxy-url: {{ item['proxy-url'] | to_json }}
+{% endif %}
+{% for k, v in item.items() %}
+{% if k not in ['api-key', 'proxy-url'] %}
+{% if v is string or v is number or v is boolean %}
+    {{ k }}: {{ v | to_json }}
+{% else %}
+    {{ k }}:
+{{ v | to_nice_yaml(indent=2, width=1000) | indent(6, true) }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+# Enable debug logging
+debug: false
+
+commercial-mode: {{ cliproxyapi_commercial_mode | default(true) | bool | to_json }}
+
+# When true, write application logs to rotating files instead of stdout
+logging-to-file: false
+
+# Maximum total size (MB) of log files under the logs directory.
+logs-max-total-size-mb: {{ cliproxyapi_logs_max_total_size_mb | default(5) }}
+
+# When false, disable in-memory usage statistics aggregation
+usage-statistics-enabled: false
+
+# Proxy URL. Supports socks5/http/https protocols.
+proxy-url: "{{ cliproxyapi_proxy_url | default('') }}"
+
+# When true, unprefixed model requests only use credentials without a prefix (except when prefix == model name).
+force-model-prefix: false
+
+# Number of times to retry a request. Retries will occur if the HTTP response code is 403, 408, 500, 502, 503, or 504.
+request-retry: 3
+
+max-retry-interval: {{ cliproxyapi_max_retry_interval | default(10) }}
+
+# Quota exceeded behavior
+quota-exceeded:
+  switch-project: true
+  switch-preview-model: true
+
+# Routing strategy for selecting credentials when multiple match.
+routing:
+  strategy: "{{ cliproxyapi_routing_strategy | default('weighted-round-robin') }}"
+  session-affinity: {{ cliproxyapi_session_affinity | default(true) | bool | to_json }}
+
+# When true, enable authentication for the WebSocket API (/v1/ws).
+ws-auth: {{ cliproxyapi_ws_auth | default(true) | bool | to_json }}
+
+disable-image-generation: "{{ cliproxyapi_disable_image_generation | default('passthrough') }}"
+
+claude-header-defaults:
+  stabilize-device-profile: {{ cliproxyapi_stabilize_device_profile | default(true) | bool | to_json }}
+
+# When > 0, emit blank lines every N seconds for non-streaming responses to prevent idle timeouts.
+nonstream-keepalive-interval: 0
+
+# Global model thinking/reasoning handling
+openai-compatibility:
+{% if cliproxyapi_openai_compatibility | default([]) | length > 0 %}
+{% for provider in cliproxyapi_openai_compatibility %}
+  - name: {{ provider.name | to_json }}
+{% if provider.name in (cliproxyapi_direct_providers | default([])) %}
+    proxy-url: "direct"
+{% elif provider['proxy-url'] is defined %}
+    proxy-url: {{ provider['proxy-url'] | to_json }}
+{% endif %}
+{% for k, v in provider.items() %}
+{% if k not in ['name', 'proxy-url'] %}
+{% if v is string or v is number or v is boolean %}
+    {{ k }}: {{ v | to_json }}
+{% else %}
+    {{ k }}:
+{{ v | to_nice_yaml(indent=2, width=1000) | indent(6, true) }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+  - name: "global-reasoning-cleaner"
+    models:
+      - name: "deepseek-*"
+        thinking:
+          levels: ["none"]
+      - name: "*-reasoner"
+        thinking:
+          levels: ["none"]
+      - name: "*-thinking"
+        thinking:
+          levels: ["none"]
+
+# OAuth model name aliases (per channel)
+oauth-model-alias:
+  antigravity:
+{% include 'cliproxyapi_antigravity_aliases.yaml.j2' %}
+
+{% if cliproxyapi_oauth_excluded_models | default({}) | length > 0 %}
+oauth-excluded-models:
+{{ cliproxyapi_oauth_excluded_models | to_nice_yaml(indent=2, width=1000) | indent(2, true) }}
+{% endif %}

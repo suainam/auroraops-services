@@ -4,7 +4,7 @@
 本角色负责部署和管理 VPS 上的 Docker 应用程序。**所有应用现在使用 `container_deployer` Meta 角色进行统一部署**，实现了标准化的容器管理流程。
 
 ### 已迁移至 container_deployer 的应用
-- ✅ **CLIProxyAPI**: Gemini API 代理服务 (PostgreSQL 集成)
+- **CLIProxyAPI**: 已迁移至 `vps.services.cliproxyapi`，由统一 Role 负责 native/Docker 分支；`docker_apps` 不再拥有其任务。
 - ✅ **New API Suite**: API 管理平台 (PostgreSQL + Redis, Compose 模式)
 - ✅ **Manifest**: LLM 可观测与评估面板 (PostgreSQL, Compose 模式)
 - ✅ **SillyTavern**: AI 聊天前端
@@ -17,6 +17,11 @@
 - ✅ **opcotoai-toolkit**: SMTP Console 与 gateway（旧 Grok 已迁移到独立 `grok_register` Role）
 - ✅ **DS2API**: DeepSeek Web API 兼容服务（固定 Release 镜像）
 - ✅ **Vertex AI Proxy**: OpenAI-compatible Gemini proxy（本地构建镜像，SSE 入口）
+
+Sub-Store 的 `aurora-singbox` 是幂等 upsert：如果旧版本已经创建了同名
+`local` 订阅，后续部署也必须将它 PATCH 为当前 `sub_store_source_url` 的
+`remote` Provider。只判断“名称是否存在”会保留旧短 ID/旧节点，造成聚合订阅
+与当前 Singbox 服务端不一致。
 
 ### Container Deployer 优势
 - **代码量减少 44%**: 507行 → 284行
@@ -35,12 +40,12 @@
 - include_role:
     name: vps.services.container_deployer
   vars:
-    cdp_name: "cliproxyapi"
-    cdp_image: "{{ cliproxyapi_image }}"
+    cdp_name: "gcli2api"
+    cdp_image: "{{ gcli2api_image }}"
     cdp_dirs: ["", "auths", "logs"]
     cdp_networks: [{name: "sweb"}]
-    cdp_ports: ["127.0.0.1:{{ app_port_cliproxyapi }}:8317"]
-  tags: [deploy, services, docker_apps, cliproxyapi, phase2]
+    cdp_ports: ["127.0.0.1:{{ docker_apps_app_port_gcli2api_api }}:7861"]
+  tags: [deploy, services, docker_apps, gcli2api, phase2]
 ```
 
 #### Compose 模式
@@ -136,7 +141,7 @@ Role 内部统一使用 `docker_apps_*` 前缀变量。现有 inventory 中的�
 | `docker_apps_singbox_enabled` | `true` | Singbox 核心代理 |
 | `docker_apps_sub_store_enabled` | `false` | Sub-Store 相关能力开关；仅在部署主机显式启用 |
 | `docker_apps_sub_store_pull` | `false` | Sub-Store 镜像拉取开关；已有本地镜像默认不访问 Docker Hub，首次部署或升级时显式设置为 `true` |
-| `docker_apps_cliproxyapi_enabled` | `true` | CLIProxyAPI 部署 |
+| `cliproxyapi_enabled` | `true` | 统一 CLIProxyAPI Role；`cliproxyapi_deploy_mode` 选择 native 或 Docker |
 | `docker_apps_newapi_suite_enabled` | `true` | New API 套件 |
 | `docker_apps_gemini_balance_enabled` | `false` | Gemini Balance (需手动启用) |
 | `docker_apps_shellcrash_enabled` | `false` | ShellCrash (通常仅 NAS 使用) |
@@ -157,20 +162,18 @@ Vertex AI Proxy 通过 `docker_apps_containers_host` 中的 `vertex` 启用，�
 | `docker_apps_warp_memory_reservation` | `96m` | WARP 本地 SOCKS 代理容器内存预留 |
 | `docker_apps_warp_cpus` | `0.25` | WARP 本地 SOCKS 代理容器 CPU 上限 |
 
-### CLIProxyAPI 认证
+### CLIProxyAPI 认证（由 `vps.services.cliproxyapi` 管理）
 
 `cliproxyapi_api_keys` 必须定义在 Ansible Vault 中，作为完整列表渲染到
-CLIProxyAPI 的 `api-keys`；已有配置也会迁移该列表，并补齐由官方模型目录生成的
-Antigravity 别名。角色拒绝空列表或空成员，避免使用无效的默认密钥。
+CLIProxyAPI 的 `api-keys`；native 与 Docker 分支共用同一组 API key、Provider 和 OAuth
+凭据目录。
 
-CLIProxyAPI 管理面板中的 Provider 配置不放入 `vault.yml`。需要固化某台主机的
-Provider 时，在该主机变量中设置 `cliproxyapi_ai_providers_file`，指向本地
-独立加密的 `secrets/cliproxyapi_ai_providers.yml`；文件根变量为
-`cliproxyapi_openai_compatibility` 和 `cliproxyapi_claude_api_key`。角色仅在该文件
-存在时将其用于首次 seed，仍以 `force: false` 保留管理面板后续修改。
-如需固化完整的管理面板配置（包括 `routing.session-affinity`、OAuth 禁用模型等），
-设置 `cliproxyapi_config_seed_file` 指向独立加密的完整配置；同样仅首次 seed，
-不会覆盖已有运行时配置。
+Provider 配置通过 `cliproxyapi_ai_providers_file` 从独立加密文件载入；认证 JSON 通过
+`cliproxyapi_auths_dir` 同步到对应分支的数据目录。已有 Docker 配置只增量重写托管的
+Provider/API key/别名区块，保留管理面板写入的其他字段。
+
+完整配置 seed 使用 `cliproxyapi_config_seed_file`，仅首次创建 Docker 配置文件时生效；
+native 分支每次部署渲染统一模板。
 
 ### 端口配置 (Overridable via group_vars)
 建议遵循 `docs/Port_Allocation_Standard.md` 规范。
@@ -179,7 +182,7 @@ Provider 时，在该主机变量中设置 `cliproxyapi_ai_providers_file`，指
 | :--- | :--- | :--- |
 | `docker_apps_app_port_newapi` | `30001` | New API HTTP；兼容 `app_port_newapi` |
 | `docker_apps_app_port_neko_key_tool` | `30010` | Neko API Key Tool；兼容 `app_port_neko_key_tool` |
-| `docker_apps_app_port_cliproxyapi` | `30011` | CLIProxyAPI；兼容 `app_port_cliproxyapi` |
+| `cliproxyapi_docker_app_port` | `30011` | CLIProxyAPI Docker 分支；native 使用 `cliproxyapi_bind_address` |
 | `docker_apps_app_port_manifest` | `30013` | Manifest；兼容 `app_port_manifest` |
 | `app_port_sub_store` | `30015` | Sub-Store，仅绑定回环地址 |
 | `app_port_sillytavern` | `30002` | SillyTavern WEB UI |
@@ -710,18 +713,18 @@ curl -s https://your-domain/x9a8b7c6d5e4f3 | base64 -d | grep hysteria2
 ```
 
 ### 订阅 Token 变更操作指南
-当前实现中，`make deploy-services.docker_apps.singbox` 会在订阅文件发生变更时自动补跑 `nginx_site_config`，确保订阅入口切换到新 Token。
+当前实现中，`make deploy-services.docker_apps.sub_store` 会在 Provider catalog/profile 部署成功后自动补跑 `make deploy-services.nginx.nginx_site_config`，确保订阅入口与最新聚合结果一致。`singbox` 定向部署仍只更新 Singbox；如果只是 Singbox 订阅文件或 Token 变化，请显式执行 Nginx focused target。
 
 如果历史环境已经出现“新订阅文件已生成，但 Nginx 仍指向旧 Token”的状态，可按顺序执行以下操作修复：
 
 1.  **更新 Docker 应用** (生成新的订阅文件):
     ```bash
-    make deploy-services.docker_apps.singbox
+    make deploy-services.docker_apps.sub_store
     ```
 2.  **更新 Nginx 配置** (指向新的订阅路径):
     ```bash
     # 使用轻量级部署，仅更新站点配置，不重装 Nginx/Certbot
-    make deploy-services.nginx.site_config
+    make deploy-services.nginx.nginx_site_config
     ```
 
 ## 6. 相关文档

@@ -1,16 +1,16 @@
 ---
 - name: Resolve effective Sub-Store providers for verification
-  ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_providers.yml
+  ansible.builtin.import_tasks: "{{ role_path }}/../../../common/tasks/resolve_sub_store_providers.yml"
   when: verify_docker_app_name | default('') == 'sub_store'
   tags: [verify, services, docker_apps, sub_store, phase5]
 
 - name: Resolve capability provider catalog for verification
-  ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_capability_providers.yml
+  ansible.builtin.import_tasks: "{{ role_path }}/../../../common/tasks/resolve_sub_store_capability_providers.yml"
   when: verify_docker_app_name | default('') == 'sub_store'
   tags: [verify, services, docker_apps, sub_store, phase5]
 
 - name: 合并 Docker Apps 容器列表
-  ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
+  ansible.builtin.include_tasks: "{{ role_path }}/../../../common/tasks/merge_list_vars.yml"
   vars:
     merge_var_name: docker_apps_containers
   tags:
@@ -49,7 +49,6 @@
       flare: flare
       singbox: singbox
       sub_store: sub_store
-      cliproxyapi: cliproxyapi
       newapi_suite: new-api
       manifest: manifest
       shellcrash: shellcrash
@@ -89,20 +88,56 @@
     - flare
     - singbox
     - sub_store
-    - cliproxyapi
     - newapi_suite
     - manifest
     - phase5
     - shellcrash
 
-- name: 验证 Sing-box 原生服务状态 (Native)
+- name: Verify Sing-box native service is active and enabled on systemd
   become: true
   ansible.builtin.service:
     name: sing-box
     state: started
   check_mode: true
-  register: docker_apps_singbox_native_service_status
-  failed_when: docker_apps_singbox_native_service_status.changed
+  register: docker_apps_singbox_native_systemd_status
+  changed_when: false
+  failed_when: docker_apps_singbox_native_systemd_status.changed
+  when:
+    - verify_docker_app_name is defined
+    - verify_docker_app_name == 'singbox'
+    - (docker_apps_singbox_deploy_mode | default('docker')) == 'native'
+    - ansible_service_mgr | default('systemd') == 'systemd'
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - singbox
+    - phase5
+
+- name: Verify Sing-box native service is active and enabled on OpenRC
+  become: true
+  ansible.builtin.command: rc-service sing-box status
+  register: docker_apps_singbox_native_openrc_status
+  changed_when: false
+  failed_when: docker_apps_singbox_native_openrc_status.rc != 0
+  when:
+    - verify_docker_app_name is defined
+    - verify_docker_app_name == 'singbox'
+    - (docker_apps_singbox_deploy_mode | default('docker')) == 'native'
+    - ansible_service_mgr | default('') != 'systemd'
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - singbox
+    - phase5
+
+- name: Verify Sing-box native configuration parses
+  become: true
+  ansible.builtin.command: sing-box check -C /etc/sing-box
+  register: docker_apps_singbox_native_config_check
+  changed_when: false
+  failed_when: docker_apps_singbox_native_config_check.rc != 0
   when:
     - verify_docker_app_name is defined
     - verify_docker_app_name == 'singbox'
@@ -112,8 +147,8 @@
     - services
     - docker_apps
     - singbox
+    - wireguard
     - phase5
-
 
 - name: Build expected container running state map
   ansible.builtin.set_fact:
@@ -125,7 +160,6 @@
       flare: true
       singbox: true
       sub_store: true
-      cliproxyapi: true
       newapi_suite: true
       manifest: true
       shellcrash: true
