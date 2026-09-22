@@ -4,8 +4,8 @@
 - name: Check if PostgreSQL is installed for CLIProxyAPI
   ansible.builtin.stat:
     path: /etc/postgresql
-  register: docker_apps_cliproxyapi_postgresql_installed
-  when: docker_apps_cliproxyapi_use_postgres | bool
+  register: cliproxyapi_postgresql_installed
+  when: cliproxyapi_docker_use_postgres | bool
   tags: [deploy, services, docker_apps, cliproxyapi, init_db, phase5]
 
 - name: Check if Postgres user exists
@@ -15,13 +15,13 @@
     argv:
       - psql
       - -tAc
-      - "SELECT 1 FROM pg_roles WHERE rolname='{{ docker_apps_cliproxyapi_pg_user }}'"
+      - "SELECT 1 FROM pg_roles WHERE rolname='{{ cliproxyapi_docker_pg_user }}'"
   register: docker_apps_cliproxy_user_exists
   changed_when: false
   failed_when: docker_apps_cliproxy_user_exists.rc != 0
   when:
-    - docker_apps_cliproxyapi_use_postgres | bool
-    - docker_apps_cliproxyapi_postgresql_installed.stat.exists | default(false)
+    - cliproxyapi_docker_use_postgres | bool
+    - cliproxyapi_postgresql_installed.stat.exists | default(false)
   tags: [deploy, services, docker_apps, cliproxyapi, init_db, phase5]
 
 - name: Create Postgres user
@@ -34,12 +34,12 @@
       - ON_ERROR_STOP=1
       - -c
       - >-
-        CREATE USER {{ docker_apps_cliproxyapi_pg_user }}
-        WITH PASSWORD '{{ docker_apps_cliproxyapi_pg_pass }}';
+        CREATE USER {{ cliproxyapi_docker_pg_user }}
+        WITH PASSWORD '{{ cliproxyapi_docker_pg_pass }}';
   changed_when: true
   when:
-    - docker_apps_cliproxyapi_use_postgres | bool
-    - docker_apps_cliproxyapi_postgresql_installed.stat.exists | default(false)
+    - cliproxyapi_docker_use_postgres | bool
+    - cliproxyapi_postgresql_installed.stat.exists | default(false)
     - docker_apps_cliproxy_user_exists.stdout | default('') | trim != '1'
   no_log: true
   tags: [deploy, services, docker_apps, cliproxyapi, init_db, phase5]
@@ -51,13 +51,13 @@
     argv:
       - psql
       - -tAc
-      - "SELECT 1 FROM pg_database WHERE datname='{{ docker_apps_cliproxyapi_pg_db }}'"
+      - "SELECT 1 FROM pg_database WHERE datname='{{ cliproxyapi_docker_pg_db }}'"
   register: docker_apps_cliproxy_db_exists
   changed_when: false
   failed_when: docker_apps_cliproxy_db_exists.rc != 0
   when:
-    - docker_apps_cliproxyapi_use_postgres | bool
-    - docker_apps_cliproxyapi_postgresql_installed.stat.exists | default(false)
+    - cliproxyapi_docker_use_postgres | bool
+    - cliproxyapi_postgresql_installed.stat.exists | default(false)
   tags: [deploy, services, docker_apps, cliproxyapi, init_db, phase5]
 
 - name: Create Postgres database
@@ -70,12 +70,12 @@
       - ON_ERROR_STOP=1
       - -c
       - >-
-        CREATE DATABASE {{ docker_apps_cliproxyapi_pg_db }}
-        OWNER {{ docker_apps_cliproxyapi_pg_user }};
+        CREATE DATABASE {{ cliproxyapi_docker_pg_db }}
+        OWNER {{ cliproxyapi_docker_pg_user }};
   changed_when: true
   when:
-    - docker_apps_cliproxyapi_use_postgres | bool
-    - docker_apps_cliproxyapi_postgresql_installed.stat.exists | default(false)
+    - cliproxyapi_docker_use_postgres | bool
+    - cliproxyapi_postgresql_installed.stat.exists | default(false)
     - docker_apps_cliproxy_db_exists.stdout | default('') | trim != '1'
   tags: [deploy, services, docker_apps, cliproxyapi, init_db, phase5]
 
@@ -89,20 +89,34 @@
     mode: '0755'
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
+- name: Ensure CLIProxyAPI OAuth credential directory exists
+  become: true
+  ansible.builtin.file:
+    path: /opt/dockers/cliproxyapi/auths
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  tags: [deploy, services, cliproxyapi, cliproxyapi_credentials, phase5]
+
+- name: Synchronize shared CLIProxyAPI credentials
+  ansible.builtin.import_tasks: shared_credentials.yml
+  tags: [deploy, services, cliproxyapi, cliproxyapi_credentials, phase5]
+
 - name: Load CLIProxyAPI Antigravity model catalog
   ansible.builtin.include_vars:
     file: "{{ role_path }}/files/cliproxyapi_antigravity_models.json"
-    name: docker_apps_cliproxyapi_antigravity_catalog
+    name: cliproxyapi_antigravity_catalog
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
 - name: Validate CLIProxyAPI Antigravity model catalog
   ansible.builtin.assert:
     that:
-      - docker_apps_cliproxyapi_antigravity_catalog.models is sequence
-      - docker_apps_cliproxyapi_antigravity_catalog.models | length > 0
+      - cliproxyapi_antigravity_catalog.models is sequence
+      - cliproxyapi_antigravity_catalog.models | length > 0
       - >-
         (
-          docker_apps_cliproxyapi_antigravity_catalog.models
+          cliproxyapi_antigravity_catalog.models
           | selectattr('upstream_name', 'equalto', 'gemini-pro-agent')
           | list
           | length
@@ -116,51 +130,39 @@
   become: true
   ansible.builtin.stat:
     path: /opt/dockers/cliproxyapi/config.yaml
-  register: docker_apps_cliproxyapi_config
+  register: cliproxyapi_config
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
-- name: Load private CLIProxyAPI AI Provider seed when present
-  ansible.builtin.include_vars:
-    file: "{{ docker_apps_cliproxyapi_ai_providers_file }}"
-  no_log: true
-  when:
-    - >-
-      docker_apps_cliproxyapi_ai_providers_file | default('', true) | length > 0
-      and query(
-        'ansible.builtin.fileglob',
-        docker_apps_cliproxyapi_ai_providers_file | default('', true)
-      ) | length > 0
-  tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
 - name: Load full CLIProxyAPI runtime config seed when present
   ansible.builtin.include_vars:
-    file: "{{ docker_apps_cliproxyapi_config_seed_file }}"
-    name: docker_apps_cliproxyapi_config_seed_vars
+    file: "{{ cliproxyapi_config_seed_file }}"
+    name: cliproxyapi_config_seed_vars
   no_log: true
   when:
     - >-
-      docker_apps_cliproxyapi_config_seed_file | default('', true) | length > 0
+      cliproxyapi_config_seed_file | default('', true) | length > 0
       and query(
         'ansible.builtin.fileglob',
-        docker_apps_cliproxyapi_config_seed_file | default('', true)
+        cliproxyapi_config_seed_file | default('', true)
       ) | length > 0
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
 - name: Validate CLIProxyAPI API keys
   ansible.builtin.assert:
     that:
-      - docker_apps_cliproxyapi_api_keys is sequence
-      - docker_apps_cliproxyapi_api_keys is not string
-      - docker_apps_cliproxyapi_api_keys | length == 6
+      - cliproxyapi_api_keys is sequence
+      - cliproxyapi_api_keys is not string
+      - cliproxyapi_api_keys | length == 6
       - >-
         (
-          docker_apps_cliproxyapi_api_keys
+          cliproxyapi_api_keys
           | select('string')
           | map('trim')
           | reject('equalto', '')
           | list
           | length
-        ) == docker_apps_cliproxyapi_api_keys | length
+        ) == cliproxyapi_api_keys | length
     fail_msg: >-
       CLIProxyAPI API keys must be a non-empty Vault-supplied list of strings.
   no_log: true
@@ -184,7 +186,7 @@
     owner: root
     group: root
     mode: '0600'
-  when: docker_apps_cliproxyapi_config.stat.exists
+  when: cliproxyapi_config.stat.exists
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
 - name: Read CLIProxyAPI config before alias migration
@@ -192,9 +194,23 @@
   no_log: true
   ansible.builtin.slurp:
     src: /opt/dockers/cliproxyapi/config.yaml
-  register: docker_apps_cliproxyapi_config_contents
-  when: docker_apps_cliproxyapi_config.stat.exists
+  register: cliproxyapi_config_contents
+  when: cliproxyapi_config.stat.exists
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
+
+- name: Reconcile shared CLIProxyAPI OpenAI Provider block
+  become: true
+  no_log: true
+  diff: false
+  ansible.builtin.replace:
+    path: /opt/dockers/cliproxyapi/config.yaml
+    regexp: '(?ms)^openai-compatibility:\n.*?(?=^[^ \t#\r\n][^:\r\n]*:\s*$|\Z)'
+    replace: "{{ lookup('template', 'cliproxyapi_openai_compatibility.yaml.j2') }}"
+  when:
+    - cliproxyapi_config.stat.exists
+    - cliproxyapi_openai_compatibility is defined
+  notify: restart cliproxyapi
+  tags: [deploy, services, cliproxyapi, cliproxyapi_config, phase5]
 
 - name: Remove managed CLIProxyAPI Antigravity alias block before reconciliation
   become: true
@@ -205,18 +221,18 @@
     regexp: '(?ms)^# BEGIN AuroraOps CLIProxyAPI Antigravity aliases$\n.*?^# END AuroraOps CLIProxyAPI Antigravity aliases\n?'
     replace: ''
   when:
-    - docker_apps_cliproxyapi_config.stat.exists
+    - cliproxyapi_config.stat.exists
     - >-
       (
         (
-          docker_apps_cliproxyapi_config_contents.content
+          cliproxyapi_config_contents.content
           | b64decode
           | regex_findall('(?m)^oauth-model-alias:')
           | length
         ) != 1
       ) or (
         '# BEGIN AuroraOps CLIProxyAPI Antigravity aliases' not in
-        (docker_apps_cliproxyapi_config_contents.content | b64decode)
+        (cliproxyapi_config_contents.content | b64decode)
       )
   notify: restart cliproxyapi
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
@@ -230,18 +246,18 @@
     regexp: '(?m)^oauth-model-alias:\n(?:^[ \t][^\n]*(?:\n|$))+'
     replace: ''
   when:
-    - docker_apps_cliproxyapi_config.stat.exists
+    - cliproxyapi_config.stat.exists
     - >-
       (
         (
-          docker_apps_cliproxyapi_config_contents.content
+          cliproxyapi_config_contents.content
           | b64decode
           | regex_findall('(?m)^oauth-model-alias:')
           | length
         ) != 1
       ) or (
         '# BEGIN AuroraOps CLIProxyAPI Antigravity aliases' not in
-        (docker_apps_cliproxyapi_config_contents.content | b64decode)
+        (cliproxyapi_config_contents.content | b64decode)
       )
   notify: restart cliproxyapi
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
@@ -256,7 +272,7 @@
     insertafter: EOF
     block: >-
       {{ lookup('template', 'cliproxyapi_antigravity_config.yaml.j2') }}
-  when: docker_apps_cliproxyapi_config.stat.exists
+  when: cliproxyapi_config.stat.exists
   notify: restart cliproxyapi
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
@@ -270,7 +286,7 @@
     replace: >-
       {{ 'api-keys:\n'
          ~ lookup('template', 'cliproxyapi_api_keys.yaml.j2') }}
-  when: docker_apps_cliproxyapi_config.stat.exists
+  when: cliproxyapi_config.stat.exists
   notify: restart cliproxyapi
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
@@ -286,10 +302,10 @@
       {{ 'api-keys:\n'
          ~ lookup('template', 'cliproxyapi_api_keys.yaml.j2') }}
   when:
-    - docker_apps_cliproxyapi_config.stat.exists
+    - cliproxyapi_config.stat.exists
     - >-
       (
-        docker_apps_cliproxyapi_config_contents.content
+        cliproxyapi_config_contents.content
         | b64decode
         | regex_search('(?m)^api-keys:')
       ) is none
@@ -303,21 +319,23 @@
   ansible.builtin.copy:
     content: >-
       {{
-        docker_apps_cliproxyapi_config_seed_vars.cliproxyapi_config_seed
+        cliproxyapi_config_seed_vars.cliproxyapi_config_seed
         | to_nice_yaml(indent=2, width=1000)
       }}
     dest: /opt/dockers/cliproxyapi/config.yaml
     owner: root
     mode: '0600'
-    force: false
+    force: "{{ cliproxyapi_force_overwrite | bool }}"
   when:
-    - not docker_apps_cliproxyapi_config.stat.exists
-    - docker_apps_cliproxyapi_config_seed_vars is defined
-    - docker_apps_cliproxyapi_config_seed_vars.cliproxyapi_config_seed is defined
+    - cliproxyapi_config_seed_vars is defined
+    - cliproxyapi_config_seed_vars.cliproxyapi_config_seed is defined
+    - >-
+      cliproxyapi_force_overwrite | bool
+      or not cliproxyapi_config.stat.exists
   notify: restart cliproxyapi
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
-- name: Seed cliproxyapi config file (force=false, 避免覆盖管理面板写入的 AI Provider 配置)
+- name: Seed cliproxyapi config file when absent or force-enabled
   become: true
   no_log: true
   diff: false
@@ -326,54 +344,90 @@
     dest: /opt/dockers/cliproxyapi/config.yaml
     owner: root
     mode: '0600'
-    force: false
+    force: "{{ cliproxyapi_force_overwrite | bool }}"
+  when:
+    - cliproxyapi_force_overwrite | bool or not cliproxyapi_config.stat.exists
+    - >-
+      cliproxyapi_config_seed_vars is not defined
+      or cliproxyapi_config_seed_vars.cliproxyapi_config_seed is not defined
   notify: restart cliproxyapi
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
+- name: Resolve CLIProxyAPI container environment for selected storage mode
+  ansible.builtin.set_fact:
+    cliproxyapi_container_env: >-
+      {{
+        {
+          'TZ': 'Asia/Shanghai',
+          'GOMEMLIMIT': '220MiB',
+          'MANAGEMENT_PASSWORD': cliproxyapi_management_key,
+          'MANAGEMENT_STATIC_PATH': '/CLIProxyAPI/static/management.html'
+        }
+        | combine(
+            {
+              'OBJECTSTORE_ENDPOINT': cliproxyapi_docker_s3_endpoint,
+              'OBJECTSTORE_BUCKET': cliproxyapi_docker_s3_bucket,
+              'OBJECTSTORE_ACCESS_KEY': cliproxyapi_docker_s3_access_key,
+              'OBJECTSTORE_SECRET_KEY': cliproxyapi_docker_s3_secret_key,
+              'OBJECTSTORE_LOCAL_PATH': cliproxyapi_docker_s3_local_path
+            }
+            if (cliproxyapi_docker_storage_driver == 's3' or cliproxyapi_docker_s3_endpoint | default('') | length > 0)
+            else (
+              {
+                'PGSTORE_DSN':
+                  'postgresql://'
+                  ~ cliproxyapi_docker_pg_user
+                  ~ ':'
+                  ~ (cliproxyapi_docker_pg_pass | urlencode)
+                  ~ '@'
+                  ~ cliproxyapi_docker_pg_host
+                  ~ ':'
+                  ~ (cliproxyapi_docker_pg_port | string)
+                  ~ '/'
+                  ~ cliproxyapi_docker_pg_db
+                  ~ '?sslmode=disable'
+              }
+              if cliproxyapi_docker_use_postgres | bool
+              else {}
+            )
+          )
+      }}
+  no_log: true
+  tags: [deploy, services, cliproxyapi, phase5]
 - name: Deploy cliproxyapi container
   ansible.builtin.include_role:
     name: vps.services.container_deployer
   vars:
+    cdp_recreate: "{{ cliproxyapi_force_overwrite | bool }}"
     cdp_name: "cliproxyapi"
     cdp_image: "{{ cliproxyapi_image }}"
-    cdp_dirs: ["", "auths", "logs"]
-    cdp_memory: "{{ docker_apps_cliproxyapi_memory | default('128m') }}"
+    cdp_dirs: ["", "logs", "objectstore"]
+    cdp_memory: "{{ cliproxyapi_docker_memory | default('128m') }}"
     cdp_cpus: "0.5"
-    cdp_memory_reservation: "{{ docker_apps_cliproxyapi_memory_reservation | default('32m') }}"
+    cdp_memory_reservation: "{{ cliproxyapi_docker_memory_reservation | default('32m') }}"
     cdp_oom_score_adj: "-300"
-    cdp_networks: "{{ docker_apps_cliproxyapi_networks }}"
+    cdp_networks: "{{ cliproxyapi_docker_networks }}"
     cdp_ports:
-      - "{{ docker_apps_cliproxyapi_bind_address }}:{{ docker_apps_app_port_cliproxyapi }}:8317"
-    cdp_volumes:
-      - "/opt/dockers/cliproxyapi/config.yaml:/CLIProxyAPI/config.yaml"
-      - "/opt/dockers/cliproxyapi/auths:/root/.cli-proxy-api"
-      - "/opt/dockers/cliproxyapi/logs:/CLIProxyAPI/logs"
+      - "{{ cliproxyapi_docker_bind_address }}:{{ cliproxyapi_docker_app_port }}:8317"
+    cdp_volumes: >-
+      {{
+        [
+          "/opt/dockers/cliproxyapi/logs:/CLIProxyAPI/logs"
+        ]
+        + (
+          [
+            "/opt/dockers/cliproxyapi/objectstore:/CLIProxyAPI/objectstore"
+          ]
+          if (cliproxyapi_docker_storage_driver == 's3' or cliproxyapi_docker_s3_endpoint | default('') | length > 0)
+          else [
+            "/opt/dockers/cliproxyapi/config.yaml:/CLIProxyAPI/config.yaml",
+            "/opt/dockers/cliproxyapi/auths:/root/.cli-proxy-api"
+          ]
+        )
+      }}
     cdp_etc_hosts:
       "host.docker.internal": "host-gateway"
-    cdp_env:
-      TZ: "Asia/Shanghai"
-      # Keep Go heap below Docker's 256 MiB cgroup limit while retaining headroom.
-      GOMEMLIMIT: "220MiB"
-      PGSTORE_DSN: >-
-        {{
-          (docker_apps_cliproxyapi_use_postgres | bool)
-          | ternary(
-              'postgresql://'
-              ~ docker_apps_cliproxyapi_pg_user
-              ~ ':'
-              ~ (docker_apps_cliproxyapi_pg_pass | urlencode)
-              ~ '@'
-              ~ docker_apps_cliproxyapi_pg_host
-              ~ ':'
-              ~ (docker_apps_cliproxyapi_pg_port | string)
-              ~ '/'
-              ~ docker_apps_cliproxyapi_pg_db
-              ~ '?sslmode=disable',
-              omit
-            )
-        }}
-      MANAGEMENT_PASSWORD: "{{ cliproxyapi_management_key }}"
-      MANAGEMENT_STATIC_PATH: "/CLIProxyAPI/static/management.html"
+    cdp_env: "{{ cliproxyapi_container_env }}"
     cdp_healthcheck:
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8317'"]
       interval: 1800s

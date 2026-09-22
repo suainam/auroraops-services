@@ -77,21 +77,3 @@
   when: (docker_apps_singbox_deploy_mode | default('docker')) == 'native'
   tags: [deploy, services, docker_apps, singbox]
 
-- name: Restart cliproxyapi
-  listen: restart cliproxyapi
-  become: true
-  community.docker.docker_container:
-    name: cliproxyapi
-    state: started
-    restart: true
-  tags: [deploy, services, docker_apps, cliproxyapi]
-
-- name: Restart cliproxyapi scheduler timer
-  listen: restart cliproxyapi scheduler timer
-  become: true
-  ansible.builtin.systemd:
-    name: cliproxyapi-scheduler-restart.timer
-    enabled: true
-    state: restarted
-    daemon_reload: true
-  tags: [deploy, services, docker_apps, cliproxyapi]

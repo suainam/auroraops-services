@@ -1,0 +1,30 @@
+openai-compatibility:
+{% for provider in cliproxyapi_openai_compatibility | default([]) %}
+  - name: {{ provider.name | to_json }}
+{% if provider.name in (cliproxyapi_direct_providers | default([])) %}
+    proxy-url: "direct"
+{% elif provider['proxy-url'] is defined %}
+    proxy-url: {{ provider['proxy-url'] | to_json }}
+{% endif %}
+{% for k, v in provider.items() %}
+{% if k not in ['name', 'proxy-url'] %}
+{% if v is string or v is number or v is boolean %}
+    {{ k }}: {{ v | to_json }}
+{% else %}
+    {{ k }}:
+{{ v | to_nice_yaml(indent=2, width=1000) | indent(6, true) }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+  - name: "global-reasoning-cleaner"
+    models:
+      - name: "deepseek-*"
+        thinking:
+          levels: ["none"]
+      - name: "*-reasoner"
+        thinking:
+          levels: ["none"]
+      - name: "*-thinking"
+        thinking:
+          levels: ["none"]

@@ -1,0 +1,44 @@
+---
+- name: Restart CLIProxyAPI native service
+  listen: restart cliproxyapi
+  become: true
+  ansible.builtin.systemd:
+    name: cliproxyapi-native.service
+    state: restarted
+    daemon_reload: true
+  when:
+    - not ansible_check_mode
+    - cliproxyapi_effective_mode == 'native'
+
+- name: Restart CLIProxyAPI Docker container
+  listen: restart cliproxyapi
+  become: true
+  community.docker.docker_container:
+    name: cliproxyapi
+    state: started
+    restart: true
+  when:
+    - not ansible_check_mode
+    - cliproxyapi_effective_mode == 'docker'
+
+- name: Restart CLIProxyAPI native restart timer
+  listen: restart cliproxyapi scheduler timer
+  become: true
+  ansible.builtin.systemd:
+    name: cliproxyapi-restart.timer
+    state: restarted
+    daemon_reload: true
+  when:
+    - not ansible_check_mode
+    - cliproxyapi_effective_mode == 'native'
+
+- name: Restart CLIProxyAPI Docker scheduler timer
+  listen: restart cliproxyapi scheduler timer
+  become: true
+  ansible.builtin.systemd:
+    name: cliproxyapi-scheduler-restart.timer
+    state: restarted
+    daemon_reload: true
+  when:
+    - not ansible_check_mode
+    - cliproxyapi_effective_mode == 'docker'

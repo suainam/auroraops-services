@@ -246,22 +246,22 @@
     - nginx_cfip
     - nginx_logrotate
     - nginx_config
-  - name: 验证 services.cliproxyapi_native
+  - name: 验证 services.cliproxyapi
     include_role:
-      name: vps.services.cliproxyapi_native
+      name: vps.services.cliproxyapi
       tasks_from: verify
       apply:
         tags:
         - verify
         - phase5
         - services
-        - cliproxyapi_native
-    when: auroraops_roles['services']['cliproxyapi_native'] | default(true) | bool
+        - cliproxyapi
+    when: auroraops_roles['services']['cliproxyapi'] | default(true) | bool
     tags:
     - verify
     - phase5
     - services
-    - cliproxyapi_native
+    - cliproxyapi
   - name: 验证 services.container_deployer
     include_role:
       name: vps.services.container_deployer

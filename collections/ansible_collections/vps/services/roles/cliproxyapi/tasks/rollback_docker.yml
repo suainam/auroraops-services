@@ -1,0 +1,29 @@
+---
+- name: Stop and remove CLIProxyAPI Docker container
+  become: true
+  community.docker.docker_container:
+    name: cliproxyapi
+    state: absent
+  failed_when: false
+  tags: [rollback, services, cliproxyapi, cliproxyapi_rollback, phase5]
+
+- name: Remove CLIProxyAPI Docker scheduler units
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/cliproxyapi-scheduler-restart.service
+    - /etc/systemd/system/cliproxyapi-scheduler-restart.timer
+  tags: [rollback, services, cliproxyapi, cliproxyapi_rollback, phase5]
+
+- name: Reload systemd after CLIProxyAPI Docker rollback
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  tags: [rollback, services, cliproxyapi, cliproxyapi_rollback, phase5]
+
+- name: Preserve CLIProxyAPI Docker data and OAuth credentials
+  ansible.builtin.debug:
+    msg: "Preserved CLIProxyAPI Docker data and OAuth credentials in /opt/dockers/cliproxyapi"
+  tags: [rollback, services, cliproxyapi, cliproxyapi_rollback, phase5]

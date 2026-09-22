@@ -2,7 +2,7 @@
 - name: Collect systemd facts after CLIProxyAPI rollback
   become: true
   ansible.builtin.service_facts:
-  tags: [rollback_verify, services, cliproxyapi_native, cliproxyapi_native_rollback_verify, phase5]
+  tags: [rollback_verify, services, cliproxyapi_native, cliproxyapi_rollback_verify, phase5]
 
 - name: Assert CLIProxyAPI runtime units are absent after rollback
   ansible.builtin.assert:
@@ -12,20 +12,20 @@
       - "'cliproxyapi-restart.timer' not in ansible_facts.services"
     fail_msg: "CLIProxyAPI runtime units still exist after rollback"
     success_msg: "CLIProxyAPI runtime units are absent after rollback"
-  tags: [rollback_verify, services, cliproxyapi_native, cliproxyapi_native_rollback_verify, phase5]
+  tags: [rollback_verify, services, cliproxyapi_native, cliproxyapi_rollback_verify, phase5]
 
 - name: Check preserved CLIProxyAPI credential data
   become: true
   ansible.builtin.stat:
-    path: "{{ cliproxyapi_native_data_dir }}"
-  register: cliproxyapi_native_rollback_data
-  tags: [rollback_verify, services, cliproxyapi_native, cliproxyapi_native_rollback_verify, phase5]
+    path: "{{ cliproxyapi_data_dir }}"
+  register: cliproxyapi_rollback_data
+  tags: [rollback_verify, services, cliproxyapi_native, cliproxyapi_rollback_verify, phase5]
 
 - name: Assert CLIProxyAPI credential data survived rollback
   ansible.builtin.assert:
     that:
-      - cliproxyapi_native_rollback_data.stat.exists
-      - cliproxyapi_native_rollback_data.stat.isdir
+      - cliproxyapi_rollback_data.stat.exists
+      - cliproxyapi_rollback_data.stat.isdir
     fail_msg: "CLIProxyAPI persistent credential data was not preserved"
     success_msg: "CLIProxyAPI persistent credential data was preserved"
-  tags: [rollback_verify, services, cliproxyapi_native, cliproxyapi_native_rollback_verify, phase5]
+  tags: [rollback_verify, services, cliproxyapi_native, cliproxyapi_rollback_verify, phase5]

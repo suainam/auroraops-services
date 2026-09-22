@@ -9,7 +9,7 @@
   block:
   # 合并容器列表（增量配置）
     - name: 合并 Docker Apps 容器列表
-      ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
+      ansible.builtin.include_tasks: "{{ role_path }}/../../../common/tasks/merge_list_vars.yml"
       vars:
         merge_var_name: docker_apps_containers
       tags:
@@ -23,7 +23,6 @@
         - flare
         - singbox
         - sub_store
-        - cliproxyapi
         - newapi_suite
         - manifest
         - shellcrash
@@ -46,7 +45,6 @@
         - flare
         - singbox
         - sub_store
-        - cliproxyapi
         - newapi_suite
         - manifest
         - shellcrash
@@ -104,10 +102,6 @@
       when: "'sub_store' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'sub_store')"
       tags: [deploy, services, docker_apps, sub_store, phase5]
 
-    - name: 加载 CLIProxyAPI 部署任务
-      ansible.builtin.import_tasks: cliproxyapi.yml
-      when: "'cliproxyapi' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'cliproxyapi')"
-      tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
     - name: 加载 New API Suite 部署任务
       ansible.builtin.import_tasks: newapi_suite.yml

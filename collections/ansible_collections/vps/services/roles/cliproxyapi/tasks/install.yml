@@ -1,0 +1,164 @@
+---
+- name: Ensure CLIProxyAPI installation directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ cliproxyapi_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]
+
+- name: Ensure CLIProxyAPI data directory exists for credential persistence
+  become: true
+  ansible.builtin.file:
+    path: "{{ cliproxyapi_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]
+
+- name: Validate CLIProxyAPI supported platform architecture
+  ansible.builtin.assert:
+    that:
+      - ansible_architecture in cliproxyapi_arch_map
+      - (ansible_architecture in cliproxyapi_checksums) or (cliproxyapi_auto_checksum | default(true) | bool)
+    fail_msg: >-
+      Architecture '{{ ansible_architecture }}' is not supported for CLIProxyAPI native.
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]
+
+- name: Resolve CLIProxyAPI release architecture and version
+  ansible.builtin.set_fact:
+    cliproxyapi_arch: "{{ cliproxyapi_arch_map[ansible_architecture] }}"
+    cliproxyapi_version_clean: "{{ cliproxyapi_version | regex_replace('^v', '') }}"
+    cliproxyapi_expected_checksum: "{{ cliproxyapi_checksums[ansible_architecture] | default('') }}"
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]
+
+- name: Check currently installed CLIProxyAPI binary
+  become: true
+  ansible.builtin.stat:
+    path: "{{ cliproxyapi_install_dir }}/cli-proxy-api"
+  register: cliproxyapi_binary_stat
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]
+
+- name: Read installed CLIProxyAPI version marker
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ cliproxyapi_install_dir }}/version.txt"
+  register: cliproxyapi_version_slurp
+  failed_when: false
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]
+
+- name: Determine if CLIProxyAPI binary needs download
+  ansible.builtin.set_fact:
+    cliproxyapi_needs_install: >-
+      {{
+        not cliproxyapi_binary_stat.stat.exists
+        or cliproxyapi_version_slurp.failed | default(false)
+        or (cliproxyapi_version_slurp.content | default('') | b64decode | trim) != cliproxyapi_version
+      }}
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]
+
+- name: Fetch official release checksums when not statically configured
+  become: true
+  ansible.builtin.uri:
+    url: >-
+      {{
+        'https://github.com/router-for-me/CLIProxyAPI/releases/download/' ~
+        cliproxyapi_version ~ '/checksums.txt'
+      }}
+    return_content: true
+  environment:
+    http_proxy: "{{ cliproxyapi_download_proxy }}"
+    https_proxy: "{{ cliproxyapi_download_proxy }}"
+    HTTP_PROXY: "{{ cliproxyapi_download_proxy }}"
+    HTTPS_PROXY: "{{ cliproxyapi_download_proxy }}"
+  register: cliproxyapi_remote_checksums
+  when:
+    - not ansible_check_mode
+    - cliproxyapi_needs_install | bool
+    - cliproxyapi_expected_checksum | default('') | length == 0
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]
+
+- name: Parse checksum for architecture from official checksums.txt
+  ansible.builtin.set_fact:
+    cliproxyapi_expected_checksum: >-
+      sha256:{{
+        (
+          cliproxyapi_remote_checksums.content
+          | regex_findall('([a-f0-9]{64})\s+.*CLIProxyAPI_.*' ~ cliproxyapi_arch ~ '\.tar\.gz')
+        ) | first
+      }}
+  when:
+    - not ansible_check_mode
+    - cliproxyapi_needs_install | bool
+    - cliproxyapi_remote_checksums.content is defined
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]
+
+- name: Download CLIProxyAPI release archive via outbound proxy
+  become: true
+  ansible.builtin.get_url:
+    url: >-
+      {{
+        'https://github.com/router-for-me/CLIProxyAPI/releases/download/' ~
+        cliproxyapi_version ~ '/CLIProxyAPI_' ~
+        cliproxyapi_version_clean ~ '_' ~ cliproxyapi_arch ~ '.tar.gz'
+      }}
+    dest: "/tmp/CLIProxyAPI_{{ cliproxyapi_version_clean }}_{{ cliproxyapi_arch }}.tar.gz"
+    checksum: "{{ cliproxyapi_expected_checksum }}"
+    mode: "0644"
+  environment:
+    http_proxy: "{{ cliproxyapi_download_proxy }}"
+    https_proxy: "{{ cliproxyapi_download_proxy }}"
+    HTTP_PROXY: "{{ cliproxyapi_download_proxy }}"
+    HTTPS_PROXY: "{{ cliproxyapi_download_proxy }}"
+  when:
+    - not ansible_check_mode
+    - cliproxyapi_needs_install | bool
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]
+
+- name: Extract CLIProxyAPI binary to installation directory
+  become: true
+  ansible.builtin.unarchive:
+    src: "/tmp/CLIProxyAPI_{{ cliproxyapi_version_clean }}_{{ cliproxyapi_arch }}.tar.gz"
+    dest: "{{ cliproxyapi_install_dir }}"
+    remote_src: true
+  when:
+    - not ansible_check_mode
+    - cliproxyapi_needs_install | bool
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]
+
+- name: Ensure CLIProxyAPI binary permissions
+  become: true
+  ansible.builtin.file:
+    path: "{{ cliproxyapi_install_dir }}/cli-proxy-api"
+    state: file
+    owner: root
+    group: root
+    mode: "0755"
+  when: not ansible_check_mode
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]
+
+- name: Record installed CLIProxyAPI version marker
+  become: true
+  ansible.builtin.copy:
+    dest: "{{ cliproxyapi_install_dir }}/version.txt"
+    content: "{{ cliproxyapi_version }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - not ansible_check_mode
+    - cliproxyapi_needs_install | bool
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]
+
+- name: Clean up temporary CLIProxyAPI archive
+  become: true
+  ansible.builtin.file:
+    path: "/tmp/CLIProxyAPI_{{ cliproxyapi_version_clean }}_{{ cliproxyapi_arch }}.tar.gz"
+    state: absent
+  when:
+    - not ansible_check_mode
+    - cliproxyapi_needs_install | bool
+  tags: [deploy, services, cliproxyapi, cliproxyapi_install, phase5]

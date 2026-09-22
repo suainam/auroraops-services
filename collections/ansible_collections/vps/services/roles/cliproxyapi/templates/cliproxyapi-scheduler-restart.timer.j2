@@ -4,7 +4,7 @@ Documentation=https://github.com/suainam/AuroraOps
 
 [Timer]
 Unit=cliproxyapi-scheduler-restart.service
-{% for calendar in docker_apps_cliproxyapi_restart_schedule | default(['*-*-* 07:20:00', '*-*-* 13:20:00', '*-*-* 19:20:00']) %}
+{% for calendar in cliproxyapi_docker_restart_schedule | default(['*-*-* 07:20:00', '*-*-* 13:20:00', '*-*-* 19:20:00']) %}
 OnCalendar={{ calendar }}
 {% endfor %}
 Persistent=false

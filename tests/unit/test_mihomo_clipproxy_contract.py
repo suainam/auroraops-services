@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SERVICES = ROOT / "collections/ansible_collections/vps/services/roles"
 MIHOMO = SERVICES / "mihomo_native"
-CLIPROXY = SERVICES / "cliproxyapi_native"
+CLIPROXY = SERVICES / "cliproxyapi"
 
 
 def test_mihomo_role_owns_loopback_profile_and_controller_bootstrap():
@@ -26,8 +26,8 @@ def test_cliproxyapi_uses_mihomo_and_has_no_legacy_gateway_dependency():
     defaults = (CLIPROXY / "defaults/main.yml").read_text(encoding="utf-8")
     service = (CLIPROXY / "templates/cliproxyapi-native.service.j2").read_text(encoding="utf-8")
 
-    assert 'cliproxyapi_native_proxy_url: "http://127.0.0.1:7890"' in defaults
-    assert 'cliproxyapi_native_download_proxy: "http://127.0.0.1:7890"' in defaults
+    assert "cliproxyapi_proxy_url: \"{{ cliproxyapi_proxy_url }}\"" in defaults
+    assert "cliproxyapi_download_proxy: \"{{ cliproxyapi_download_proxy }}\"" in defaults
     assert "mihomo-native.service" in service
     assert "transparent-gateway.service" not in service
     assert "hysteria2-native.service" not in service
@@ -37,9 +37,9 @@ def test_cliproxyapi_uses_mihomo_and_has_no_legacy_gateway_dependency():
 def test_generated_playbook_orders_mihomo_before_cliproxyapi():
     playbook = (ROOT / "playbooks/services/deploy.yml").read_text(encoding="utf-8")
     assert "vps.services.mihomo_native" in playbook
-    assert "vps.services.cliproxyapi_native" in playbook
+    assert "vps.services.cliproxyapi" in playbook
     assert playbook.index("vps.services.mihomo_native") < playbook.index(
-        "vps.services.cliproxyapi_native"
+        "vps.services.cliproxyapi"
     )
 
 

@@ -1,0 +1,25 @@
+---
+- name: Resolve CLIProxyAPI deployment mode
+  ansible.builtin.set_fact:
+    cliproxyapi_role_enabled: >-
+      {{
+        cliproxyapi_enabled | bool
+        and ((auroraops_roles | default({})).get('services', {}).get('cliproxyapi', false) | bool)
+      }}
+    cliproxyapi_effective_mode: "{{ cliproxyapi_deploy_mode | lower }}"
+    cliproxyapi_auth_destination_dir: >-
+      {{
+        cliproxyapi_docker_auth_dir
+        if (cliproxyapi_deploy_mode | lower) == 'docker'
+        else cliproxyapi_data_dir
+      }}
+  tags: [deploy, verify, rollback, rollback_verify, services, cliproxyapi, phase5]
+
+- name: Validate CLIProxyAPI deployment mode
+  ansible.builtin.assert:
+    that:
+      - cliproxyapi_effective_mode in ['native', 'docker']
+    fail_msg: >-
+      cliproxyapi_deploy_mode must be native or docker,
+      got '{{ cliproxyapi_deploy_mode }}'.
+  tags: [deploy, verify, rollback, rollback_verify, services, cliproxyapi, phase5]

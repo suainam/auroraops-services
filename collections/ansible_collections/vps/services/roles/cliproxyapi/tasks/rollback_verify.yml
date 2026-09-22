@@ -1,0 +1,16 @@
+---
+- name: Resolve CLIProxyAPI rollback verification branch
+  ansible.builtin.include_tasks: resolve.yml
+  tags: [rollback_verify, services, cliproxyapi, phase5]
+
+- name: Verify native CLIProxyAPI rollback
+  ansible.builtin.include_tasks: rollback_verify_native.yml
+  when:
+    - cliproxyapi_role_enabled | bool
+    - cliproxyapi_effective_mode == 'native'
+
+- name: Verify Docker CLIProxyAPI rollback
+  ansible.builtin.include_tasks: rollback_verify_docker.yml
+  when:
+    - cliproxyapi_role_enabled | bool
+    - cliproxyapi_effective_mode == 'docker'
