@@ -1,0 +1,27 @@
+---
+# Defaults for vps.services.tailscale
+# Additive pilot: ZeroTier remains independent until an explicit migration.
+tailscale_enabled: "{{ auroraops_roles['services']['tailscale'] | default(false) }}"
+tailscale_package_name: tailscale
+tailscale_service_name: tailscaled
+tailscale_openrc_service_name: tailscale
+tailscale_auth_key: ""
+tailscale_hostname: "{{ inventory_hostname }}"
+tailscale_tags: []
+tailscale_advertise_routes: []
+tailscale_accept_routes: false
+tailscale_ssh_enabled: false
+tailscale_exit_node: false
+tailscale_stateful_filtering: false
+tailscale_extra_up_args: []
+tailscale_repo_keyring: /usr/share/keyrings/tailscale-archive-keyring.gpg
+tailscale_repo_list: /etc/apt/sources.list.d/tailscale.list
+tailscale_fact_path: /etc/ansible/facts.d/tailscale.fact
+tailscale_state_dir: /var/lib/tailscale
+tailscale_preserve_state_on_rollback: true
+tailscale_download_environment: "{{ {
+  'http_proxy': proxy_http,
+  'https_proxy': proxy_https,
+  'HTTP_PROXY': proxy_http,
+  'HTTPS_PROXY': proxy_https
+} if proxy_enabled | default(false) | bool else {} }}"

@@ -1,0 +1,34 @@
+---
+- name: Check Tailscale daemon state after rollback
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ tailscale_service_name }}.service"
+  register: tailscale_rollback_status
+  failed_when: false
+  when: tailscale_service_manager | default('systemd') == 'systemd'
+  tags: [rollback_verify, services, tailscale, tailscale_rollback_verify, phase3]
+
+- name: Assert Tailscale daemon is stopped after rollback
+  ansible.builtin.assert:
+    that:
+      - tailscale_rollback_status.status.ActiveState | default('inactive') != 'active'
+      - tailscale_rollback_status.status.UnitFileState | default('disabled') != 'enabled'
+    fail_msg: "Tailscale daemon remains active or enabled after rollback"
+  when: tailscale_service_manager | default('systemd') == 'systemd'
+  tags: [rollback_verify, services, tailscale, tailscale_rollback_verify, phase3]
+
+- name: Assert preserved Tailscale state remains available
+  become: true
+  ansible.builtin.stat:
+    path: "{{ tailscale_state_dir }}"
+  register: tailscale_rollback_state
+  when: tailscale_preserve_state_on_rollback | bool
+  tags: [rollback_verify, services, tailscale, tailscale_rollback_verify, phase3]
+
+- name: Verify preserved Tailscale state
+  ansible.builtin.assert:
+    that:
+      - tailscale_rollback_state.stat.exists
+    fail_msg: "Tailscale state directory was not preserved"
+  when: tailscale_preserve_state_on_rollback | bool
+  tags: [rollback_verify, services, tailscale, tailscale_rollback_verify, phase3]

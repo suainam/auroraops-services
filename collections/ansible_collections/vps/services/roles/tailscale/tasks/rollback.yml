@@ -1,0 +1,34 @@
+---
+- name: Stop Tailscale daemon on systemd
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ tailscale_service_name }}.service"
+    state: stopped
+    enabled: false
+  failed_when: false
+  when: tailscale_service_manager | default('systemd') == 'systemd'
+  tags: [rollback, services, tailscale, tailscale_rollback, phase3]
+
+- name: Stop Tailscale daemon on OpenRC
+  become: true
+  ansible.builtin.service:
+    name: "{{ tailscale_openrc_service_name }}"
+    state: stopped
+    enabled: false
+  failed_when: false
+  when: tailscale_service_manager | default('systemd') == 'openrc'
+  tags: [rollback, services, tailscale, tailscale_rollback, phase3]
+
+- name: Preserve Tailscale state for reversible pilot rollback
+  ansible.builtin.debug:
+    msg: "Tailscale daemon stopped; state directory preserved by pilot policy"
+  when: tailscale_preserve_state_on_rollback | bool
+  tags: [rollback, services, tailscale, tailscale_rollback, phase3]
+
+- name: Remove Tailscale state after explicit destructive rollback
+  become: true
+  ansible.builtin.file:
+    path: "{{ tailscale_state_dir }}"
+    state: absent
+  when: not (tailscale_preserve_state_on_rollback | bool)
+  tags: [rollback, services, tailscale, tailscale_rollback, phase3]

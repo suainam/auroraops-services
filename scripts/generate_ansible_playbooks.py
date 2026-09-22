@@ -82,7 +82,7 @@ ROLE_PHASE_MAP = {
     'python_environment': 'phase1',
     'qmd': 'phase3',
     'redis': 'phase3',
-
+    'tailscale': 'phase3',
     # Phase 4: Services (核心服务) - 对应 domain: services, applications
     'certbot': 'phase4',
     'nginx': 'phase4',
