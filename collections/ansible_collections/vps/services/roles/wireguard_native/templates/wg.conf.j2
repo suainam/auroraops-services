@@ -1,0 +1,20 @@
+[Interface]
+Address = {{ wireguard_native_address }}
+PrivateKey = {{ wireguard_native_private_key }}
+{% if wireguard_native_role == 'server' or wireguard_native_port is defined and wireguard_native_port | int > 0 %}
+ListenPort = {{ wireguard_native_port }}
+{% endif %}
+SaveConfig = {{ wireguard_native_save_config | lower }}
+
+{% for peer in wireguard_native_peers %}
+[Peer]
+PublicKey = {{ peer.public_key }}
+AllowedIPs = {{ peer.allowed_ips }}
+{% if peer.endpoint is defined and peer.endpoint | length > 0 %}
+Endpoint = {{ peer.endpoint }}
+{% endif %}
+{% if peer.persistent_keepalive is defined and peer.persistent_keepalive | int > 0 %}
+PersistentKeepalive = {{ peer.persistent_keepalive }}
+{% endif %}
+
+{% endfor %}

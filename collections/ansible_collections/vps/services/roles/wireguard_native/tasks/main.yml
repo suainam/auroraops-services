@@ -1,0 +1,83 @@
+---
+- name: Run WireGuard preflight
+  ansible.builtin.include_tasks: preflight.yml
+  when: wireguard_native_enabled | bool
+  tags: [deploy, services, wireguard_native, wireguard_native_preflight, phase3]
+
+- name: Install wireguard-tools package on Debian / Ubuntu
+  become: true
+  ansible.builtin.apt:
+    name: "{{ wireguard_native_package_name }}"
+    state: present
+    update_cache: true
+  environment: "{{ wireguard_native_download_environment }}"
+  when:
+    - wireguard_native_enabled | bool
+    - ansible_os_family in ['Debian', 'Ubuntu']
+    - not ansible_check_mode
+  tags: [deploy, services, wireguard_native, wireguard_native_install, phase3]
+
+- name: Install wireguard-tools package on Alpine
+  become: true
+  community.general.apk:
+    name: "{{ wireguard_native_package_name }}"
+    state: present
+    update_cache: true
+  when:
+    - wireguard_native_enabled | bool
+    - ansible_os_family == 'Alpine'
+    - not ansible_check_mode
+  tags: [deploy, services, wireguard_native, wireguard_native_install, phase3]
+
+- name: Ensure WireGuard configuration directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ wireguard_native_config_dir }}"
+    state: directory
+    mode: "0700"
+    owner: root
+    group: root
+  when:
+    - wireguard_native_enabled | bool
+    - not ansible_check_mode
+  tags: [deploy, services, wireguard_native, wireguard_native_config, phase3]
+
+- name: Render WireGuard interface configuration
+  become: true
+  ansible.builtin.template:
+    src: wg.conf.j2
+    dest: "{{ wireguard_native_config_path }}"
+    mode: "0600"
+    owner: root
+    group: root
+  no_log: true
+  when:
+    - wireguard_native_enabled | bool
+    - not ansible_check_mode
+  notify: restart wireguard_native
+  tags: [deploy, services, wireguard_native, wireguard_native_config, phase3]
+
+- name: Ensure WireGuard service is enabled and started on systemd
+  become: true
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ wireguard_native_interface }}.service"
+    enabled: true
+    state: started
+  when:
+    - wireguard_native_enabled | bool
+    - ansible_service_mgr | default('systemd') == 'systemd'
+    - not ansible_check_mode
+  tags: [deploy, services, wireguard_native, wireguard_native_service, phase3]
+
+- name: Clean up WireGuard when disabled
+  become: true
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ wireguard_native_interface }}.service"
+    enabled: false
+    state: stopped
+  failed_when: false
+  when:
+    - not wireguard_native_enabled | bool
+    - ansible_service_mgr | default('systemd') == 'systemd'
+    - not ansible_check_mode
+  tags: [deploy, services, wireguard_native, phase3]

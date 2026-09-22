@@ -1,0 +1,10 @@
+---
+- name: restart wireguard_native
+  become: true
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ wireguard_native_interface }}.service"
+    state: restarted
+  when:
+    - wireguard_native_enabled | bool
+    - ansible_service_mgr | default('systemd') == 'systemd'
+    - not ansible_check_mode

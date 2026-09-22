@@ -190,6 +190,22 @@
     - phase3
     - services
     - tailscale
+  - name: 部署 services.wireguard_native
+    include_role:
+      name: vps.services.wireguard_native
+      tasks_from: main
+      apply:
+        tags:
+        - deploy
+        - phase3
+        - services
+        - wireguard_native
+    when: auroraops_roles['services']['wireguard_native'] | default(true) | bool
+    tags:
+    - deploy
+    - phase3
+    - services
+    - wireguard_native
   - name: 部署 services.certbot
     include_role:
       name: vps.services.certbot

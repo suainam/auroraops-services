@@ -190,6 +190,22 @@
     - phase3
     - services
     - tailscale
+  - name: 回滚 services.wireguard_native
+    include_role:
+      name: vps.services.wireguard_native
+      tasks_from: rollback
+      apply:
+        tags:
+        - rollback
+        - phase3
+        - services
+        - wireguard_native
+    when: auroraops_roles['services']['wireguard_native'] | default(true) | bool
+    tags:
+    - rollback
+    - phase3
+    - services
+    - wireguard_native
   - name: 回滚 services.certbot
     include_role:
       name: vps.services.certbot

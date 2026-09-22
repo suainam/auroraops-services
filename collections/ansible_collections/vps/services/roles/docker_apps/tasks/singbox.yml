@@ -471,6 +471,30 @@
     - not (auroraops_roles['services']['ip2free_gateway'] | default(false) | bool)
   tags: [deploy, services, docker_apps, singbox, phase5]
 
+- name: Sing-box - Deploy 06_wireguard (WireGuard Endpoint)
+  become: true
+  diff: false
+  ansible.builtin.template:
+    src: singbox/06_wireguard.json.j2
+    dest: /opt/dockers/singbox/config/06_wireguard.json
+    mode: "0644"
+  notify: restart singbox
+  no_log: true
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_wireguard_enabled | default(false) | bool
+  tags: [deploy, services, docker_apps, singbox, wireguard, phase5]
+
+- name: Sing-box - Remove 06_wireguard when WireGuard is disabled
+  become: true
+  ansible.builtin.file:
+    path: /opt/dockers/singbox/config/06_wireguard.json
+    state: absent
+  notify: restart singbox
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - not (singbox_wireguard_enabled | default(false) | bool)
+  tags: [deploy, services, docker_apps, singbox, wireguard, phase5]
 - name: Sing-box - Remove Legacy Config file
   become: true
   ansible.builtin.file:

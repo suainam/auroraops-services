@@ -1,0 +1,32 @@
+---
+- name: Check WireGuard service state after rollback
+  become: true
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ wireguard_native_interface }}.service"
+  register: wireguard_native_rollback_status
+  failed_when: false
+  when: ansible_service_mgr | default('systemd') == 'systemd'
+  tags: [rollback_verify, services, wireguard_native, wireguard_native_rollback_verify, phase3]
+
+- name: Assert WireGuard service is stopped after rollback
+  ansible.builtin.assert:
+    that:
+      - wireguard_native_rollback_status.status.ActiveState | default('inactive') != 'active'
+      - wireguard_native_rollback_status.status.UnitFileState | default('disabled') != 'enabled'
+    fail_msg: "WireGuard service remains active or enabled after rollback"
+  when: ansible_service_mgr | default('systemd') == 'systemd'
+  tags: [rollback_verify, services, wireguard_native, wireguard_native_rollback_verify, phase3]
+
+- name: Check WireGuard interface absence
+  ansible.builtin.command: "ip link show {{ wireguard_native_interface }}"
+  register: wireguard_native_interface_check
+  failed_when: false
+  changed_when: false
+  tags: [rollback_verify, services, wireguard_native, wireguard_native_rollback_verify, phase3]
+
+- name: Assert WireGuard interface is removed
+  ansible.builtin.assert:
+    that:
+      - wireguard_native_interface_check.rc != 0
+    fail_msg: "WireGuard interface {{ wireguard_native_interface }} was not removed"
+  tags: [rollback_verify, services, wireguard_native, wireguard_native_rollback_verify, phase3]

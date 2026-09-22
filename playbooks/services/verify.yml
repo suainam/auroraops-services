@@ -190,6 +190,22 @@
     - phase3
     - services
     - tailscale
+  - name: 验证 services.wireguard_native
+    include_role:
+      name: vps.services.wireguard_native
+      tasks_from: verify
+      apply:
+        tags:
+        - verify
+        - phase3
+        - services
+        - wireguard_native
+    when: auroraops_roles['services']['wireguard_native'] | default(true) | bool
+    tags:
+    - verify
+    - phase3
+    - services
+    - wireguard_native
   - name: 验证 services.certbot
     include_role:
       name: vps.services.certbot

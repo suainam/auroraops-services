@@ -1,0 +1,39 @@
+---
+- name: Verify WireGuard service status on systemd
+  become: true
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ wireguard_native_interface }}.service"
+  register: wireguard_native_service_status
+  when:
+    - wireguard_native_enabled | bool
+    - ansible_service_mgr | default('systemd') == 'systemd'
+  tags: [verify, services, wireguard_native, wireguard_native_verify, phase3]
+
+- name: Assert WireGuard daemon is active on systemd
+  ansible.builtin.assert:
+    that:
+      - wireguard_native_service_status.status.ActiveState == 'active'
+      - wireguard_native_service_status.status.UnitFileState == 'enabled'
+    fail_msg: "WireGuard service is not active and enabled on systemd"
+  when:
+    - wireguard_native_enabled | bool
+    - ansible_service_mgr | default('systemd') == 'systemd'
+  tags: [verify, services, wireguard_native, wireguard_native_verify, phase3]
+
+- name: Check WireGuard interface state
+  become: true
+  ansible.builtin.command: "wg show {{ wireguard_native_interface }}"
+  register: wireguard_native_show_status
+  changed_when: false
+  no_log: true
+  when: wireguard_native_enabled | bool
+  tags: [verify, services, wireguard_native, wireguard_native_verify, phase3]
+
+- name: Assert WireGuard interface is initialized
+  ansible.builtin.assert:
+    that:
+      - wireguard_native_show_status.rc == 0
+      - wireguard_native_interface in wireguard_native_show_status.stdout
+    fail_msg: "WireGuard interface {{ wireguard_native_interface }} is not initialized"
+  when: wireguard_native_enabled | bool
+  tags: [verify, services, wireguard_native, wireguard_native_verify, phase3]
