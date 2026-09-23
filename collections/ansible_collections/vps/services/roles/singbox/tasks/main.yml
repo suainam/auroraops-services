@@ -23,6 +23,10 @@
   tags: [deploy, services, singbox, phase5]
 
 - name: Render singbox canonical modular configuration
+  ansible.builtin.import_tasks: configure_common.yml
+  when: singbox_role_enabled
+  tags: [deploy, services, singbox, phase5]
+
 - name: Deploy native singbox branch
   ansible.builtin.include_tasks: native.yml
   when:
