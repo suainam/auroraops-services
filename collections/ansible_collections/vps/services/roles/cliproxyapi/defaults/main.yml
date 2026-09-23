@@ -19,8 +19,8 @@ cliproxyapi_allow_remote: true
 cliproxyapi_management_key: "{{ vault_cliproxyapi_management_key | default('') }}"
 cliproxyapi_api_keys: "{{ vault_cliproxyapi_api_keys | default([]) }}"
 cliproxyapi_test_api_key: "{{ (cliproxyapi_api_keys | default([]) | first) | default('') }}"
-cliproxyapi_ai_providers_file: "{{ inventory_dir ~ '/../secrets/cliproxyapi_ai_providers.yml' }}"
-cliproxyapi_auths_dir: "{{ inventory_dir ~ '/../secrets/cliproxyapi_auths' }}"
+cliproxyapi_ai_providers_file: "{{ inventory_dir ~ '/group_vars/all/cliproxyapi_ai_providers.yml' }}"
+cliproxyapi_auths_dir: "{{ inventory_dir ~ '/files/cliproxyapi/auths' }}"
 cliproxyapi_direct_providers: []
 cliproxyapi_direct_claude: false
 cliproxyapi_config_seed_file: ""
