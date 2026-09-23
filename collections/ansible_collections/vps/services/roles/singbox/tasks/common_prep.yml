@@ -1,0 +1,129 @@
+---
+- name: Sing-box - Ensure data directories exist
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  loop:
+    - "{{ singbox_data_dir }}"
+    - "{{ singbox_data_dir }}/web"
+    - "{{ singbox_config_dir }}"
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box - Check for existing Short IDs
+  ansible.builtin.stat:
+    path: "{{ singbox_data_dir }}/short_ids.txt"
+  register: singbox_short_ids_stat
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box - Generate Short IDs if missing
+  become: true
+  ansible.builtin.shell: |
+    set -eu
+    count={{ singbox_reality_short_id_count | default(8) }}
+    for i in $(seq 1 $count); do
+      openssl rand -hex 8
+    done > "{{ singbox_data_dir }}/short_ids.txt"
+  when: not singbox_short_ids_stat.stat.exists
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box - Read Short IDs
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ singbox_data_dir }}/short_ids.txt"
+  register: singbox_short_ids_raw
+  no_log: true
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box - Parse Short IDs list
+  ansible.builtin.set_fact:
+    singbox_reality_short_ids: "{{ (singbox_short_ids_raw.content | b64decode).strip().splitlines() }}"
+  no_log: true
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box - Check for existing Reality Key
+  become: true
+  ansible.builtin.stat:
+    path: "{{ singbox_data_dir }}/reality_key.txt"
+  register: singbox_reality_key_stat
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Docker - Generate Reality Keypair
+  become: true
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - "{{ singbox_image }}"
+      - generate
+      - reality-keypair
+  register: singbox_docker_reality_key_gen
+  when:
+    - not singbox_reality_key_stat.stat.exists
+    - singbox_effective_mode == 'docker'
+    - not ansible_check_mode
+  no_log: true
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Generate Reality Keypair
+  become: true
+  ansible.builtin.command:
+    argv:
+      - sing-box
+      - generate
+      - reality-keypair
+  register: singbox_native_reality_key_gen
+  when:
+    - not singbox_reality_key_stat.stat.exists
+    - singbox_effective_mode == 'native'
+    - not ansible_check_mode
+  no_log: true
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box - Save generated Reality Key
+  become: true
+  ansible.builtin.copy:
+    dest: "{{ singbox_data_dir }}/reality_key.txt"
+    content: >-
+      {{
+        (singbox_docker_reality_key_gen.stdout | default(''))
+        if singbox_effective_mode == 'docker'
+        else (singbox_native_reality_key_gen.stdout | default(''))
+      }}
+    mode: "0600"
+  when:
+    - not singbox_reality_key_stat.stat.exists
+    - not ansible_check_mode
+  no_log: true
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box - Read Reality Key
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ singbox_data_dir }}/reality_key.txt"
+  register: singbox_reality_key_raw
+  when:
+    - singbox_reality_key_stat.stat.exists or not ansible_check_mode
+  no_log: true
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box - Parse Reality Keys
+  ansible.builtin.set_fact:
+    singbox_reality_private_key: >-
+      {{
+        (singbox_reality_key_raw.content | b64decode | regex_search('PrivateKey:\s*([^\s]+)', '\1')) | first
+        if singbox_reality_key_raw.content is defined
+        else 'SIMULATED_PRIVATE_KEY'
+      }}
+    singbox_reality_public_key_generated: >-
+      {{
+        (singbox_reality_key_raw.content | b64decode | regex_search('PublicKey:\s*([^\s]+)', '\1')) | first
+        if singbox_reality_key_raw.content is defined
+        else 'SIMULATED_PUBLIC_KEY'
+      }}
+  no_log: true
+  tags: [deploy, services, singbox, phase5]

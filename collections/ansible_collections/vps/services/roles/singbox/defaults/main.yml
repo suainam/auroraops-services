@@ -1,0 +1,39 @@
+---
+singbox_enabled: true
+singbox_deploy_mode: auto
+
+# Image and Binary
+singbox_image: "ghcr.io/sagernet/sing-box:v1.13.21"
+singbox_version: "1.13.11"
+
+# Directory Structure
+singbox_config_dir: "/opt/dockers/singbox/config"
+singbox_data_dir: "/opt/dockers/singbox"
+singbox_native_config_dir: "/etc/sing-box"
+singbox_native_workdir: "/var/lib/sing-box"
+
+# Networking Ports
+singbox_reality_port: 30052
+singbox_hysteria_port: 30051
+singbox_relay_reality_port: 30054
+singbox_relay_hysteria_port: 30053
+singbox_web_port: 10080
+
+# Role and Domain
+singbox_role: "direct"
+singbox_domain: ""
+docker_apps_singbox_certificate_domain: "suai.eu.org"
+
+# Reality Settings
+singbox_reality_sni_candidates:
+  - www.cloudflare.com
+  - www.microsoft.com
+singbox_reality_short_id_count: 8
+
+# WireGuard Userspace Guard
+singbox_wireguard_enabled: false
+singbox_wireguard_system: false
+singbox_wireguard_http_inbound: false
+singbox_wireguard_server_port: 30059
+singbox_wireguard_allowed_ips: ["10.144.10.0/24"]
+singbox_wireguard_keepalive: 25

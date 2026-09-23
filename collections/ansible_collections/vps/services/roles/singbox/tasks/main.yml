@@ -1,0 +1,58 @@
+---
+- name: Resolve singbox role state
+  ansible.builtin.set_fact:
+    singbox_role_enabled: >-
+      {{ singbox_enabled | default(true) | bool and
+         ((auroraops_roles | default({})).get('services', {}).get('singbox', true) | bool) }}
+  tags: [deploy, services, singbox, phase5]
+
+- name: Report disabled singbox role
+  ansible.builtin.debug:
+    msg: "Role singbox is disabled, skipping"
+  when: not singbox_role_enabled
+  tags: [deploy, services, singbox, phase5]
+
+- name: Resolve singbox deployment mode
+  ansible.builtin.import_tasks: resolve.yml
+  when: singbox_role_enabled
+  tags: [deploy, services, singbox, phase5]
+
+- name: Execute singbox common preparation
+  ansible.builtin.import_tasks: common_prep.yml
+  when: singbox_role_enabled
+  tags: [deploy, services, singbox, phase5]
+
+- name: Render singbox canonical modular configuration
+  ansible.builtin.import_tasks: configure_common.yml
+  when: singbox_role_enabled
+  tags: [deploy, services, singbox, phase5]
+
+- name: Deploy native singbox branch
+  ansible.builtin.import_tasks: native.yml
+  when:
+    - singbox_role_enabled
+    - singbox_effective_mode == 'native'
+  tags: [deploy, services, singbox, phase5]
+
+- name: Deploy docker singbox branch
+  ansible.builtin.import_tasks: docker.yml
+  when:
+    - singbox_role_enabled
+    - singbox_effective_mode == 'docker'
+  tags: [deploy, services, singbox, phase5]
+
+- name: Verify native singbox branch after deployment
+  ansible.builtin.import_tasks: verify_native.yml
+  when:
+    - singbox_role_enabled
+    - singbox_effective_mode == 'native'
+    - not ansible_check_mode
+  tags: [verify, services, singbox, singbox_verify, phase5]
+
+- name: Verify docker singbox branch after deployment
+  ansible.builtin.import_tasks: verify_docker.yml
+  when:
+    - singbox_role_enabled
+    - singbox_effective_mode == 'docker'
+    - not ansible_check_mode
+  tags: [verify, services, singbox, singbox_verify, phase5]

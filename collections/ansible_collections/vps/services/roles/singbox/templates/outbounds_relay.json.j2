@@ -1,0 +1,93 @@
+{
+  "outbounds": [
+    { "type": "direct", "tag": "direct-out" },
+    { "type": "block", "tag": "block" },
+    {
+      "type": "urltest",
+      "tag": "relay-failover-cluster",
+      "outbounds": [
+{% if singbox_relay_upstreams | default([]) | length > 0 %}
+{% for upstream in singbox_relay_upstreams %}
+        "relay-upstream-{{ upstream.name }}"{% if not loop.last %},{% endif %}
+{% endfor %}
+{% else %}
+        "zt-relay-out",
+        "public-relay-fallback"
+{% endif %}
+      ],
+      "url": "http://cp.cloudflare.com/generate_204",
+      "interval": "1m",
+      "tolerance": 50
+    }
+{% if singbox_relay_upstreams | default([]) | length == 0 %},
+    {
+      "type": "vless",
+      "tag": "zt-relay-out",
+      "server": "{{ singbox_zt_peer_ip }}",
+      "server_port": {{ singbox_zt_relay_port | default(40052) }},
+      "uuid": "{{ singbox_uuid_aws }}",
+      "domain_resolver": "cf-dns"
+    },
+    {
+      "type": "vless",
+      "tag": "public-relay-fallback",
+      "server": "{{ singbox_public_peer_host | default(singbox_domain) }}",
+      "server_port": 30052,
+      "uuid": "{{ singbox_uuid_aws }}",
+      "flow": "xtls-rprx-vision",
+      "domain_resolver": "cf-dns",
+      "tls": {
+        "enabled": true,
+        "server_name": "{{ singbox_public_peer_host | default(singbox_domain) }}",
+        "utls": { "enabled": true, "fingerprint": "chrome" },
+        "reality": {
+          "enabled": true,
+          "public_key": "aEeIAIPEuV0bsIk19W7hnpbTgRd6oPBcrB-rc71oww4",
+          "short_id": "8b1ec27f"
+        }
+      }
+    }
+{% endif %}
+{% for upstream in singbox_relay_upstreams | default([]) %},
+{% if upstream.type == 'vless' %}
+    {
+      "type": "vless",
+      "tag": "relay-upstream-{{ upstream.name }}",
+      "server": "{{ upstream.server }}",
+      "server_port": {{ upstream.port }},
+      "uuid": "{{ upstream.uuid }}",
+      "flow": "xtls-rprx-vision",
+      "domain_resolver": "cf-dns",
+      "tls": {
+        "enabled": true,
+        "server_name": "{{ upstream.sni }}",
+        "utls": { "enabled": true, "fingerprint": "chrome" },
+        "reality": {
+          "enabled": true,
+          "public_key": "{{ upstream.public_key }}",
+          "short_id": "{{ upstream.short_id }}"
+        }
+      }
+    }
+{% elif upstream.type == 'hysteria2' %}
+    {
+      "type": "hysteria2",
+      "tag": "relay-upstream-{{ upstream.name }}",
+      "server": "{{ upstream.server }}",
+      "server_port": {{ upstream.port }},
+      "password": "{{ upstream.password }}",
+      "domain_resolver": "cf-dns",
+      "tls": {
+        "enabled": true,
+        "server_name": "{{ upstream.sni }}",
+        "insecure": {{ upstream.insecure | default(false) | lower }}
+      },
+      "obfs": {
+        "type": "salamander",
+        "password": "{{ upstream.obfs_password }}"
+      }
+    }
+{% endif %}
+{% endfor %}
+  ]
+}

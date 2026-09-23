@@ -1,0 +1,25 @@
+---
+- name: Resolve singbox effective deployment mode
+  ansible.builtin.set_fact:
+    singbox_effective_mode: >-
+      {{
+        singbox_deploy_mode | lower
+        if (singbox_deploy_mode | default('auto') | lower) in ['docker', 'native']
+        else (
+          'native'
+          if (
+            ansible_facts.distribution | default(ansible_distribution | default('')) == 'Alpine'
+            or (ansible_memtotal_mb | default(1024)) < 512
+          )
+          else 'docker'
+        )
+      }}
+  tags: [deploy, verify, rollback, rollback_verify, services, singbox, phase5]
+
+- name: Validate singbox deployment mode
+  ansible.builtin.assert:
+    that:
+      - singbox_effective_mode in ['native', 'docker']
+    fail_msg: >-
+      singbox_deploy_mode must be 'native' or 'docker', got '{{ singbox_deploy_mode }}'.
+  tags: [deploy, verify, rollback, rollback_verify, services, singbox, phase5]

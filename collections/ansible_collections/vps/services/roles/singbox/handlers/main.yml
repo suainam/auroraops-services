@@ -1,0 +1,28 @@
+---
+- name: Restart singbox docker container
+  become: true
+  community.docker.docker_container:
+    name: singbox
+    state: started
+    restart: true
+  when:
+    - not ansible_check_mode
+    - (singbox_effective_mode | default('docker')) == 'docker'
+
+- name: Restart singbox openrc service
+  become: true
+  ansible.builtin.service:
+    name: sing-box
+    state: restarted
+  when:
+    - not ansible_check_mode
+    - (singbox_effective_mode | default('native')) == 'native'
+
+- name: Reload singbox openrc service
+  become: true
+  ansible.builtin.service:
+    name: sing-box
+    state: reloaded
+  when:
+    - not ansible_check_mode
+    - (singbox_effective_mode | default('native')) == 'native'

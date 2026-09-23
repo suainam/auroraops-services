@@ -1,0 +1,23 @@
+---
+- name: Stop singbox docker container
+  become: true
+  community.docker.docker_container:
+    name: singbox
+    state: stopped
+  failed_when: false
+  when: singbox_effective_mode == 'docker'
+  tags: [rollback, services, singbox, phase5]
+
+- name: Stop singbox native service
+  become: true
+  ansible.builtin.service:
+    name: sing-box
+    state: stopped
+  failed_when: false
+  when: singbox_effective_mode == 'native'
+  tags: [rollback, services, singbox, phase5]
+
+- name: Preserve singbox keys and certificates
+  ansible.builtin.debug:
+    msg: "Preserving {{ singbox_data_dir }}/reality_key.txt and short_ids.txt across rollback"
+  tags: [rollback, services, singbox, phase5]

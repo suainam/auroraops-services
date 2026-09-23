@@ -1,0 +1,48 @@
+{
+  "route": {
+    "rule_set": [
+      { "tag": "geoip-cn", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geoip/cn.srs" },
+      { "tag": "geosite-cn", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/cn.srs" },
+      { "tag": "geosite-category-ads-all", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-ads-all.srs" }
+      {%- if docker_apps_singbox_warp_enabled | default(false) | bool -%},
+      { "tag": "geosite-openai", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/openai.srs" },
+      { "tag": "geosite-anthropic", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/anthropic.srs" },
+      { "tag": "geosite-google", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/google.srs" }
+      {%- endif %}
+    ],
+    "rules": [
+      { "protocol": "dns", "action": "hijack-dns" },
+      { "action": "resolve", "strategy": "prefer_ipv4" },
+      {
+        "ip_cidr": [
+          "0.0.0.0/8",
+          "10.0.0.0/8",
+          "100.64.0.0/10",
+          "127.0.0.0/8",
+          "169.254.0.0/16",
+          "172.16.0.0/12",
+          "192.168.0.0/16",
+          "::1/128",
+          "fc00::/7",
+          "fe80::/10"
+        ],
+        "action": "reject"
+      },
+      {% if auroraops_roles['services']['ip2free_gateway'] | default(false) %}
+      { "inbound": ["hy2-resi"], "outbound": "🏠 住宅代理" },
+      {% endif %}
+      { "rule_set": ["geosite-category-ads-all", "geoip-cn", "geosite-cn"], "action": "reject" },
+      {%- if docker_apps_singbox_warp_enabled | default(false) | bool %}
+      { "domain_suffix": ["cloudcode-pa.googleapis.com", "daily-cloudcode-pa.googleapis.com"], "outbound": "direct-out" },
+      { "rule_set": ["geosite-openai", "geosite-anthropic", "geosite-google"], "outbound": "warp-out" },
+      {%- endif %}
+{% for node in singbox_extra_nodes | default([]) if node.relay_outbound is defined %}
+      { "inbound": ["in-{{ node.name | regex_replace('[^a-zA-Z0-9-]', '') | lower }}"], "outbound": "{{ node.relay_outbound }}" },
+{% endfor %}
+      { "outbound": "direct-out" }
+    ],
+    "final": "direct-out",
+    "auto_detect_interface": true,
+    "default_domain_resolver": "google-dns-tcp"
+  }
+}

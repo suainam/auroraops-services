@@ -1,0 +1,16 @@
+---
+- name: Verify Sing-box container is running
+  become: true
+  community.docker.docker_container_info:
+    name: singbox
+  register: singbox_docker_info
+  failed_when: not singbox_docker_info.exists or not singbox_docker_info.container.State.Running
+  tags: [verify, services, singbox, phase5]
+
+- name: Verify Sing-box container reality port is listening
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ singbox_reality_port }}"
+    state: started
+    timeout: 5
+  tags: [verify, services, singbox, phase5]

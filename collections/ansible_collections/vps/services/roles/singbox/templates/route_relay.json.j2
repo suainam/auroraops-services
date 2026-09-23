@@ -1,0 +1,44 @@
+{
+  "route": {
+    "rule_set": [
+      { "tag": "geosite-cn", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/cn.srs" },
+      { "tag": "geosite-category-ads-all", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-ads-all.srs" }
+    ],
+    "rules": [
+      { "protocol": "dns", "action": "hijack-dns" },
+      { "action": "resolve", "strategy": "prefer_ipv4" },
+      {
+        "ip_cidr": [
+          "0.0.0.0/8",
+          "10.0.0.0/8",
+          "100.64.0.0/10",
+          "127.0.0.0/8",
+          "169.254.0.0/16",
+          "172.16.0.0/12",
+          "192.168.0.0/16",
+          "::1/128",
+          "fc00::/7",
+          "fe80::/10"
+        ],
+        "action": "reject"
+      },
+      { "rule_set": "geosite-category-ads-all", "action": "reject" },
+      {
+        "inbound": [
+          {%- set ns = namespace(first_tag=true) -%}
+          {%- set all_in_nodes = (docker_apps_singbox_processed_nodes | default(singbox_nodes)) + (singbox_extra_nodes | default([])) -%}
+          {%- for node in all_in_nodes if not (node.external | default(false) | bool) and not (node.behind_nginx | default(false) | bool) -%}
+          {%- if not ns.first_tag %}, {% endif -%}
+          {%- set ns.first_tag = false -%}
+          "in-relay-{{ node.name | regex_replace('[^a-zA-Z0-9-]', '') | lower }}"
+          {%- endfor -%}
+        ],
+        "outbound": "relay-failover-cluster"
+      },
+      { "outbound": "direct-out" }
+    ],
+    "final": "direct-out",
+    "auto_detect_interface": true,
+    "default_domain_resolver": "google-dns-tcp"
+  }
+}

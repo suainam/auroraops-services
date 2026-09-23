@@ -1,0 +1,43 @@
+proxies:
+{% set raw_sub_nodes = (docker_apps_singbox_processed_nodes | default(singbox_nodes)) + (singbox_extra_nodes | default([])) %}
+{% set all_sub_nodes = raw_sub_nodes | rejectattr('name', 'search', 'resi') | list if not (auroraops_roles['services']['ip2free_gateway'] | default(false) | bool) else raw_sub_nodes %}
+{% for node in all_sub_nodes %}
+{% if node.type == 'vless' and (not node.transport is defined or node.transport == 'tcp') %}
+  - name: "{{ node.name }}"
+    type: vless
+    server: "{{ node.server | default(singbox_domain) }}"
+    port: {{ node.port }}
+    uuid: "{{ node.uuid }}"
+    network: tcp
+    tls: true
+    servername: "{{ node.sni }}"
+    flow: xtls-rprx-vision
+    udp: true
+    client-fingerprint: chrome
+    reality-opts:
+      public-key: "{{ docker_apps_singbox_reality_public_key }}"
+      short-id: "{{ docker_apps_singbox_short_ids_gen.stdout_lines[0] | default('') }}"
+{% elif node.type == 'hysteria2' %}
+  - name: "{{ node.name }}"
+    type: hysteria2
+    server: "{{ node.server | default(singbox_domain) }}"
+    port: {{ node.port }}
+    password: "{{ node.password }}"
+    alpn:
+      - "{{ node.alpn | default('h3') }}"
+    skip-cert-verify: {{ node.insecure | default(false) | lower }}
+{% if node.sni | default('') | length > 0 %}
+    sni: "{{ node.sni }}"
+{% endif %}
+{% if node.obfs is defined %}
+    obfs: salamander
+    obfs-password: "{{ node.obfs_password }}"
+{% endif %}
+{% elif node.type == 'anytls' %}
+  - name: "{{ node.name }}"
+    type: anytls
+    server: "{{ node.server | default(singbox_domain) }}"
+    port: {{ node.port }}
+    password: "{{ node.password }}"
+{% endif %}
+{% endfor %}
