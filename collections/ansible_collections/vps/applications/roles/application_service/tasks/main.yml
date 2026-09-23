@@ -1,62 +1,18 @@
 ---
-# Application Service meta role tasks. Callers control enablement through include_role.
-
-- name: "[Application Service] Ensure application user and group exist"
-  ansible.builtin.user:
-    name: "{{ application_service_user }}"
-    group: "{{ application_service_group | default(omit) }}"
-    state: present
-    system: true
-  when:
-    - application_service_user is not none
-    - application_service_user | length > 0
-  tags:
-    - deploy
-    - phase5
-    - applications
-    - application_service
-    - application_service_user
-
-- name: "[Application Service] Create systemd service file: {{ application_service_name }}"
-  ansible.builtin.template:
-    src: application.service.j2
-    dest: "/etc/systemd/system/{{ application_service_name }}.service"
-    owner: root
-    group: root
-    mode: "0644"
-  notify: "[Application Service] Reload systemd and apply service change: {{ application_service_name }}"
-  when: application_service_name | length > 0
-  tags:
-    - deploy
-    - phase5
-    - applications
-    - application_service
-    - application_service_config
-
-- name: "[Application Service] Ensure systemd is reloaded after service file changes"
-  become: true
-  ansible.builtin.systemd:
-    daemon_reload: true
-  when: application_service_name | length > 0
-  tags:
-    - deploy
-    - phase5
-    - applications
-    - application_service
-    - application_service_reload
-
-- name: "[Application Service] Enable and set service state: {{ application_service_name }}"
-  become: true
-  ansible.builtin.systemd:
-    name: "{{ application_service_name }}.service"
-    enabled: "{{ application_service_enabled | bool }}"
-    state: "{{ application_service_state }}"
-  when:
-    - application_service_name | length > 0
-    - not ansible_check_mode
-  tags:
-    - deploy
-    - phase5
-    - applications
-    - application_service
-    - application_service_service
+- name: Delegate to managed_service universal task library
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../../../../common/tasks/managed_service.yml"
+  vars:
+    service_name: "{{ app_service_name | default(application_service_name | default('')) }}"
+    service_description: "{{ app_service_description | default(application_service_description | default('')) }}"
+    service_exec_start: "{{ app_service_exec_start | default(application_service_exec_start | default('')) }}"
+    service_user: "{{ app_service_user | default(application_service_user | default('root')) }}"
+    service_group: "{{ app_service_group | default(application_service_group | default('root')) }}"
+    service_type: "{{ app_service_type | default(application_service_type | default('simple')) }}"
+    service_restart: "{{ app_service_restart | default(application_service_restart | default('on-failure')) }}"
+    service_restart_sec: "{{ app_service_restart_sec | default(application_service_restart_sec | default(5)) }}"
+    service_working_directory: "{{ app_service_working_directory | default(application_service_working_directory | default('')) }}"
+    service_environment_file: "{{ app_service_environment_file | default(application_service_environment_file | default('')) }}"
+    service_environment: "{{ app_service_environment | default(application_service_environment | default({})) }}"
+    service_state: "{{ app_service_state | default(application_service_state | default('started')) }}"
+    service_enabled: "{{ app_service_enabled | default(application_service_enabled | default(true)) }}"

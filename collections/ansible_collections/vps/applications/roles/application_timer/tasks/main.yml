@@ -1,46 +1,12 @@
 ---
-# Application Timer meta role tasks. Callers control enablement through include_role.
-
-- name: "[Application Timer] Create systemd timer file: {{ application_timer_name }}"
-  ansible.builtin.template:
-    src: application.timer.j2
-    dest: "/etc/systemd/system/{{ application_timer_name }}.timer"
-    owner: root
-    group: root
-    mode: "0644"
-  notify: "[Application Timer] Reload systemd and apply timer change: {{ application_timer_name }}"
-  when: application_timer_name | length > 0
-  tags:
-    - deploy
-    - phase5
-    - applications
-    - application_timer
-    - application_timer_config
-
-- name: "[Application Timer] Ensure systemd is reloaded after timer file changes"
-  become: true
-  ansible.builtin.systemd:
-    daemon_reload: true
-  when: application_timer_name | length > 0
-  tags:
-    - deploy
-    - phase5
-    - applications
-    - application_timer
-    - application_timer_reload
-
-- name: "[Application Timer] Enable and set timer state: {{ application_timer_name }}"
-  become: true
-  ansible.builtin.systemd:
-    name: "{{ application_timer_name }}.timer"
-    enabled: "{{ application_timer_enabled | bool }}"
-    state: "{{ application_timer_state }}"
-  when:
-    - application_timer_name | length > 0
-    - not ansible_check_mode
-  tags:
-    - deploy
-    - phase5
-    - applications
-    - application_timer
-    - application_timer_service
+- name: Delegate to managed_timer universal task library
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/../../../../common/tasks/managed_timer.yml"
+  vars:
+    timer_name: "{{ app_timer_name | default(application_timer_name | default('')) }}"
+    timer_description: "{{ app_timer_description | default(application_timer_description | default('')) }}"
+    timer_exec_start: "{{ app_timer_exec_start | default(application_timer_exec_start | default('')) }}"
+    timer_schedule: "{{ app_timer_on_calendar | default(application_timer_on_calendar | default('daily')) }}"
+    timer_user: "{{ app_timer_user | default(application_timer_user | default('root')) }}"
+    timer_state: "{{ app_timer_state | default(application_timer_state | default('started')) }}"
+    timer_enabled: "{{ app_timer_enabled | default(application_timer_enabled | default(true)) }}"
