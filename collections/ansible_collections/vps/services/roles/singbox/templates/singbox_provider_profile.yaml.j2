@@ -15,8 +15,8 @@ proxies:
     udp: true
     client-fingerprint: chrome
     reality-opts:
-      public-key: "{{ docker_apps_singbox_reality_public_key }}"
-      short-id: "{{ docker_apps_singbox_short_ids_gen.stdout_lines[0] | default('') }}"
+      public-key: "{{ singbox_reality_public_key | default(docker_apps_singbox_reality_public_key | default(singbox_reality_public_key_generated | default(''))) }}"
+      short-id: "{{ (singbox_reality_short_ids | default(['']))[0] }}"
 {% elif node.type == 'hysteria2' %}
   - name: "{{ node.name }}"
     type: hysteria2

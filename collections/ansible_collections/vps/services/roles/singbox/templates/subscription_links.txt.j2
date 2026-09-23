@@ -11,8 +11,8 @@
 {%- set display_name = node.name if has_flag else (current_flag + ' ' + node.name) -%}
 {%- set is_reality = node.reality | default(true) | bool -%}
 {%- set use_port = node.port if is_reality else 443 -%}
-{%- set _pbk = node.relay_public_key | default(docker_apps_singbox_reality_public_key) -%}
-{%- set _sid = node.relay_short_id | default((docker_apps_singbox_short_ids_gen.stdout_lines | default(['']))[0] | default('')) -%}
+{%- set _pbk = node.relay_public_key | default(singbox_reality_public_key | default(docker_apps_singbox_reality_public_key | default(singbox_reality_public_key_generated | default('')))) -%}
+{%- set _sid = node.relay_short_id | default((singbox_reality_short_ids | default(['']))[0]) -%}
 {% if node.type == 'vless' -%}
 {% if node.transport is defined and node.transport == 'grpc' -%}
 vless://{{ node.uuid }}@{{ node.server | default(singbox_domain) }}:{{ use_port }}?encryption=none&security={{ 'reality' if is_reality else 'tls' }}&sni={{ node.sni }}&alpn=h2&fp=chrome{% if is_reality %}&pbk={{ _pbk }}&sid={{ _sid }}{% endif %}&type=grpc&serviceName={{ node.service_name }}&mode=gun#{{ display_name | urlencode }}
