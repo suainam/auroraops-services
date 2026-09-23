@@ -36,7 +36,7 @@
   # Default mode: preserve the current exit identity. Provider and node changes
   # happen only after health failure; fallback-only providers stay last by catalog order.
   - name: "🛡️ 稳定优先"
-    type: fallback
+    type: select
     proxies:
 {% for spec in display_group_specs %}
 {% set matched_sources = namespace(items=[]) %}
@@ -79,14 +79,12 @@
 {% for provider in capability_providers %}
 {% if provider.enabled | default(true) and not (provider['fallback-only'] | default(false)) %}
 {% set prefix = provider['additional-prefix'] | default('[' ~ provider.name ~ ']') %}
-      - "{{ prefix | regex_replace('^\\[|\\]$', '') }} · 稳定"
+{% set provider_label = prefix | regex_replace('^\\[|\\]$', '') %}
+{% if provider_label not in category_provider_labels %}
+      - "{{ provider_label }} · 稳定"
+{% endif %}
 {% endif %}
 {% endfor %}
-    url: https://www.gstatic.com/generate_204
-    interval: 300
-    timeout: 5000
-    max-failed-times: 5
-    lazy: true
 
   # Regional url-test helpers are ordered behind a fallback. A healthy region
   # stays selected; cross-region movement only occurs after regional failure.
