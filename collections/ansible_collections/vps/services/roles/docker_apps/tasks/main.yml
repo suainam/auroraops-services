@@ -92,11 +92,6 @@
       when: "'flare' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'flare')"
       tags: [deploy, services, docker_apps, flare, phase5]
 
-    - name: 加载 Singbox 部署任务
-      ansible.builtin.import_tasks: singbox.yml
-      when: "'singbox' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'singbox')"
-      tags: [deploy, services, docker_apps, singbox, phase5]
-
     - name: 加载 Sub-Store 部署任务
       ansible.builtin.import_tasks: sub_store.yml
       when: "'sub_store' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'sub_store')"

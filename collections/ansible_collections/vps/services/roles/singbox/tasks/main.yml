@@ -23,26 +23,22 @@
   tags: [deploy, services, singbox, phase5]
 
 - name: Render singbox canonical modular configuration
-  ansible.builtin.import_tasks: configure_common.yml
-  when: singbox_role_enabled
-  tags: [deploy, services, singbox, phase5]
-
 - name: Deploy native singbox branch
-  ansible.builtin.import_tasks: native.yml
+  ansible.builtin.include_tasks: native.yml
   when:
     - singbox_role_enabled
     - singbox_effective_mode == 'native'
   tags: [deploy, services, singbox, phase5]
 
 - name: Deploy docker singbox branch
-  ansible.builtin.import_tasks: docker.yml
+  ansible.builtin.include_tasks: docker.yml
   when:
     - singbox_role_enabled
     - singbox_effective_mode == 'docker'
   tags: [deploy, services, singbox, phase5]
 
 - name: Verify native singbox branch after deployment
-  ansible.builtin.import_tasks: verify_native.yml
+  ansible.builtin.include_tasks: verify_native.yml
   when:
     - singbox_role_enabled
     - singbox_effective_mode == 'native'
@@ -50,7 +46,7 @@
   tags: [verify, services, singbox, singbox_verify, phase5]
 
 - name: Verify docker singbox branch after deployment
-  ansible.builtin.import_tasks: verify_docker.yml
+  ansible.builtin.include_tasks: verify_docker.yml
   when:
     - singbox_role_enabled
     - singbox_effective_mode == 'docker'

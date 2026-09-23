@@ -4,11 +4,11 @@
   tags: [verify, services, singbox, phase5]
 
 - name: Verify native singbox branch
-  ansible.builtin.import_tasks: verify_native.yml
+  ansible.builtin.include_tasks: verify_native.yml
   when: singbox_effective_mode == 'native'
   tags: [verify, services, singbox, phase5]
 
 - name: Verify docker singbox branch
-  ansible.builtin.import_tasks: verify_docker.yml
+  ansible.builtin.include_tasks: verify_docker.yml
   when: singbox_effective_mode == 'docker'
   tags: [verify, services, singbox, phase5]
