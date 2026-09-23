@@ -149,7 +149,7 @@
 - name: 部署 Nginx 站点配置（自定义模板）
   become: true
   ansible.builtin.template:
-    src: "{{ item }}.conf.j2"
+    src: "{{ site_config.template | default(item ~ '.conf.j2') }}"
     dest: "/etc/nginx/sites-available/{{ item }}.conf"
     mode: "0644"
   loop: "{{ nginx_sites_to_mutate }}"

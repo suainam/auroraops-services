@@ -1,0 +1,14 @@
+galaxy_info:
+  author: AuroraOps
+  description: Sing-box unified proxy role supporting docker container and native OpenRC runtimes
+  company: AuroraOps
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions: ["all"]
+    - name: Ubuntu
+      versions: ["all"]
+    - name: Alpine
+      versions: ["all"]
+dependencies: []

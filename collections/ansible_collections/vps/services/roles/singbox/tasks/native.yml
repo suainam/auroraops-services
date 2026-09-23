@@ -1,0 +1,70 @@
+---
+- name: Sing-box Native - Install Alpine packages
+  become: true
+  community.general.apk:
+    name:
+      - sing-box
+      - sing-box-openrc
+    state: present
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Ensure system config directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ singbox_native_config_dir }}"
+    state: directory
+    mode: "0755"
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Ensure certs directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ singbox_native_config_dir }}/certs"
+    state: directory
+    mode: "0755"
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Configure OpenRC environment defaults
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/conf.d/sing-box
+    content: |
+      # Managed by AuroraOps
+      SINGBOX_CONFIG={{ singbox_native_config_dir }}
+      SINGBOX_WORKDIR={{ singbox_native_workdir }}
+      export ENABLE_DEPRECATED_SPECIAL_OUTBOUNDS=true
+      export ENABLE_DEPRECATED_DNS_SERVERS=true
+    mode: "0644"
+  notify: Restart singbox openrc service
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Sync modular config to system directory
+  become: true
+  ansible.builtin.copy:
+    src: "{{ singbox_config_dir }}/"
+    dest: "{{ singbox_native_config_dir }}/"
+    remote_src: true
+    mode: "0644"
+  notify: Restart singbox openrc service
+  when: not ansible_check_mode
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Clean deleted configs in system directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ singbox_native_config_dir }}/06_wireguard.json"
+    state: absent
+  when:
+    - not (singbox_wireguard_enabled | default(false) | bool)
+    - not ansible_check_mode
+  notify: Restart singbox openrc service
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Ensure OpenRC Service Enabled and Started
+  become: true
+  ansible.builtin.service:
+    name: sing-box
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+  tags: [deploy, services, singbox, phase5]

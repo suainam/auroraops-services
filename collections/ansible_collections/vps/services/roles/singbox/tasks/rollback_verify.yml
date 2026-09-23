@@ -1,0 +1,17 @@
+---
+- name: Verify singbox container stopped
+  become: true
+  community.docker.docker_container_info:
+    name: singbox
+  register: singbox_rollback_docker_info
+  failed_when: singbox_rollback_docker_info.exists and singbox_rollback_docker_info.container.State.Running
+  when: singbox_effective_mode == 'docker'
+  tags: [rollback_verify, services, singbox, phase5]
+
+- name: Verify singbox native service stopped
+  become: true
+  ansible.builtin.command: rc-service sing-box status
+  register: singbox_rollback_rc_status
+  failed_when: singbox_rollback_rc_status.rc == 0 and 'started' in singbox_rollback_rc_status.stdout
+  when: singbox_effective_mode == 'native'
+  tags: [rollback_verify, services, singbox, phase5]

@@ -3,9 +3,50 @@ server {
     listen [::]:80;
     server_name {{ singbox_domain }};
     
-    # Redirect all HTTP traffic to HTTPS
+    # Redirect public HTTP traffic to HTTPS
     location / {
         return 301 https://$host$request_uri;
+    }
+}
+
+# Internal dual-rail tunnel listeners (WireGuard 10.144.10.15 & ZeroTier 10.147.20.149)
+server {
+    listen 10.144.10.15:80;
+    listen 10.147.20.149:80;
+    server_name {{ singbox_domain }} 10.144.10.15 10.147.20.149;
+
+    include /etc/nginx/conf.d/common_headers.conf;
+    include /etc/nginx/conf.d/common_performance.conf;
+
+    # Sing-box Base64 Subscription
+    location = /{{ singbox_sub_token }} {
+        alias {{ singbox_sub_path }};
+        default_type text/plain;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="ccuai_sub"';
+        add_header Profile-Title "ccuai_sub";
+    }
+
+    # Sing-box YAML Profile
+    location = /{{ singbox_sub_token }}.yaml {
+        alias {{ singbox_sub_path }}.yaml;
+        default_type application/x-yaml;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="ccuai_sub"';
+        add_header Profile-Title "ccuai_sub";
+    }
+
+    # Sub-Store Capability Profile
+    location = /{{ sub_store_capability_profile_suffix }} {
+        alias {{ sub_store_capability_profile_path }};
+        default_type application/x-yaml;
+        charset utf-8;
+        add_header Content-Disposition 'inline; filename="ccuai_capabilities.yaml"';
+        add_header Profile-Title "ccuai_capabilities";
+    }
+
+    location / {
+        return 404;
     }
 }
 

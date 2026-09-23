@@ -19,7 +19,7 @@
         }
       ]
     }
-  ]{% if singbox_wireguard_http_inbound | default(false) %},
+  ]{% if (singbox_wireguard_system | default(false) | bool) and (singbox_wireguard_http_inbound | default(false) | bool) %},
   "inbounds": [
     {
       "type": "http",

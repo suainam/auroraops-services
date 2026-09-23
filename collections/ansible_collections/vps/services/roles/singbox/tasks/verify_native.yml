@@ -1,0 +1,24 @@
+---
+- name: Verify Sing-box native service is active and enabled on OpenRC
+  become: true
+  ansible.builtin.command: rc-service sing-box status
+  register: singbox_native_rc_status
+  changed_when: false
+  failed_when: singbox_native_rc_status.rc != 0 or 'started' not in singbox_native_rc_status.stdout
+  tags: [verify, services, singbox, phase5]
+
+- name: Verify Sing-box native configuration parses
+  become: true
+  ansible.builtin.command: sing-box check -C "{{ singbox_native_config_dir }}"
+  register: singbox_native_check
+  changed_when: false
+  failed_when: singbox_native_check.rc != 0
+  tags: [verify, services, singbox, phase5]
+
+- name: Verify Sing-box native reality port is listening
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ singbox_reality_port }}"
+    state: started
+    timeout: 5
+  tags: [verify, services, singbox, phase5]
