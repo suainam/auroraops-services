@@ -34,8 +34,8 @@
             "server": "{{ node.sni }}",
             "server_port": 443
           },
-          "private_key": "{{ docker_apps_singbox_reality_private_key }}",
-          "short_id": {{ docker_apps_singbox_short_ids_gen.stdout_lines | default(['']) | to_json }}
+          "private_key": "{{ singbox_reality_private_key | default(docker_apps_singbox_reality_private_key | default('')) }}",
+          "short_id": {{ singbox_reality_short_ids | default(docker_apps_singbox_short_ids_gen.stdout_lines | default([''])) | to_json }}
         }
       }{% endif %}{% if is_grpc %},
       "transport": {
