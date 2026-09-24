@@ -22,3 +22,33 @@
     state: started
     timeout: 5
   tags: [verify, services, singbox, phase5]
+
+- name: Verify Sing-box WireGuard loopback proxy port is listening
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ singbox_wireguard_loopback_port | default(30058) }}"
+    state: started
+    timeout: 5
+  when:
+    - singbox_wireguard_enabled | default(false) | bool
+    - singbox_wireguard_loopback_inbound | default(true) | bool
+  tags: [verify, services, singbox, wireguard, phase5]
+
+- name: Verify Sing-box userspace WireGuard proxy reachability
+  no_log: true
+  ansible.builtin.uri:
+    url: "{{ singbox_wireguard_probe_url }}"
+    use_proxy: true
+    timeout: "{{ singbox_wireguard_probe_timeout | default(5) }}"
+    status_code: 200
+  environment:
+    http_proxy: "http://127.0.0.1:{{ singbox_wireguard_loopback_port | default(30058) }}"
+    https_proxy: "http://127.0.0.1:{{ singbox_wireguard_loopback_port | default(30058) }}"
+    no_proxy: ""
+    NO_PROXY: ""
+  when:
+    - singbox_wireguard_enabled | default(false) | bool
+    - singbox_wireguard_loopback_inbound | default(true) | bool
+    - not (singbox_wireguard_system | default(false) | bool)
+    - not ansible_check_mode
+  tags: [verify, services, singbox, wireguard, phase5]

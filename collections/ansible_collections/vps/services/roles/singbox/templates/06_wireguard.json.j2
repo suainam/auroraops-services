@@ -26,6 +26,21 @@
       "tag": "sub-in-wg",
       "listen": "{{ singbox_wireguard_address.split('/')[0] }}",
       "listen_port": {{ singbox_wireguard_http_port | default(10080) }}
+    }{% if singbox_wireguard_loopback_inbound | default(true) | bool %},
+    {
+      "type": "mixed",
+      "tag": "wg-loopback-in",
+      "listen": "127.0.0.1",
+      "listen_port": {{ singbox_wireguard_loopback_port | default(30058) }}
+    }{% endif %}
+  ]
+{% elif singbox_wireguard_loopback_inbound | default(true) | bool %},
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "wg-loopback-in",
+      "listen": "127.0.0.1",
+      "listen_port": {{ singbox_wireguard_loopback_port | default(30058) }}
     }
   ]
 {% endif %}

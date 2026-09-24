@@ -37,3 +37,13 @@ singbox_wireguard_http_inbound: false
 singbox_wireguard_server_port: 30059
 singbox_wireguard_allowed_ips: ["10.144.10.0/24"]
 singbox_wireguard_keepalive: 25
+singbox_wireguard_peer_tag: "hub"
+singbox_wireguard_interface: "wg0"
+singbox_wireguard_loopback_inbound: true
+singbox_wireguard_loopback_port: 30058
+singbox_wireguard_probe_url: ""
+singbox_wireguard_probe_timeout: 5
+singbox_wireguard_address: ""
+singbox_wireguard_server: ""
+singbox_wireguard_peer_public_key: ""
+singbox_wireguard_private_key: ""
