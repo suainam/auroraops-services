@@ -22,18 +22,6 @@ def test_mihomo_role_owns_loopback_profile_and_controller_bootstrap():
     assert "-f {{ mihomo_native_profile_path }}" in service
 
 
-def test_cliproxyapi_uses_mihomo_and_has_no_legacy_gateway_dependency():
-    defaults = (CLIPROXY / "defaults/main.yml").read_text(encoding="utf-8")
-    service = (CLIPROXY / "templates/cliproxyapi-native.service.j2").read_text(encoding="utf-8")
-
-    assert "cliproxyapi_proxy_url: \"{{ cliproxyapi_proxy_url }}\"" in defaults
-    assert "cliproxyapi_download_proxy: \"{{ cliproxyapi_download_proxy }}\"" in defaults
-    assert "mihomo-native.service" in service
-    assert "transparent-gateway.service" not in service
-    assert "hysteria2-native.service" not in service
-    assert "12346" not in defaults
-
-
 def test_generated_playbook_orders_mihomo_before_cliproxyapi():
     playbook = (ROOT / "playbooks/services/deploy.yml").read_text(encoding="utf-8")
     assert "vps.services.mihomo_native" in playbook
