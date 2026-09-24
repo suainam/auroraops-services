@@ -85,13 +85,31 @@
   notify: Restart singbox openrc service
   tags: [deploy, services, singbox, phase5]
 
+- name: Sing-box - Validate WireGuard parameters
+  ansible.builtin.assert:
+    that:
+      - (singbox_wireguard_address | default('')) | length > 0
+      - (singbox_wireguard_server | default('')) | length > 0
+      - (singbox_wireguard_peer_public_key | default('')) | length > 0
+      - (singbox_wireguard_private_key | default('')) | length > 0
+      - (singbox_wireguard_system | default(false) | bool) or ((singbox_wireguard_loopback_inbound | default(true) | bool) and (singbox_wireguard_probe_url | default('') | length > 0))
+    fail_msg: >-
+      WireGuard endpoint requires singbox_wireguard_address, singbox_wireguard_server,
+      singbox_wireguard_peer_public_key, and singbox_wireguard_private_key to be configured.
+      Userspace mode (system: false) also requires singbox_wireguard_probe_url for reachability verification.
+  when: singbox_wireguard_enabled | default(false) | bool
+  tags: [deploy, services, singbox, wireguard, phase5]
+
 - name: Sing-box - Deploy 06_wireguard
   become: true
   diff: false
+  no_log: true
   ansible.builtin.template:
     src: 06_wireguard.json.j2
     dest: "{{ singbox_config_dir }}/06_wireguard.json"
-    mode: "0644"
+    mode: "0600"
+    owner: root
+    group: root
   when: singbox_wireguard_enabled | default(false) | bool
   notify: Restart singbox openrc service
   tags: [deploy, services, singbox, wireguard, phase5]

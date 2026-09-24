@@ -13,6 +13,18 @@
     "rules": [
       { "protocol": "dns", "action": "hijack-dns" },
       { "action": "resolve", "strategy": "prefer_ipv4" },
+      {% if singbox_wireguard_enabled | default(false) | bool %}
+      {% if singbox_wireguard_loopback_inbound | default(true) | bool %}
+      {
+        "inbound": ["wg-loopback-in"],
+        "outbound": "wg-{{ singbox_wireguard_peer_tag | default('hub') }}"
+      },
+      {% endif %}
+      {
+        "ip_cidr": {{ singbox_wireguard_allowed_ips | default(['10.144.10.0/24']) | to_json }},
+        "outbound": "wg-{{ singbox_wireguard_peer_tag | default('hub') }}"
+      },
+      {% endif %}
       {
         "ip_cidr": [
           "0.0.0.0/8",
