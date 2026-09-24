@@ -39,5 +39,105 @@
     }
 {% endfor %}
 {% endif %}
+{% if singbox_smart_unlock_enabled | default(true) | bool %},
+    {
+      "type": "vless",
+      "tag": "out-nat-jp3",
+      "server": "{{ singbox_jp3_host | default('173.239.246.29') }}",
+      "server_port": 30052,
+      "uuid": "{{ singbox_uuid_aws }}",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.cloudflare.com",
+        "utls": { "enabled": true, "fingerprint": "chrome" },
+        "reality": {
+          "enabled": true,
+          "public_key": "xl-LDCjn_VKbhRAPkpLIqqOAVSLKP_axioYoa3xS-jM",
+          "short_id": "f674722ffaaa070d"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "out-cc15",
+      "server": "{{ singbox_cc15_host | default('117.55.226.100') }}",
+      "server_port": 30053,
+      "uuid": "{{ singbox_uuid_cf }}",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.cloudflare.com",
+        "utls": { "enabled": true, "fingerprint": "chrome" },
+        "reality": {
+          "enabled": true,
+          "public_key": "aEeIAIPEuV0bsIk19W7hnpbTgRd6oPBcrB-rc71oww4",
+          "short_id": "15d9565cee5e6844"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "out-nat-hk216",
+      "server": "{{ singbox_hk216_host | default('38.76.219.14') }}",
+      "server_port": 30052,
+      "uuid": "{{ singbox_uuid_aws }}",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "aws.amazon.com",
+        "utls": { "enabled": true, "fingerprint": "chrome" },
+        "reality": {
+          "enabled": true,
+          "public_key": "NiSfj3h0cASa44FkrktDz8oV3dN2ic8iwlTn_w02Mxw",
+          "short_id": "d4361ef75a54a076"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "out-nat-hk084",
+      "server": "{{ singbox_hk084_host | default('38.76.189.196') }}",
+      "server_port": 30052,
+      "uuid": "{{ singbox_uuid_aws }}",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.cloudflare.com",
+        "utls": { "enabled": true, "fingerprint": "chrome" },
+        "reality": {
+          "enabled": true,
+          "public_key": "3hleuNs8hbUaxd9b-C50Q7gR8DlOJCYkS1yF0BQbuWc",
+          "short_id": "ecf55366167941a8"
+        }
+      }
+    },
+    {
+      "type": "urltest",
+      "tag": "ai-restricted-cluster",
+      "outbounds": [
+        "out-nat-jp3",
+        "out-cc15",
+        "direct-out"
+      ],
+      "url": "http://www.google.com/generate_204",
+      "interval": "3m",
+      "tolerance": 50
+    },
+    {
+      "type": "urltest",
+      "tag": "media-asia-cluster",
+      "outbounds": [
+        "out-nat-jp3",
+        "out-nat-hk216",
+        "out-nat-hk084",
+        "out-cc15",
+        "direct-out"
+      ],
+      "url": "http://www.google.com/generate_204",
+      "interval": "3m",
+      "tolerance": 50
+    }
+{% endif %}
   ]
 }
