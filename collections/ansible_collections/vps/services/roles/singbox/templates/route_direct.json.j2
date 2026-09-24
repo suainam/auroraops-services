@@ -36,6 +36,7 @@
       { "inbound": ["in-vless-smart-unlock"], "domain_suffix": ["openai.com", "chatgpt.com", "sora.com", "oaistatic.com", "oaiusercontent.com", "claude.ai", "anthropic.com"], "outbound": "ai-restricted-cluster" },
       { "inbound": ["in-vless-smart-unlock"], "domain_suffix": ["netflix.com", "netflix.net", "nflxvideo.net", "nflxext.com", "nflximg.net", "gemini.google.com", "generativelanguage.googleapis.com"], "outbound": "media-asia-cluster" },
       { "inbound": ["in-vless-smart-unlock"], "outbound": "direct-out" },
+      {%- if docker_apps_singbox_warp_enabled | default(false) | bool %}
       { "domain_suffix": ["cloudcode-pa.googleapis.com", "daily-cloudcode-pa.googleapis.com"], "outbound": "direct-out" },
       { "rule_set": ["geosite-openai", "geosite-anthropic", "geosite-google"], "outbound": "warp-out" },
       {%- endif %}
