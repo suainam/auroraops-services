@@ -16,6 +16,7 @@ container_deployer_fix_uid: "{{ cdp_fix_uid | default(docker_user_uid | default(
 container_deployer_fix_gid: "{{ cdp_fix_gid | default(docker_user_gid | default(1000)) }}"
 container_deployer_fix_mode: "{{ cdp_fix_mode | default('0777') }}"
 container_deployer_networks: "{{ cdp_networks | default([]) }}"
+container_deployer_dns: "{{ cdp_dns | default([]) }}"
 container_deployer_network_mode: "{{ cdp_network_mode | default('') }}"
 container_deployer_ports: "{{ cdp_ports | default([]) }}"
 container_deployer_volumes: "{{ cdp_volumes | default([]) }}"

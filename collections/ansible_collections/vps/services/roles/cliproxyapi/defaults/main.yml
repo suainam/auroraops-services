@@ -33,6 +33,10 @@ cliproxyapi_docker_image: "{{ cliproxyapi_image }}"
 cliproxyapi_docker_memory: "128m"
 cliproxyapi_docker_memory_reservation: "32m"
 cliproxyapi_docker_networks: "{{ cliproxyapi_networks | default([{'name': 'sweb'}]) }}"
+# cc15 类主机通过 sysctl 关闭 IPv6，但宿主机 /etc/resolv.conf 仍保留 IPv6 DNS。
+# Go 解析器会把不可达的 IPv6 nameserver 当作整次解析失败，导致 R2 对象存储
+# 引导直接 network is unreachable。显式钉死 IPv4 DNS 与宿主 resolv.conf 解耦。
+cliproxyapi_docker_dns: "{{ cliproxyapi_dns | default(['8.8.8.8', '8.8.4.4']) }}"
 cliproxyapi_docker_storage_driver: "{{ cliproxyapi_storage_driver | default('file') }}"
 cliproxyapi_docker_use_postgres: "{{ cliproxyapi_use_postgres | default(false) }}"
 cliproxyapi_docker_pg_host: "{{ cliproxyapi_pg_host | default('host.docker.internal') }}"

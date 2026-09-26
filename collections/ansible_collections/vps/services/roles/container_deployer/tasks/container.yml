@@ -12,6 +12,7 @@
     user: "{{ container_deployer_user if container_deployer_user | length > 0 else omit }}"
     working_dir: "{{ container_deployer_working_dir if container_deployer_working_dir | length > 0 else omit }}"
     networks: "{{ container_deployer_networks if container_deployer_networks | length > 0 else omit }}"
+    dns: "{{ container_deployer_dns if container_deployer_dns | length > 0 else omit }}"
     network_mode: "{{ container_deployer_network_mode if container_deployer_network_mode | length > 0 else omit }}"
     ports: "{{ container_deployer_ports if container_deployer_ports | length > 0 else omit }}"
     volumes: "{{ container_deployer_volumes if container_deployer_volumes | length > 0 else omit }}"

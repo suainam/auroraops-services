@@ -407,6 +407,7 @@
     cdp_memory_reservation: "{{ cliproxyapi_docker_memory_reservation | default('32m') }}"
     cdp_oom_score_adj: "-300"
     cdp_networks: "{{ cliproxyapi_docker_networks }}"
+    cdp_dns: "{{ cliproxyapi_docker_dns }}"
     cdp_ports:
       - "{{ cliproxyapi_docker_bind_address }}:{{ cliproxyapi_docker_app_port }}:8317"
     cdp_volumes: >-
