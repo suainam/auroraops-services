@@ -94,6 +94,21 @@
 # therefore read from runtime state, never from configuration: comparing two
 # config values only proves the config is self-consistent, which is precisely
 # what failed to catch this.
+#
+# The comparison is gated on port hopping being *enabled*, not on the host
+# being a relay. A direct node with hopping enabled is exactly the host that
+# was broken, so gating on relay membership would skip the check where it
+# matters most and pass vacuously.
+
+- name: "[Sing-box] Resolve the hopping range under audit"
+  ansible.builtin.set_fact:
+    singbox_hopping_audit_enabled: >-
+      {{ (firewall_hysteria_hopping.enabled | default(false) | bool)
+         or (singbox_hopping_enabled | default(false) | bool) }}
+    singbox_hopping_audit_range: >-
+      {{ firewall_hysteria_hopping.port_range
+         | default(app_port_hysteria_hopping_range | default('')) }}
+  tags: [verify, services, singbox, phase5]
 
 - name: "[Sing-box] Read the live Hysteria redirect target from the firewall"
   become: true
@@ -101,8 +116,8 @@
     set -o pipefail 2>/dev/null || true
     if command -v iptables >/dev/null 2>&1; then
       iptables -t nat -S PREROUTING 2>/dev/null \
-        | awk -v range="{{ singbox_hopping_firewall_range | default('') }}" '
-            $0 ~ ("--dport " range) && /REDIRECT/ {
+        | awk -v range="{{ singbox_hopping_audit_range }}" '
+            range != "" && $0 ~ ("--dport " range) && /REDIRECT/ {
               for (i = 1; i <= NF; i++) if ($i == "--to-ports") print $(i + 1)
             }' \
         | sort -u
@@ -157,8 +172,8 @@
 - name: "[Sing-box] Assert the redirect target matches the listening port"
   ansible.builtin.assert:
     that:
-      # Nothing to compare when the host does not use port hopping.
-      - singbox_relay_upstreams | default([]) | length == 0
+      # Only meaningful where port hopping is switched on.
+      - not (singbox_hopping_audit_enabled | bool)
         or singbox_hysteria_listen_port | length == 0
         or singbox_hysteria_redirect_target | length == 0
         or singbox_hysteria_redirect_mismatch | length == 0
