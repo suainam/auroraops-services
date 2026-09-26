@@ -27,6 +27,25 @@ cliproxyapi_config_seed_file: ""
 cliproxyapi_force_overwrite: false
 
 cliproxyapi_docker_dir: "/opt/dockers/cliproxyapi"
+# Where the running container actually reads its configuration from.
+#
+# File mode: bind-mounted into the container, so the host path is the source.
+# S3 mode: the config.yaml/auths bind mounts are dropped and the server instead
+# keeps a local mirror at <OBJECTSTORE_LOCAL_PATH>/objectstore, which it watches
+# and mirrors to the bucket in both directions. Reconciling the old host path in
+# S3 mode wrote a file the container never reads, so the role reported `changed`
+# while the effective configuration stayed untouched.
+cliproxyapi_object_store_active: >-
+  {{
+    (cliproxyapi_docker_storage_driver == 's3')
+    or (cliproxyapi_docker_s3_endpoint | default('', true) | string | length > 0)
+  }}
+cliproxyapi_docker_config_path: >-
+  {{
+    (cliproxyapi_docker_dir ~ '/objectstore/config/config.yaml')
+    if (cliproxyapi_object_store_active | bool)
+    else (cliproxyapi_docker_dir ~ '/config.yaml')
+  }}
 cliproxyapi_docker_auth_dir: "{{ cliproxyapi_docker_dir }}/auths"
 cliproxyapi_image: "eceasy/cli-proxy-api:v7.3.2"
 cliproxyapi_docker_image: "{{ cliproxyapi_image }}"

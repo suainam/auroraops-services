@@ -129,7 +129,7 @@
 - name: Check whether cliproxyapi config already exists
   become: true
   ansible.builtin.stat:
-    path: /opt/dockers/cliproxyapi/config.yaml
+    path: "{{ cliproxyapi_docker_config_path }}"
   register: cliproxyapi_config
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
@@ -181,7 +181,7 @@
   become: true
   no_log: true
   ansible.builtin.file:
-    path: /opt/dockers/cliproxyapi/config.yaml
+    path: "{{ cliproxyapi_docker_config_path }}"
     state: file
     owner: root
     group: root
@@ -193,7 +193,7 @@
   become: true
   no_log: true
   ansible.builtin.slurp:
-    src: /opt/dockers/cliproxyapi/config.yaml
+    src: "{{ cliproxyapi_docker_config_path }}"
   register: cliproxyapi_config_contents
   when: cliproxyapi_config.stat.exists
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
@@ -203,7 +203,7 @@
   no_log: true
   diff: false
   ansible.builtin.replace:
-    path: /opt/dockers/cliproxyapi/config.yaml
+    path: "{{ cliproxyapi_docker_config_path }}"
     regexp: '(?ms)^openai-compatibility:\n.*?(?=^[^ \t#\r\n][^:\r\n]*:\s*$|\Z)'
     replace: "{{ lookup('template', 'cliproxyapi_openai_compatibility.yaml.j2') }}"
   when:
@@ -217,7 +217,7 @@
   no_log: true
   diff: false
   ansible.builtin.replace:
-    path: /opt/dockers/cliproxyapi/config.yaml
+    path: "{{ cliproxyapi_docker_config_path }}"
     regexp: '(?ms)^# BEGIN AuroraOps CLIProxyAPI Antigravity aliases$\n.*?^# END AuroraOps CLIProxyAPI Antigravity aliases\n?'
     replace: ''
   when:
@@ -242,7 +242,7 @@
   no_log: true
   diff: false
   ansible.builtin.replace:
-    path: /opt/dockers/cliproxyapi/config.yaml
+    path: "{{ cliproxyapi_docker_config_path }}"
     regexp: '(?m)^oauth-model-alias:\n(?:^[ \t][^\n]*(?:\n|$))+'
     replace: ''
   when:
@@ -267,7 +267,7 @@
   no_log: true
   diff: false
   ansible.builtin.blockinfile:
-    path: /opt/dockers/cliproxyapi/config.yaml
+    path: "{{ cliproxyapi_docker_config_path }}"
     marker: "# {mark} AuroraOps CLIProxyAPI Antigravity aliases"
     insertafter: EOF
     block: >-
@@ -281,7 +281,7 @@
   no_log: true
   diff: false
   ansible.builtin.replace:
-    path: /opt/dockers/cliproxyapi/config.yaml
+    path: "{{ cliproxyapi_docker_config_path }}"
     regexp: '(?m)(?:^api-keys:\n(?:  - [^\n]*(?:\n|$))+|^api-keys:[ \t]*\[\][ \t]*$)'
     replace: >-
       {{ 'api-keys:\n'
@@ -295,7 +295,7 @@
   no_log: true
   diff: false
   ansible.builtin.blockinfile:
-    path: /opt/dockers/cliproxyapi/config.yaml
+    path: "{{ cliproxyapi_docker_config_path }}"
     marker: "# {mark} AuroraOps CLIProxyAPI API keys"
     insertafter: EOF
     block: >-
@@ -322,16 +322,26 @@
         cliproxyapi_config_seed_vars.cliproxyapi_config_seed
         | to_nice_yaml(indent=2, width=1000)
       }}
-    dest: /opt/dockers/cliproxyapi/config.yaml
+    dest: "{{ cliproxyapi_docker_config_path }}"
     owner: root
     mode: '0600'
     force: "{{ cliproxyapi_force_overwrite | bool }}"
   when:
     - cliproxyapi_config_seed_vars is defined
     - cliproxyapi_config_seed_vars.cliproxyapi_config_seed is defined
+    # In object-store mode the mirror is shared state with the management UI, so
+    # an existing file is only reconciled section by section further up — never
+    # overwritten wholesale, because a full seed would drop keys the frontend
+    # owns (for example antigravity.sensitive-words). Seeding is bootstrap-only.
     - >-
-      cliproxyapi_force_overwrite | bool
-      or not cliproxyapi_config.stat.exists
+      (
+        (not (cliproxyapi_object_store_active | bool))
+        and (cliproxyapi_force_overwrite | bool or not cliproxyapi_config.stat.exists)
+      )
+      or (
+        (cliproxyapi_object_store_active | bool)
+        and not cliproxyapi_config.stat.exists
+      )
   notify: restart cliproxyapi
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
@@ -341,12 +351,22 @@
   diff: false
   ansible.builtin.template:
     src: cliproxyapi_config.yaml.j2
-    dest: /opt/dockers/cliproxyapi/config.yaml
+    dest: "{{ cliproxyapi_docker_config_path }}"
     owner: root
     mode: '0600'
     force: "{{ cliproxyapi_force_overwrite | bool }}"
   when:
-    - cliproxyapi_force_overwrite | bool or not cliproxyapi_config.stat.exists
+    # Same bootstrap-only rule as the seed copy above: never clobber an existing
+    # object-store mirror, which the management UI also writes to.
+    - >-
+      (
+        (not (cliproxyapi_object_store_active | bool))
+        and (cliproxyapi_force_overwrite | bool or not cliproxyapi_config.stat.exists)
+      )
+      or (
+        (cliproxyapi_object_store_active | bool)
+        and not cliproxyapi_config.stat.exists
+      )
     - >-
       cliproxyapi_config_seed_vars is not defined
       or cliproxyapi_config_seed_vars.cliproxyapi_config_seed is not defined
@@ -443,7 +463,7 @@
           ]
           if (cliproxyapi_docker_storage_driver == 's3' or cliproxyapi_docker_s3_endpoint | default('') | length > 0)
           else [
-            "/opt/dockers/cliproxyapi/config.yaml:/CLIProxyAPI/config.yaml",
+            "{{ cliproxyapi_docker_config_path }}:/CLIProxyAPI/config.yaml",
             "/opt/dockers/cliproxyapi/auths:/root/.cli-proxy-api"
           ]
         )
