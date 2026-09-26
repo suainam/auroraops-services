@@ -166,7 +166,7 @@
     - phase4
 
 - name: Verify PostgreSQL logrotate configuration
-  ansible.builtin.import_tasks: ../../../common/tasks/verify_optional_logrotate.yml
+  ansible.builtin.import_tasks: "{{ role_path }}/../../../common/tasks/verify_optional_logrotate.yml"
   vars:
     optional_logrotate_owner: PostgreSQL
     optional_logrotate_enabled: "{{ postgresql_logrotate_enabled }}"

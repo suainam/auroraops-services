@@ -63,8 +63,9 @@
     - phase5
     - vertex
 - name: 验证 Docker 应用程序容器状态 (单个)
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   community.docker.docker_container_info:
+    docker_host: "{{ docker_host | default(omit) }}"
     name: "{{ docker_apps_container_names[verify_docker_app_name] | default(verify_docker_app_name) }}"
   register: docker_apps_container_info
   failed_when: >-
@@ -94,7 +95,7 @@
     - shellcrash
 
 - name: Verify Sing-box native service is active and enabled on systemd
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.service:
     name: sing-box
     state: started
@@ -115,7 +116,7 @@
     - phase5
 
 - name: Verify Sing-box native service is active and enabled on OpenRC
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.command: rc-service sing-box status
   register: docker_apps_singbox_native_openrc_status
   changed_when: false
@@ -133,7 +134,7 @@
     - phase5
 
 - name: Verify Sing-box native configuration parses
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.command: sing-box check -C /etc/sing-box
   register: docker_apps_singbox_native_config_check
   changed_when: false
@@ -226,7 +227,7 @@
   tags: [verify, services, docker_apps, ds2api, phase5]
 
 - name: Verify ds2api config file permissions
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.stat:
     path: "{{ docker_apps_ds2api_data_dir }}/config.json"
   register: docker_apps_ds2api_config_stat
@@ -284,7 +285,7 @@
   tags: [verify, services, docker_apps, vertex, phase5]
 
 - name: Verify Vertex persistent secret file permissions
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.stat:
     path: "{{ item }}"
   loop:
@@ -359,8 +360,9 @@
   tags: [verify, services, docker_apps, vaultwarden, phase5]
 
 - name: Read Vaultwarden runtime version
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   community.docker.docker_container_exec:
+    docker_host: "{{ docker_host | default(omit) }}"
     container: vaultwarden
     argv: [/vaultwarden, --version]
   register: docker_apps_vaultwarden_version_result
@@ -411,8 +413,9 @@
   tags: [verify, services, docker_apps, vaultwarden, phase5]
 
 - name: Wait for Vaultwarden Docker health status
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   community.docker.docker_container_info:
+    docker_host: "{{ docker_host | default(omit) }}"
     name: vaultwarden
   register: docker_apps_vaultwarden_health_info
   until: >-
@@ -429,24 +432,27 @@
   tags: [verify, services, docker_apps, vaultwarden, phase5]
 
 - name: Inspect opcotoai gateway container
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   community.docker.docker_container_info:
+    docker_host: "{{ docker_host | default(omit) }}"
     name: opcotoai-toolkit-gateway-1
   register: docker_apps_opcotoai_gateway_info
   when: verify_docker_app_name | default('') == 'opcotoai_toolkit'
   tags: [verify, services, docker_apps, opcotoai_toolkit, phase5]
 
 - name: Inspect opcotoai SMTP container
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   community.docker.docker_container_info:
+    docker_host: "{{ docker_host | default(omit) }}"
     name: opcotoai-toolkit-smtp-1
   register: docker_apps_opcotoai_smtp_info
   when: verify_docker_app_name | default('') == 'opcotoai_toolkit'
   tags: [verify, services, docker_apps, opcotoai_toolkit, phase5]
 
 - name: Inspect legacy opcotoai Grok container
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   community.docker.docker_container_info:
+    docker_host: "{{ docker_host | default(omit) }}"
     name: opcotoai-toolkit-grok-1
   register: docker_apps_opcotoai_legacy_grok_info
   when: verify_docker_app_name | default('') == 'opcotoai_toolkit'
@@ -469,7 +475,7 @@
   tags: [verify, services, docker_apps, opcotoai_toolkit, phase5]
 
 - name: Verify opcotoai local gateway responds
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ app_port_opcotoai_smtp }}/"
     method: GET
@@ -493,7 +499,7 @@
     - phase5
 
 - name: Verify Sub-Store backend endpoint
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ app_port_sub_store }}{{ sub_store_backend_path }}/api/utils/env"
     method: GET
@@ -509,7 +515,7 @@
     - phase5
 
 - name: Verify public Sub-Store Mihomo subscription
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.uri:
     url: "https://{{ singbox_domain }}/{{ sub_store_mihomo_suffix }}"
     method: GET
@@ -559,7 +565,7 @@
     - phase5
 
 - name: Verify public Sub-Store Mihomo provider
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.uri:
     url: "https://{{ singbox_domain }}/{{ sub_store_mihomo_provider_suffix }}"
     method: GET
@@ -605,7 +611,7 @@
     - phase5
 
 - name: Read public Sub-Store Mihomo subscription headers
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.command:
     argv:
       - curl
@@ -642,7 +648,7 @@
     - phase5
 
 - name: Verify public Sub-Store sing-box subscription
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.uri:
     url: "https://{{ singbox_domain }}/{{ sub_store_singbox_suffix }}"
     method: GET
@@ -674,7 +680,7 @@
     - phase5
 
 - name: Verify public Sub-Store capability profile
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.uri:
     url: "https://{{ singbox_domain }}/{{ sub_store_capability_profile_suffix }}"
     method: GET
@@ -758,7 +764,7 @@
   tags: [verify, services, docker_apps, sub_store, phase5]
 
 - name: Verify public Sub-Store capability source providers
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.uri:
     url: >-
       {{ 'https://' ~ singbox_domain ~ '/' ~ sub_store_capability_source_provider_suffix ~
@@ -792,7 +798,7 @@
   tags: [verify, services, docker_apps, sub_store, phase5]
 
 - name: Verify public Sub-Store capability aggregate provider
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.uri:
     url: "https://{{ singbox_domain }}/{{ sub_store_capability_provider_suffix }}"
     method: GET
@@ -819,7 +825,7 @@
   tags: [verify, services, docker_apps, sub_store, phase5]
 
 - name: Verify Sub-Store capability pool timer is enabled
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.command:
     argv:
       - systemctl
@@ -834,7 +840,7 @@
   tags: [verify, services, docker_apps, sub_store, phase5]
 
 - name: Verify Sub-Store capability pool timer is active
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.command:
     argv:
       - systemctl
@@ -849,7 +855,7 @@
   tags: [verify, services, docker_apps, sub_store, phase5]
 
 - name: Verify Sub-Store capability profiler timer is enabled
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.command:
     argv:
       - systemctl
@@ -864,7 +870,7 @@
   tags: [verify, services, docker_apps, sub_store, phase5]
 
 - name: Verify Sub-Store capability profiler timer is active
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.command:
     argv:
       - systemctl
@@ -879,7 +885,7 @@
   tags: [verify, services, docker_apps, sub_store, phase5]
 
 - name: Verify Sub-Store capability registry state file
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.stat:
     path: "{{ sub_store_capability_registry_state_path }}"
   register: docker_apps_sub_store_registry_stat
@@ -890,7 +896,7 @@
   tags: [verify, services, docker_apps, sub_store, phase5]
 
 - name: Read Sub-Store capability registry state
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.slurp:
     src: "{{ sub_store_capability_registry_state_path }}"
   register: docker_apps_sub_store_registry_raw
@@ -934,8 +940,9 @@
   tags: [verify, services, docker_apps, sub_store, phase5]
 
 - name: 验证 Docker 应用程序容器状态 (批量)
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   community.docker.docker_container_info:
+    docker_host: "{{ docker_host | default(omit) }}"
     name: "{{ docker_apps_container_names[item] }}"
   register: docker_apps_container_info
   failed_when: >-

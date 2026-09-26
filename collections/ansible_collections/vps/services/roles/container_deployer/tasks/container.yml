@@ -2,8 +2,9 @@
 # Container Deployer - 单容器部署
 
 - name: Deploy container
-  become: true
+  become: "{{ container_deployer_become | default(true) }}"
   community.docker.docker_container:
+    docker_host: "{{ docker_host | default(omit) }}"
     name: "{{ container_deployer_name }}"
     image: "{{ container_deployer_image }}"
     pull: "{{ container_deployer_cdp_pull | bool }}"

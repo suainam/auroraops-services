@@ -31,7 +31,10 @@ cloudflared_download_environment: >-
        'HTTP_PROXY': proxy_http,
        'HTTPS_PROXY': proxy_https
      } if proxy_enabled | default(false) | bool else {} }}
-cloudflared_binary_path: /usr/bin/cloudflared
+cloudflared_binary_path: >-
+  {{ '/opt/homebrew/bin/cloudflared'
+     if (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Darwin'
+     else '/usr/bin/cloudflared' }}
 cloudflared_service_name: cloudflared
 cloudflared_service_manager: >-
   {{ 'openrc'
@@ -41,9 +44,12 @@ cloudflared_service_path: >-
   {{ '/etc/systemd/system/cloudflared.service'
      if cloudflared_service_manager == 'systemd'
      else '/etc/init.d/cloudflared' }}
-cloudflared_config_dir: /etc/cloudflared
-cloudflared_config_path: /etc/cloudflared/config.yml
-cloudflared_credentials_path: "/etc/cloudflared/{{ cloudflared_tunnel_id }}.json"
+cloudflared_config_dir: >-
+  {{ (lookup('env', 'HOME') ~ '/.cloudflared')
+     if (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Darwin'
+     else '/etc/cloudflared' }}
+cloudflared_config_path: "{{ cloudflared_config_dir }}/config.yml"
+cloudflared_credentials_path: "{{ cloudflared_config_dir }}/{{ cloudflared_tunnel_id }}.json"
 cloudflared_fact_path: /etc/ansible/facts.d/cloudflared.fact
 cloudflared_metrics_address: 127.0.0.1:20241
 cloudflared_metrics_url: "http://{{ cloudflared_metrics_address }}/ready"

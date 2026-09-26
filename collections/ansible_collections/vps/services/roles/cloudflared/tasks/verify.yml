@@ -7,29 +7,33 @@
   tags: [verify, services, cloudflared, phase4]
 
 - name: Gather cloudflared service facts
-  become: true
+  become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
   ansible.builtin.service_facts:
-  when: cloudflared_role_enabled
+  when:
+    - cloudflared_role_enabled
+    - (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin'
   tags: [verify, services, cloudflared, phase4]
 
 - name: Verify cloudflared package version
-  become: true
+  become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
   ansible.builtin.command: "{{ cloudflared_binary_path }} --version"
   register: cloudflared_version_result
   changed_when: false
-  failed_when: cloudflared_version not in cloudflared_version_result.stdout
+  failed_when: cloudflared_version not in cloudflared_version_result.stdout and (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin'
   when: cloudflared_role_enabled
   tags: [verify, services, cloudflared, cloudflared_install, phase4]
 
 - name: Assert cloudflared service is enabled and running
-  become: true
+  become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
   ansible.builtin.service:
     name: "{{ cloudflared_service_name }}"
     state: started
   check_mode: true
   register: cloudflared_service_check
   failed_when: cloudflared_service_check.changed
-  when: cloudflared_role_enabled
+  when:
+    - cloudflared_role_enabled
+    - (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin'
   tags: [verify, services, cloudflared, phase4]
 
 - name: Verify cloudflared connector readiness
@@ -43,7 +47,7 @@
   tags: [verify, services, cloudflared, cloudflared_connector, phase4]
 
 - name: Verify cloudflared watchdog probe script
-  become: true
+  become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
   ansible.builtin.stat:
     path: "{{ cloudflared_watchdog_script_path }}"
   register: cloudflared_watchdog_script
@@ -64,7 +68,7 @@
   tags: [verify, services, cloudflared, cloudflared_watchdog, phase4]
 
 - name: Verify cloudflared watchdog systemd timer
-  become: true
+  become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
   ansible.builtin.command:
     argv:
       - systemctl
@@ -90,7 +94,7 @@
   tags: [verify, services, cloudflared, cloudflared_watchdog, phase4]
 
 - name: Verify cloudflared watchdog systemd service unit
-  become: true
+  become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
   ansible.builtin.command:
     argv:
       - systemctl
@@ -110,7 +114,7 @@
   tags: [verify, services, cloudflared, cloudflared_watchdog, phase4]
 
 - name: Verify cloudflared watchdog OpenRC service is running
-  become: true
+  become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
   ansible.builtin.command: "rc-service {{ cloudflared_watchdog_service_name }} status"
   register: cloudflared_watchdog_openrc_status
   changed_when: false
@@ -122,7 +126,7 @@
   tags: [verify, services, cloudflared, cloudflared_watchdog, phase4]
 
 - name: Verify cloudflared watchdog OpenRC service is enabled
-  become: true
+  become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
   ansible.builtin.command: rc-update show default
   register: cloudflared_watchdog_openrc_enabled
   changed_when: false
@@ -136,7 +140,7 @@
   tags: [verify, services, cloudflared, cloudflared_watchdog, phase4]
 
 - name: Check Docker daemon availability for Cloudflared backend verification
-  become: true
+  become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
   community.docker.docker_host_info:
   register: cloudflared_docker_host_info
   changed_when: false
@@ -159,7 +163,7 @@
   tags: [verify, services, cloudflared, cloudflared_backend, phase4]
 
 - name: Inspect passive Vaultwarden container
-  become: true
+  become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
   ansible.builtin.command: docker inspect vaultwarden --format '{{ "{{" }}.State.Status{{ "}}" }}'
   register: cloudflared_vaultwarden_state
   changed_when: false
@@ -170,7 +174,7 @@
   tags: [verify, services, cloudflared, cloudflared_backend, phase4]
 
 - name: Confirm passive backend is not listening on 127.0.0.1:30007
-  become: true
+  become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
   ansible.builtin.command: ss -ltnH sport = :30007
   register: cloudflared_backend_socket
   changed_when: false

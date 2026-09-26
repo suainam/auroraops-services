@@ -2,12 +2,12 @@
 # SillyTavern - 使用 container_deployer Meta 角色部署
 
 - name: Initialize data from image
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.shell: |
     for item in "config:/home/node/app/config" "data:/home/node/app/public" "plugins:/home/node/app/plugins"; do
       DIR_NAME=${item%%:*}
       IMG_PATH=${item#*:}
-      DEST=/opt/dockers/sillytavern/$DIR_NAME
+      DEST={{ backup_source_docker_dir }}/sillytavern/$DIR_NAME
       if [ -z "$(find "$DEST" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
         echo "Initializing empty $DIR_NAME..."
         docker run --rm --entrypoint sh -v "$DEST":/tmp/dest {{ sillytavern_image }} \
@@ -17,7 +17,7 @@
       fi
     done
 
-    DEFAULT_USER=/opt/dockers/sillytavern/data/default-user
+    DEFAULT_USER={{ backup_source_docker_dir }}/sillytavern/data/default-user
     if [ -z "$(find "$DEFAULT_USER" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
       echo "Initializing empty default-user settings..."
       docker run --rm --entrypoint sh -v "$DEFAULT_USER":/tmp/dest {{ sillytavern_image }} \
@@ -30,9 +30,9 @@
   tags: [deploy, services, docker_apps, sillytavern, phase5]
 
 - name: Initialize extensions directory
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.shell: |
-    EXT_DIR="/opt/dockers/sillytavern/extensions"
+    EXT_DIR="{{ backup_source_docker_dir }}/sillytavern/extensions"
     if [ ! -d "$EXT_DIR" ] || [ -z "$(ls -A $EXT_DIR 2>/dev/null)" ]; then
       mkdir -p "$EXT_DIR"
       echo "Extensions directory is empty. Please install extensions via Web UI (Extensions -> Download Extensions & Assets)."
@@ -55,12 +55,12 @@
   tags: [deploy, services, docker_apps, sillytavern, phase5]
 
 - name: Deploy config file
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   no_log: true
   diff: false
   ansible.builtin.template:
     src: sillytavern_config.yaml.j2
-    dest: /opt/dockers/sillytavern/config/config.yaml
+    dest: "{{ backup_source_docker_dir }}/sillytavern/config/config.yaml"
     owner: "{{ docker_apps_docker_user_uid }}"
     group: "{{ docker_apps_docker_user_gid }}"
     mode: "0644"
@@ -108,10 +108,10 @@
     cdp_ports:
       - "{{ app_port_sillytavern }}:8000"
     cdp_volumes:
-      - "/opt/dockers/sillytavern/config:/home/node/app/config"
-      - "/opt/dockers/sillytavern/data:/home/node/app/data"
-      - "/opt/dockers/sillytavern/plugins:/home/node/app/plugins"
-      - "/opt/dockers/sillytavern/extensions:/home/node/app/public/scripts/extensions/third-party"
+      - "{{ backup_source_docker_dir }}/sillytavern/config:/home/node/app/config"
+      - "{{ backup_source_docker_dir }}/sillytavern/data:/home/node/app/data"
+      - "{{ backup_source_docker_dir }}/sillytavern/plugins:/home/node/app/plugins"
+      - "{{ backup_source_docker_dir }}/sillytavern/extensions:/home/node/app/public/scripts/extensions/third-party"
     cdp_env: "{{ docker_apps_sillytavern_env }}"
     cdp_healthcheck:
       test: ["CMD-SHELL", "netstat -ltn | grep -q :8000 || exit 1"]

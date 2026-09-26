@@ -89,7 +89,7 @@
     - phase3
 
 - name: Verify Redis logrotate configuration
-  ansible.builtin.import_tasks: ../../../common/tasks/verify_optional_logrotate.yml
+  ansible.builtin.import_tasks: "{{ role_path }}/../../../common/tasks/verify_optional_logrotate.yml"
   vars:
     optional_logrotate_owner: Redis
     optional_logrotate_enabled: "{{ redis_logrotate_enabled }}"

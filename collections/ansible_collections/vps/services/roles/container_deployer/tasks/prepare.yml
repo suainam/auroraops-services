@@ -1,18 +1,18 @@
 ---
 - name: Ensure data directories exist
-  become: true
+  become: "{{ container_deployer_become | default(true) }}"
   ansible.builtin.file:
     path: "{{ container_deployer_base_path }}/{{ container_deployer_name }}/{{ item }}"
     state: directory
     mode: "{{ container_deployer_dir_mode }}"
-    owner: "{{ container_deployer_dir_owner }}"
-    group: "{{ container_deployer_dir_group }}"
+    owner: "{{ container_deployer_dir_owner if (container_deployer_dir_owner | default('') | length > 0) else omit }}"
+    group: "{{ container_deployer_dir_group if (container_deployer_dir_group | default('') | length > 0) else omit }}"
   loop: "{{ container_deployer_dirs }}"
   when: container_deployer_dirs | length > 0
   tags: [deploy, services, container_deployer, phase5]
 
 - name: Initialize data from image
-  become: true
+  become: "{{ container_deployer_become | default(true) }}"
   ansible.builtin.shell: |
     docker run --rm --entrypoint sh \
       -v "{{ container_deployer_base_path }}/{{ container_deployer_name }}/{{ item }}:/tmp/dest" \
@@ -28,7 +28,7 @@
   tags: [deploy, services, container_deployer, phase5]
 
 - name: Fix permissions
-  become: true
+  become: "{{ container_deployer_become | default(true) }}"
   ansible.builtin.file:
     path: "{{ container_deployer_base_path }}/{{ container_deployer_name }}"
     state: directory

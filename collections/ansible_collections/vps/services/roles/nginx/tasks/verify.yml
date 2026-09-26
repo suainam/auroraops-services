@@ -83,7 +83,7 @@
     - phase4
 
 - name: Verify Nginx logrotate configuration
-  ansible.builtin.import_tasks: ../../../common/tasks/verify_optional_logrotate.yml
+  ansible.builtin.import_tasks: "{{ role_path }}/../../../common/tasks/verify_optional_logrotate.yml"
   vars:
     optional_logrotate_owner: Nginx
     optional_logrotate_enabled: "{{ nginx_logrotate_enabled }}"

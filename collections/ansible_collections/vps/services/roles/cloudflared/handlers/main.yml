@@ -6,10 +6,17 @@
   when: cloudflared_service_manager == 'systemd'
 
 - name: Restart cloudflared
-  become: true
+  become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
   ansible.builtin.service:
     name: "{{ cloudflared_service_name }}"
     state: restarted
+  when: (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin'
+
+- name: Restart cloudflared (Darwin)
+  ansible.builtin.shell: |
+    launchctl unload {{ lookup('env', 'HOME') }}/Library/LaunchAgents/com.cloudflare.cloudflared.plist 2>/dev/null || true
+    launchctl load -w {{ lookup('env', 'HOME') }}/Library/LaunchAgents/com.cloudflare.cloudflared.plist
+  when: (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Darwin'
 
 - name: Restart cloudflared watchdog
   become: true

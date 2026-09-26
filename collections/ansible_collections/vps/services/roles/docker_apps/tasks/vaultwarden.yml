@@ -2,18 +2,18 @@
 # Vaultwarden - 使用 container_deployer Meta 角色部署
 
 - name: Ensure vaultwarden config directory exists
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.file:
-    path: "/opt/dockers/vaultwarden"
+    path: "{{ backup_source_docker_dir }}/vaultwarden"
     state: directory
     mode: "0755"
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Copy vaultwarden env file to remote
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.copy:
     src: "vaultwarden.env"
-    dest: "/opt/dockers/vaultwarden/vaultwarden.env"
+    dest: "{{ backup_source_docker_dir }}/vaultwarden/vaultwarden.env"
     mode: "0600"
   no_log: true
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
@@ -39,21 +39,21 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Check cached vaultwarden admin token hash
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.stat:
     path: "{{ docker_apps_vaultwarden_admin_token_hash_file }}"
   register: docker_apps_vaultwarden_admin_token_hash_stat
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Check cached vaultwarden admin token fingerprint
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.stat:
     path: "{{ docker_apps_vaultwarden_admin_token_fingerprint_file }}"
   register: docker_apps_vaultwarden_admin_token_fingerprint_stat
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Check inherited Vaultwarden admin token hash
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.stat:
     path: "{{ docker_apps_vaultwarden_admin_token_hash_file }}"
   delegate_to: "{{ docker_apps_vaultwarden_admin_hash_source_host | default(inventory_hostname, true) }}"
@@ -64,7 +64,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Check inherited Vaultwarden admin token fingerprint
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.stat:
     path: "{{ docker_apps_vaultwarden_admin_token_fingerprint_file }}"
   delegate_to: "{{ docker_apps_vaultwarden_admin_hash_source_host | default(inventory_hostname, true) }}"
@@ -89,7 +89,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Read inherited Vaultwarden admin token hash
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.slurp:
     src: "{{ docker_apps_vaultwarden_admin_token_hash_file }}"
   delegate_to: "{{ docker_apps_vaultwarden_admin_hash_source_host | default(inventory_hostname, true) }}"
@@ -101,7 +101,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Read inherited Vaultwarden admin token fingerprint
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.slurp:
     src: "{{ docker_apps_vaultwarden_admin_token_fingerprint_file }}"
   delegate_to: "{{ docker_apps_vaultwarden_admin_hash_source_host | default(inventory_hostname, true) }}"
@@ -128,7 +128,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Cache inherited Vaultwarden admin token hash locally
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.copy:
     content: "{{ docker_apps_vaultwarden_source_hash.content | b64decode | trim }}\n"
     dest: "{{ docker_apps_vaultwarden_admin_token_hash_file }}"
@@ -140,7 +140,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Cache inherited Vaultwarden admin token fingerprint locally
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.copy:
     content: "{{ docker_apps_vaultwarden_source_fingerprint.content | b64decode | trim }}\n"
     dest: "{{ docker_apps_vaultwarden_admin_token_fingerprint_file }}"
@@ -152,7 +152,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Read cached vaultwarden admin token hash
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.slurp:
     src: "{{ docker_apps_vaultwarden_admin_token_hash_file }}"
   register: docker_apps_vaultwarden_admin_token_hash_cached
@@ -161,7 +161,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Read cached vaultwarden admin token fingerprint
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.slurp:
     src: "{{ docker_apps_vaultwarden_admin_token_fingerprint_file }}"
   register: docker_apps_vaultwarden_admin_token_fingerprint_cached
@@ -192,7 +192,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Generate vaultwarden admin token hash from plaintext
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.command:
     argv:
       - script
@@ -232,7 +232,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Cache generated vaultwarden admin token hash
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.copy:
     content: "{{ docker_apps_vaultwarden_admin_token_hash_generated_value }}\n"
     dest: "{{ docker_apps_vaultwarden_admin_token_hash_file }}"
@@ -242,7 +242,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Cache vaultwarden admin token fingerprint
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.copy:
     content: "{{ docker_apps_vaultwarden_admin_token_fingerprint }}\n"
     dest: "{{ docker_apps_vaultwarden_admin_token_fingerprint_file }}"
@@ -272,9 +272,9 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Render vaultwarden admin token from generated hash
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.lineinfile:
-    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    path: "{{ backup_source_docker_dir }}/vaultwarden/vaultwarden.env"
     regexp: '^ADMIN_TOKEN='
     line: "ADMIN_TOKEN={{ docker_apps_vaultwarden_admin_token_hash_value }}"
     create: true
@@ -283,9 +283,9 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Render vaultwarden SMTP username from vault
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.lineinfile:
-    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    path: "{{ backup_source_docker_dir }}/vaultwarden/vaultwarden.env"
     regexp: '^SMTP_USERNAME='
     line: "SMTP_USERNAME={{ docker_apps_vaultwarden_smtp_username }}"
     create: true
@@ -294,9 +294,9 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Render vaultwarden SMTP password from vault
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.lineinfile:
-    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    path: "{{ backup_source_docker_dir }}/vaultwarden/vaultwarden.env"
     regexp: '^SMTP_PASSWORD='
     line: "SMTP_PASSWORD={{ docker_apps_vaultwarden_smtp_password }}"
     create: true
@@ -306,9 +306,9 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Configure vaultwarden DOMAIN in env
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.lineinfile:
-    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    path: "{{ backup_source_docker_dir }}/vaultwarden/vaultwarden.env"
     regexp: '^DOMAIN='
     line: "DOMAIN=https://{{ docker_apps_vaultwarden_domain | default('bws.msuai.top') }}"
     create: true
@@ -317,9 +317,9 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Check rendered Vaultwarden env file for container dry-run
-  become: true
+  become: "{{ docker_apps_become | default(true) }}"
   ansible.builtin.stat:
-    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    path: "{{ backup_source_docker_dir }}/vaultwarden/vaultwarden.env"
   register: docker_apps_vaultwarden_env_stat
   check_mode: false
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
@@ -343,10 +343,10 @@
     cdp_ports:
       - "{{ docker_apps_vaultwarden_publish_prefix }}{{ docker_apps_app_port_vaultwarden_http }}:80"
     cdp_volumes:
-      - "/opt/dockers/vaultwarden/data:/data"
+      - "{{ backup_source_docker_dir }}/vaultwarden/data:/data"
     cdp_env_file: >-
       {{
-        '/opt/dockers/vaultwarden/vaultwarden.env'
+        (backup_source_docker_dir ~ '/vaultwarden/vaultwarden.env')
         if docker_apps_vaultwarden_env_stat.stat.exists
         else ''
       }}

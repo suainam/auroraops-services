@@ -33,7 +33,10 @@ docker_apps_sub_store_pull: false
 
 # Shared Docker data root used by backup-aware setup tasks.  Keep the role
 # runnable when the parent inventory does not import the optional backup.yml.
-backup_source_docker_dir: "/opt/dockers"
+docker_apps_become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
+docker_apps_dir_owner: "{{ omit if (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Darwin' else 'root' }}"
+docker_apps_dir_group: "{{ omit if (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Darwin' else 'root' }}"
+backup_source_docker_dir: "{{ ('/Users/' ~ (ansible_facts.user_id | default(ansible_user_id | default('suai'))) ~ '/data/dockers') if (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Darwin' else '/opt/dockers' }}"
 
 # GCLI2API
 docker_apps_app_port_gcli2api_api: "{{ app_port_gcli2api_api | default(30006) }}"
@@ -90,9 +93,9 @@ docker_apps_vaultwarden_smtp_username: >-
 docker_apps_vaultwarden_smtp_password: >-
   {{ vaultwarden_smtp_password | default(vault_vaultwarden_smtp_password | default('')) }}
 docker_apps_vaultwarden_admin_token_hash_file: >-
-  {{ vaultwarden_admin_token_hash_file | default('/opt/dockers/vaultwarden/.admin_token.argon2') }}
+  {{ vaultwarden_admin_token_hash_file | default(backup_source_docker_dir ~ '/vaultwarden/.admin_token.argon2') }}
 docker_apps_vaultwarden_admin_token_fingerprint_file: >-
-  {{ vaultwarden_admin_token_fingerprint_file | default('/opt/dockers/vaultwarden/.admin_token.sha256') }}
+  {{ vaultwarden_admin_token_fingerprint_file | default(backup_source_docker_dir ~ '/vaultwarden/.admin_token.sha256') }}
 
 # Gemini Balance
 docker_apps_app_port_gemini_balance: "{{ app_port_gemini_balance | default(30009) }}"

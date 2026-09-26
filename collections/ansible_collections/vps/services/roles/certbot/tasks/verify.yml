@@ -53,7 +53,7 @@
     - certbot_verify_cert_expiry
     - phase4
 - name: Verify Certbot logrotate configuration
-  ansible.builtin.import_tasks: ../../../common/tasks/verify_optional_logrotate.yml
+  ansible.builtin.import_tasks: "{{ role_path }}/../../../common/tasks/verify_optional_logrotate.yml"
   vars:
     optional_logrotate_owner: Certbot
     optional_logrotate_enabled: "{{ certbot_logrotate_enabled }}"

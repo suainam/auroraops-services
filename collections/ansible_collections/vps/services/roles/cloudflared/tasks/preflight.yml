@@ -10,15 +10,17 @@
     cloudflared_service_manager: >-
       {{ 'openrc'
          if (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Alpine'
-         else (ansible_service_mgr | default('systemd')) }}
+         else ('launchd'
+           if (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Darwin'
+           else (ansible_service_mgr | default('systemd'))) }}
   tags: [deploy, services, cloudflared, cloudflared_install, phase4]
 
 - name: Validate cloudflared platform and configuration
   ansible.builtin.assert:
     that:
-      - ansible_os_family in ['Debian', 'Alpine']
-      - cloudflared_service_manager in ['systemd', 'openrc']
-      - ansible_architecture in cloudflared_package_arch
+      - (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) in ['Debian', 'Alpine', 'Darwin']
+      - cloudflared_service_manager in ['systemd', 'openrc', 'launchd']
+      - (ansible_architecture in cloudflared_package_arch or (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Darwin')
       - cloudflared_tunnel_id is match('^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
       - cloudflared_tunnel_credentials is mapping
       - cloudflared_tunnel_credentials.AccountTag | default('') | length > 0
@@ -34,7 +36,7 @@
   no_log: true
 
 - name: Inspect cloudflared baseline paths
-  become: true
+  become: "{{ (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) != 'Darwin' }}"
   ansible.builtin.stat:
     path: "{{ item.path }}"
   loop:
@@ -63,7 +65,7 @@
 - name: Refuse unmanaged cloudflared adoption
   ansible.builtin.assert:
     that:
-      - not cloudflared_preexisting or cloudflared_baseline_exists
+      - not cloudflared_preexisting or cloudflared_baseline_exists or (ansible_facts.os_family | default(ansible_os_family | default('Debian'))) == 'Darwin'
     fail_msg: "Existing unmanaged cloudflared state requires explicit migration before deployment"
 
 - name: Check explicitly managed Tunnel DNS
