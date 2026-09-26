@@ -34,6 +34,20 @@ singbox_reality_short_id_count: 8
 singbox_wireguard_enabled: false
 singbox_wireguard_system: false
 singbox_wireguard_http_inbound: false
-singbox_wireguard_server_port: 30059
+# No default. This was 30059, which is the port being given up by the retired
+# residential proxy (#40) -- so the sing-box WireGuard outbound defaulted to a
+# port that means something else entirely, and would have kept dialling it after
+# the reassignment without reporting anything. The hub's real port is the
+# authority's concern: wireguard_udp_ports.hub, overridden per host where the
+# provider forces it (cc15 is pinned to 30071). If sing-box's own WireGuard
+# outbound is ever re-enabled, it must be given that value explicitly.
+singbox_wireguard_server_port: ""
+# Likewise undeclared rather than defaulted. It had no default at all, so
+# `| default(10080)` in the template was the only definition of the port --
+# a number living in a template with no owner and no way to find it. Both
+# values are empty on purpose: this endpoint is only rendered when
+# singbox_wireguard_enabled is true, and an empty value makes a mistake fail
+# loudly instead of quietly dialling 10080 at somebody.
+singbox_wireguard_http_port: ""
 singbox_wireguard_allowed_ips: ["10.144.10.0/24"]
 singbox_wireguard_keepalive: 25
