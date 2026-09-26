@@ -42,6 +42,9 @@ container_deployer_pull: "{{ cdp_pull | default(true) }}"
 container_deployer_cdp_pull: "{{ cdp_pull | default(true) }}"
 container_deployer_healthcheck: "{{ cdp_healthcheck | default({}) }}"
 container_deployer_healthcheck_min_interval: "1800s"
+# Escape hatch for the no_log guards on the deploy tasks. Leave false in
+# production; set true only to read a failure that no_log would otherwise hide.
+container_deployer_debug: false
 
 container_deployer_log_driver: "{{ cdp_log_driver | default('json-file') }}"
 container_deployer_log_options: "{{ cdp_log_options | default({'max-size': '5m', 'max-file': '3'}) }}"

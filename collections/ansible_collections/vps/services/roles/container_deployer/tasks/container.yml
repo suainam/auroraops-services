@@ -12,7 +12,7 @@
     user: "{{ container_deployer_user if container_deployer_user | length > 0 else omit }}"
     working_dir: "{{ container_deployer_working_dir if container_deployer_working_dir | length > 0 else omit }}"
     networks: "{{ container_deployer_networks if container_deployer_networks | length > 0 else omit }}"
-    dns: "{{ container_deployer_dns if container_deployer_dns | length > 0 else omit }}"
+    dns_servers: "{{ container_deployer_dns if container_deployer_dns | length > 0 else omit }}"
     network_mode: "{{ container_deployer_network_mode if container_deployer_network_mode | length > 0 else omit }}"
     ports: "{{ container_deployer_ports if container_deployer_ports | length > 0 else omit }}"
     volumes: "{{ container_deployer_volumes if container_deployer_volumes | length > 0 else omit }}"
@@ -61,4 +61,10 @@
     log_options: "{{ container_deployer_log_options }}"
     recreate: "{{ container_deployer_recreate | bool }}"
     state: "{{ container_deployer_state }}"
+  # cdp_env carries management keys and object-store credentials. Without this,
+  # `make check` renders them in plaintext via --check --diff.
+  # Opt out with -e container_deployer_debug=true when a failure must be read; a
+  # blanket no_log would make every failure of this task unreadable, which is
+  # exactly how the 2026-09-26 "Unsupported parameters: dns" failure hid.
+  no_log: "{{ not (container_deployer_debug | bool | default(false)) }}"
   tags: [deploy, services, container_deployer, phase5]
