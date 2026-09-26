@@ -79,6 +79,28 @@
     - docker_apps_cliproxy_db_exists.stdout | default('') | trim != '1'
   tags: [deploy, services, docker_apps, cliproxyapi, init_db, phase5]
 
+- name: Assert CLIProxyAPI object-store credentials are complete
+  become: true
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - >-
+        (cliproxyapi_docker_storage_driver != 's3')
+        or (
+          (cliproxyapi_docker_s3_endpoint | default('') | string | length > 0)
+          and (cliproxyapi_docker_s3_bucket | default('') | string | length > 0)
+          and (cliproxyapi_docker_s3_access_key | default('') | string | length > 0)
+          and (cliproxyapi_docker_s3_secret_key | default('') | string | length > 0)
+        )
+    fail_msg: >-
+      storage_driver is 's3' but the object-store configuration is incomplete.
+      Refusing to deploy: an empty endpoint or key would start the container
+      against a broken token store, or silently fall back to local files while
+      the bind mounts for config.yaml and auths are already dropped.
+      Populate cliproxyapi_s3_endpoint / _bucket / _access_key / _secret_key in
+      the Vault, or set cliproxyapi_storage_driver to 'file'.
+  tags: [deploy, services, cliproxyapi, phase5]
+
 - name: Ensure cliproxyapi directory exists
   become: true
   ansible.builtin.file:
@@ -125,28 +147,6 @@
       官方 Antigravity 模型目录缺失或不包含 gemini-pro-agent，
       请先运行 make refresh-cliproxyapi-models
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
-
-- name: Assert CLIProxyAPI object-store credentials are complete
-  become: true
-  no_log: true
-  ansible.builtin.assert:
-    that:
-      - >-
-        (cliproxyapi_docker_storage_driver != 's3')
-        or (
-          (cliproxyapi_docker_s3_endpoint | default('') | string | length > 0)
-          and (cliproxyapi_docker_s3_bucket | default('') | string | length > 0)
-          and (cliproxyapi_docker_s3_access_key | default('') | string | length > 0)
-          and (cliproxyapi_docker_s3_secret_key | default('') | string | length > 0)
-        )
-    fail_msg: >-
-      storage_driver is 's3' but the object-store configuration is incomplete.
-      Refusing to deploy: an empty endpoint or key would start the container
-      against a broken token store, or silently fall back to local files while
-      the bind mounts for config.yaml and auths are already dropped.
-      Populate cliproxyapi_s3_endpoint / _bucket / _access_key / _secret_key in
-      the Vault, or set cliproxyapi_storage_driver to 'file'.
-  tags: [deploy, services, cliproxyapi, phase5]
 
 - name: Check whether cliproxyapi config already exists
   become: true
