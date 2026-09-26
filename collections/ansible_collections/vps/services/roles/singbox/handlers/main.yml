@@ -4,7 +4,6 @@
 # host wrote new configuration but never restarted, so it kept serving the
 # previous configuration indefinitely and every check still passed.
 - name: Restart singbox service
-  become: true
   ansible.builtin.include_tasks: restart.yml
   tags: [deploy, verify, rollback, services, singbox, phase5]
 
