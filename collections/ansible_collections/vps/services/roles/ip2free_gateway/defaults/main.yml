@@ -3,6 +3,13 @@ ip2free_gateway_ip2free_dir: "/opt/ip2free"
 ip2free_gateway_ip2free_python: "/opt/aurora_venv/bin/python3"
 ip2free_gateway_ip2free_pip: "/opt/aurora_venv/bin/pip"
 ip2free_gateway_ip2free_config_file: "{{ ip2free_gateway_ip2free_dir }}/config.json"
+# The sing-box fragment this role's agent rewrites on its own schedule. It has no
+# Ansible-managed counterpart: the sing-box role ships a 06_ip2free.json.j2
+# template that nothing deploys, so the file on disk is written by
+# files/update_outbounds.py and is invisible to every other role. That is why it
+# has to be named here, and why it is the artifact that outlives a disabled
+# capability unless something deliberately removes it.
+ip2free_gateway_ip2free_singbox_fragment: "{{ singbox_config_dir | default('/opt/dockers/singbox/config') }}/06_ip2free.json"
 ip2free_gateway_ip2free_email: ""
 ip2free_gateway_ip2free_password: ""
 ip2free_gateway_ip2free_proxy_source: "both"
