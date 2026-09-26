@@ -347,5 +347,8 @@
   loop: "{{ nginx_provider_responses.results | default([]) }}"
   loop_control:
     label: Provider YAML response
+  when:
+    - singbox_domain is defined
+    - singbox_domain in nginx_sites_to_mutate
   no_log: true
   tags: [verify, services, nginx, nginx_site_config, phase4]
