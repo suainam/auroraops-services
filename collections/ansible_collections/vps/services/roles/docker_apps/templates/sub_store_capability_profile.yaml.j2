@@ -1,4 +1,4 @@
-# Mihomo profile backed by Sub-Store sources with pure keyword-based lightweight grouping (#29).
+# Mihomo profile backed by Sub-Store sources with data-driven keyword grouping (#29, #46, #47).
 
 mixed-port: 7890
 allow-lan: false
@@ -20,172 +20,213 @@ geox-url:
 proxies: []
 {% set capability_providers = docker_apps_sub_store_capability_providers %}
 
+{# 数据驱动：按 display-group 动态聚合 provider-id，彻底消除具体机器名称的硬编码 #}
+{% set vps_providers = namespace(items=[]) %}
+{% set nat_providers = namespace(items=[]) %}
+{% set bp_providers  = namespace(items=[]) %}
+{% set sk_providers  = namespace(items=[]) %}
+{% for p in capability_providers %}
+{% if p.enabled | default(true) %}
+{% set pid = p['provider-id'] | default(p.name) %}
+{% set dg = p['display-group'] | default('') %}
+{% if dg == 'VPS' %}
+{% set vps_providers.items = vps_providers.items + [pid] %}
+{% elif dg == 'NAT' %}
+{% set nat_providers.items = nat_providers.items + [pid] %}
+{% elif dg == 'BP' %}
+{% set bp_providers.items = bp_providers.items + [pid] %}
+{% elif dg == 'SK' %}
+{% set sk_providers.items = sk_providers.items + [pid] %}
+{% endif %}
+{% endif %}
+{% endfor %}
+
 {% include 'sub_store_capability_profile/proxy_providers.yaml.j2' %}
 
 proxy-groups:
   # ========================================================
   # 1. 顶层业务入口 (Top-Level Services, 常用排在最前面)
   # ========================================================
-  - name: "🤖 AI 服务"
-    type: select
-    proxies:
-      - "🛡️ 自建优先 (AI 容灾)"
-      - "🖥️ 自建 VPS"
-      - "🧭 自建 NAT"
-      - "🌐 外部 BP · AI"
-      - "🌸 外部 SK · 全部"
-      - DIRECT
-
-  - name: "🐙 GitHub"
-    type: select
-    proxies:
-      - "🖥️ 自建 VPS"
-      - "🧭 自建 NAT"
-      - "⚡ BP 千兆优选"
-      - "🌸 外部 SK · 全部"
-      - DIRECT
-
-  - name: "📹 YouTube"
-    type: select
-    proxies:
-      - "⚡ BP 千兆优选"
-      - "🖥️ 自建 VPS"
-      - "🧭 自建 NAT"
-      - "🌐 外部 BP · 全部"
-      - "🌸 外部 SK · 全部"
-      - DIRECT
-
-  - name: "📺 B站港澳台"
-    type: select
-    proxies:
-      - "🧭 自建 NAT · 港澳"
-      - "🌐 外部 BP · 港澳台"
-      - "🌸 外部 SK · 港澳台"
-      - DIRECT
-
   - name: "🚀 默认代理"
     type: select
     proxies:
-      - "⚡ BP 千兆优选"
-      - "🛡️ 自建优先 (AI 容灾)"
-      - "🖥️ 自建 VPS"
-      - "🧭 自建 NAT"
-      - "🌐 外部 BP · 全部"
-      - "🌸 外部 SK · 全部"
+      - "⚡ 千兆优选"
+      - "🛡️ AI 容灾"
+      - "🖥️ VPS"
+      - "🧭 NAT"
+      - "🌐 BP"
+      - "🌸 SK"
       - DIRECT
 
-  # ========================================================
-  # 2. 底层节点实体池 (Entity Pools, 纯手动查看与调试，排在后面)
-  # ========================================================
-  - name: "🖥️ 自建 VPS"
+  - name: "🤖 AI 服务"
     type: select
-    use:
-      - source-cc15
-      - source-qqg1299
+    proxies:
+      - "🛡️ AI 容灾"
+      - "🖥️ VPS"
+      - "🧭 NAT"
+      - "🌐 BP · AI"
+      - "🌸 SK"
+      - DIRECT
 
-  - name: "🧭 自建 NAT"
-    type: select
-    use:
-      - source-nat-hk084
-      - source-nat-hk216
-      - source-nat-jp3
-
-  - name: "🌐 外部 BP · 全部"
-    type: select
-    use:
-      - source-baipiao
-
-  - name: "🌸 外部 SK · 全部"
-    type: select
-    use:
-      - source-sakura
-
-  # ========================================================
-  # 3. 内部策略与定向子组 (全部 hidden: true, 前端彻底隐形)
-  # ========================================================
-  - name: "🛡️ 自建优先 (AI 容灾)"
+  - name: "🛡️ AI 容灾"
     type: fallback
     proxies:
-      - "🖥️ 自建 VPS · AI"
-      - "🧭 自建 NAT · AI"
-      - "🌐 外部 BP · AI"
+      - "🖥️ VPS · AI"
+      - "🧭 NAT · AI"
+      - "🌐 BP · AI"
       - DIRECT
     url: https://chatgpt.com/cdn-cgi/trace
     interval: 300
     timeout: 3000
     lazy: true
-    hidden: true
 
-  - name: "⚡ BP 千兆优选"
+  - name: "📹 视频开发"
+    type: select
+    proxies:
+      - "⚡ 千兆优选"
+      - "🖥️ VPS"
+      - "🧭 NAT"
+      - "🌐 BP"
+      - "🌸 SK"
+      - DIRECT
+
+  - name: "⚡ 千兆优选"
+    type: fallback
+    use:
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)1000M|神速|快"
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    lazy: true
+
+  - name: "📺 B站港澳"
+    type: select
+    proxies:
+      - "香港优选"
+      - "🧭 NAT · 港澳"
+      - "🌐 BP · 港澳"
+      - "🌸 SK · 港澳"
+      - DIRECT
+
+  # ========================================================
+  # 2. 底层节点实体池 (Entity Pools, 纯手动查看与单选)
+  # ========================================================
+  - name: "🖥️ VPS"
+    type: select
+    use:
+{% for pid in vps_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+
+  - name: "🧭 NAT"
+    type: select
+    use:
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+
+  - name: "🌐 BP"
+    type: select
+    use:
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+
+  - name: "🌸 SK"
+    type: select
+    use:
+{% for pid in sk_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+
+  # ========================================================
+  # 3. 内部策略与定向子组 (全部 hidden: true, 前端隐形)
+  # ========================================================
+  # 香港最低延迟竞速优选组，专门为 📺 B站港澳 默认调用
+  - name: "香港优选"
     type: url-test
     use:
-      - source-baipiao
-    filter: "(?i)1000M|神速|快"
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)🇭🇰|港|hk|hong\\s*kong"
     url: https://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
     lazy: true
     hidden: true
 
-  - name: "🖥️ 自建 VPS · AI"
+  - name: "🖥️ VPS · AI"
     type: fallback
     use:
-      - source-cc15
-      - source-qqg1299
+{% for pid in vps_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
     url: https://chatgpt.com/cdn-cgi/trace
     interval: 300
     lazy: true
     hidden: true
 
-  - name: "🧭 自建 NAT · AI"
+  - name: "🧭 NAT · AI"
     type: fallback
     use:
-      - source-nat-hk084
-      - source-nat-hk216
-      - source-nat-jp3
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
     url: https://chatgpt.com/cdn-cgi/trace
     interval: 300
     lazy: true
     hidden: true
 
-  # 精准匹配真正的 AI 关键词，排除 [baipiao] 自身拼音干扰
-  - name: "🌐 外部 BP · AI"
+  # 精准匹配真正的 AI 关键词，彻底排除 [baipiao] 自身拼音误命中
+  - name: "🌐 BP · AI"
     type: fallback
     use:
-      - source-baipiao
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
     filter: "(?i)Gemini|ChatGPT|GPT|直连AI|[-_\\s]AI|AI[-_\\s$]"
     url: https://chatgpt.com/cdn-cgi/trace
     interval: 300
     lazy: true
     hidden: true
 
-  # B站港澳台专用定向子组
-  - name: "🧭 自建 NAT · 港澳"
+  # 港澳定向子组
+  - name: "🧭 NAT · 港澳"
     type: fallback
     use:
-      - source-nat-hk084
-      - source-nat-hk216
-      - source-nat-jp3
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
     filter: "(?i)🇭🇰|港|hk|hong\\s*kong|🇹🇼|台|tw|taiwan"
     url: https://www.gstatic.com/generate_204
     interval: 300
     lazy: true
     hidden: true
 
-  - name: "🌐 外部 BP · 港澳台"
+  - name: "🌐 BP · 港澳"
     type: fallback
     use:
-      - source-baipiao
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
     filter: "(?i)🇭🇰|香港|🇹🇼|台湾|HK|TW"
     url: https://www.gstatic.com/generate_204
     interval: 300
     lazy: true
     hidden: true
 
-  - name: "🌸 外部 SK · 港澳台"
+  - name: "🌸 SK · 港澳"
     type: select
     use:
-      - source-sakura
+{% for pid in sk_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
     filter: "(?i)🇭🇰|香港|🇹🇼|台湾|HK|TW"
     hidden: true
 
@@ -193,8 +234,8 @@ proxy-groups:
   - name: "⚡ 快速节点"
     type: select
     proxies:
-      - "⚡ BP 千兆优选"
-      - "🖥️ 自建 VPS"
+      - "⚡ 千兆优选"
+      - "🖥️ VPS"
       - DIRECT
     hidden: true
 

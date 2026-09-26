@@ -42,19 +42,17 @@
   - PROCESS-NAME-REGEX,(?i)^(claude|chatgpt|gpt|gemini|agy|antigravity|opencode|pi|omp|oh-my-pi|cursor|windsurf)(\.exe)?$,🤖 AI 服务
   - PROCESS-NAME-REGEX,(?i)^(Claude|ChatGPT|Cursor|Windsurf|Antigravity)\s+Helper.*$,🤖 AI 服务
 
-  # 📺 B站港澳台
-  - DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳台
-  - RULE-SET,bilibili-hmt,📺 B站港澳台
-  - DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳台
+  # 📺 B站港澳
+  - DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳
+  - RULE-SET,bilibili-hmt,📺 B站港澳
+  - DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳
 
-  # 📹 YouTube / 视频与流媒体
-  - RULE-SET,youtube,📹 YouTube
-  - RULE-SET,disney,📹 YouTube
-  - RULE-SET,netflix,📹 YouTube
-  - RULE-SET,spotify,📹 YouTube
-
-  # 🐙 GitHub
-  - RULE-SET,github,🐙 GitHub
+  # 📹 视频开发 (GitHub + YouTube + 流媒体大流量加速)
+  - RULE-SET,github,📹 视频开发
+  - RULE-SET,youtube,📹 视频开发
+  - RULE-SET,disney,📹 视频开发
+  - RULE-SET,netflix,📹 视频开发
+  - RULE-SET,spotify,📹 视频开发
 
   # 🚀 默认代理
   - RULE-SET,telegram,🚀 默认代理
