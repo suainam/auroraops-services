@@ -204,7 +204,14 @@
   diff: false
   ansible.builtin.replace:
     path: "{{ cliproxyapi_docker_config_path }}"
-    regexp: '(?ms)^openai-compatibility:\n.*?(?=^[^ \t#\r\n][^:\r\n]*:\s*$|\Z)'
+    # The terminating lookahead must identify a real top-level key: a plain
+    # identifier at column 0. List items (`- api-key-entries:`) and comments are
+    # not keys, and the match must not run past them into the rest of the file.
+    # The managed Antigravity alias block is appended at EOF, so its BEGIN marker
+    # is also a terminator — otherwise, on a config where `openai-compatibility`
+    # is the last key, the marker would be swallowed and blockinfile would append
+    # a duplicate block on every run.
+    regexp: '(?ms)^openai-compatibility:\n.*?(?=^(?!-\s|#)[A-Za-z0-9_][A-Za-z0-9_.-]*:|^# BEGIN AuroraOps|\Z)'
     replace: "{{ lookup('template', 'cliproxyapi_openai_compatibility.yaml.j2') }}"
   when:
     - cliproxyapi_config.stat.exists
@@ -391,7 +398,7 @@
               'OBJECTSTORE_SECRET_KEY': cliproxyapi_docker_s3_secret_key,
               'OBJECTSTORE_LOCAL_PATH': cliproxyapi_docker_s3_local_path
             }
-            if (cliproxyapi_docker_storage_driver == 's3' or cliproxyapi_docker_s3_endpoint | default('') | length > 0)
+            if (cliproxyapi_object_store_active | bool)
             else (
               {
                 'PGSTORE_DSN':
@@ -461,9 +468,9 @@
           [
             "/opt/dockers/cliproxyapi/objectstore:/CLIProxyAPI/objectstore"
           ]
-          if (cliproxyapi_docker_storage_driver == 's3' or cliproxyapi_docker_s3_endpoint | default('') | length > 0)
+          if (cliproxyapi_object_store_active | bool)
           else [
-            "{{ cliproxyapi_docker_config_path }}:/CLIProxyAPI/config.yaml",
+            cliproxyapi_docker_host_config_path ~ ":/CLIProxyAPI/config.yaml",
             "/opt/dockers/cliproxyapi/auths:/root/.cli-proxy-api"
           ]
         )

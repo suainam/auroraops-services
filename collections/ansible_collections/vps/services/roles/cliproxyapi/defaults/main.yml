@@ -35,17 +35,25 @@ cliproxyapi_docker_dir: "/opt/dockers/cliproxyapi"
 # and mirrors to the bucket in both directions. Reconciling the old host path in
 # S3 mode wrote a file the container never reads, so the role reported `changed`
 # while the effective configuration stayed untouched.
+# The driver alone decides the mode. It must NOT be inferred from a non-empty
+# endpoint: the R2 keys live in the Vault, so "endpoint is set" is true for every
+# host whether or not object storage is wanted. Inferring the mode from that made
+# `cliproxyapi_storage_driver: file` powerless — the container stayed on the object
+# store, the config.yaml/auths bind mounts never came back, and the role kept
+# reconciling the object-store mirror while reporting a change on every run.
 cliproxyapi_object_store_active: >-
-  {{
-    (cliproxyapi_docker_storage_driver == 's3')
-    or (cliproxyapi_docker_s3_endpoint | default('', true) | string | length > 0)
-  }}
+  {{ cliproxyapi_docker_storage_driver == 's3' }}
 cliproxyapi_docker_config_path: >-
   {{
     (cliproxyapi_docker_dir ~ '/objectstore/config/config.yaml')
     if (cliproxyapi_object_store_active | bool)
     else (cliproxyapi_docker_dir ~ '/config.yaml')
   }}
+# Bind-mount source for the file-mode branch. Distinct from the path above
+# because a volume spec is assembled inside a Jinja expression, where each entry
+# is a string literal: a nested `{{ }}` is not re-evaluated and reaches Docker
+# verbatim, which rejects it as an invalid volume name.
+cliproxyapi_docker_host_config_path: "{{ cliproxyapi_docker_dir }}/config.yaml"
 cliproxyapi_docker_auth_dir: "{{ cliproxyapi_docker_dir }}/auths"
 cliproxyapi_image: "eceasy/cli-proxy-api:v7.3.2"
 cliproxyapi_docker_image: "{{ cliproxyapi_image }}"
