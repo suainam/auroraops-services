@@ -37,3 +37,71 @@
     fail_msg: "WireGuard interface {{ wireguard_native_interface }} is not initialized"
   when: wireguard_native_enabled | bool
   tags: [verify, services, wireguard_native, wireguard_native_verify, phase3]
+
+# Configuration equality is not availability. The assertions above only prove
+# that the service is up and the interface exists, so the values below are read
+# back from the running kernel interface: the port it actually listens on, the
+# addresses it actually holds, and whether any peer has actually completed a
+# handshake. Only aggregates are collected, never keys.
+- name: Read the port the interface actually listens on
+  become: true
+  ansible.builtin.command: "wg show {{ wireguard_native_interface }} listen-port"
+  register: wireguard_native_actual_port
+  changed_when: false
+  when: wireguard_native_enabled | bool
+  tags: [verify, services, wireguard_native, wireguard_native_verify, phase3]
+
+- name: Read the addresses the interface actually holds
+  become: true
+  ansible.builtin.command: "ip -4 -o addr show {{ wireguard_native_interface }}"
+  register: wireguard_native_actual_addresses
+  changed_when: false
+  when: wireguard_native_enabled | bool
+  tags: [verify, services, wireguard_native, wireguard_native_verify, phase3]
+
+- name: Count the peers that have completed a handshake
+  become: true
+  ansible.builtin.shell: "wg show {{ wireguard_native_interface }} latest-handshakes | awk '{print $2}' | grep -c '^[1-9]' || true"
+  register: wireguard_native_handshake_count
+  changed_when: false
+  when: wireguard_native_enabled | bool
+  tags: [verify, services, wireguard_native, wireguard_native_verify, phase3]
+
+- name: Assert the interface listens on the planned port
+  ansible.builtin.assert:
+    that:
+      - wireguard_native_actual_port.stdout | trim | int == wireguard_native_port | int
+    fail_msg: >-
+      {{ wireguard_native_interface }} listens on port
+      {{ wireguard_native_actual_port.stdout | trim }} but the port authority
+      plans {{ wireguard_native_port }}. The running interface and the
+      controlled configuration have diverged.
+  when: wireguard_native_enabled | bool
+  tags: [verify, services, wireguard_native, wireguard_native_verify, phase3]
+
+- name: Assert the interface holds the planned address
+  ansible.builtin.assert:
+    that:
+      - wireguard_native_address.split('/')[0] in wireguard_native_actual_addresses.stdout
+    fail_msg: >-
+      {{ wireguard_native_interface }} does not hold
+      {{ wireguard_native_address }} as planned by the topology.
+  when: wireguard_native_enabled | bool
+  tags: [verify, services, wireguard_native, wireguard_native_verify, phase3]
+
+# A spoke that dials outward is only reachable if the hub completed a handshake
+# with it. Counting completed handshakes is the availability signal; handshake
+# age is not, because sessions rekey on a fixed timer and the age cycles through
+# its whole range on a perfectly healthy tunnel.
+- name: Assert at least one peer has completed a handshake
+  ansible.builtin.assert:
+    that:
+      - wireguard_native_handshake_count.stdout | trim | int > 0
+    fail_msg: >-
+      No peer on {{ wireguard_native_interface }} has completed a handshake.
+      A rendered configuration and an active service prove nothing about
+      reachability.
+  when:
+    - wireguard_native_enabled | bool
+    - wireguard_native_role == 'client'
+  tags: [verify, services, wireguard_native, wireguard_native_verify, phase3]

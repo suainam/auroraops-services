@@ -10,7 +10,13 @@ wireguard_native_service_name: "wg-quick@{{ wireguard_native_interface }}"
 # 本机参数
 wireguard_native_role: "client"  # server | client
 wireguard_native_address: "10.144.10.15/32"
-wireguard_native_port: 30059
+# The listen port is mandatory and has no default on purpose. A default here
+# would be a second, silent copy of the port allocation: it can name a port that
+# the authority has already reassigned, and nothing would notice until a peer
+# stopped reaching this host. Inventing an ephemeral port is worse still, so
+# preflight fails closed instead. Hosts must set this from the port source of
+# truth (app_port_wireguard_spoke / app_port_wireguard_hub).
+wireguard_native_port: ""
 wireguard_native_private_key: ""
 wireguard_native_save_config: false
 
