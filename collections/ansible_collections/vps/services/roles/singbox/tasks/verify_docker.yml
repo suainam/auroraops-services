@@ -1,4 +1,10 @@
 ---
+- name: Verify Sing-box configuration contract
+  ansible.builtin.include_tasks: verify_config_contract.yml
+  vars:
+    singbox_verify_config_dir: "{{ singbox_config_dir }}"
+  tags: [verify, services, singbox, phase5]
+
 - name: Verify Sing-box container is running
   become: true
   community.docker.docker_container_info:

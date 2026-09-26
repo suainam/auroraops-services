@@ -143,7 +143,7 @@
       "type": "vless",
       "tag": "in-zt-relay",
       "listen": "{{ singbox_zt_ip }}",
-      "listen_port": {{ singbox_zt_relay_port | default(40052) }},
+      "listen_port": {{ singbox_zt_relay_port }},
       "users": [
         {
           "uuid": "{{ singbox_uuid_aws }}"
@@ -157,7 +157,7 @@
       "type": "hysteria2",
       "tag": "hy2-resi",
       "listen": "::",
-      "listen_port": {{ app_port_singbox_hy2_resi | default(30059) }},
+      "listen_port": {{ app_port_singbox_hy2_resi }},
       "users": [
         {
           "password": "{{ hysteria_auth_password }}"

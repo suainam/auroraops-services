@@ -1,0 +1,209 @@
+---
+- name: "[Sing-box] Find JSON configuration fragments"
+  become: true
+  ansible.builtin.find:
+    paths: "{{ singbox_verify_config_dir }}"
+    patterns: "*.json"
+    file_type: file
+  register: singbox_config_fragments
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Read JSON configuration fragments"
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ item.path }}"
+  loop: "{{ singbox_config_fragments.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  register: singbox_config_contents
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Decode configuration fragments"
+  ansible.builtin.set_fact:
+    singbox_config_documents: >-
+      {{ singbox_config_contents.results
+         | map(attribute='content')
+         | map('b64decode')
+         | map('from_json')
+         | list }}
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Collect outbound tags"
+  ansible.builtin.set_fact:
+    singbox_config_outbound_tags: >-
+      {{ singbox_config_documents
+         | map(attribute='outbounds', default=[])
+         | flatten
+         | map(attribute='tag', default='')
+         | select('!=', '')
+         | list }}
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Collect route outbound references"
+  ansible.builtin.set_fact:
+    singbox_config_route_outbound_refs: >-
+      {{ singbox_config_documents
+         | map(attribute='route', default={})
+         | map(attribute='rules', default=[])
+         | flatten
+         | map(attribute='outbound', default='')
+         | select('!=', '')
+         | list }}
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Collect Reality-enabled peer outbounds"
+  ansible.builtin.set_fact:
+    singbox_config_reality_peers: >-
+      {{ singbox_config_documents
+         | map(attribute='outbounds', default=[])
+         | flatten
+         | selectattr('type', 'equalto', 'vless')
+         | selectattr('tls.reality.enabled', 'defined')
+         | selectattr('tls.reality.enabled')
+         | list }}
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Collect peers with missing or empty Reality public key"
+  ansible.builtin.set_fact:
+    # An auto-routing urltest cluster silently selects a member that can never
+    # handshake, so a peer must be flagged whether the key is absent entirely or
+    # merely rendered as an empty string.
+    singbox_config_incomplete_reality_peers: >-
+      {{ (singbox_config_reality_peers
+          | rejectattr('tls.reality.public_key', 'defined')
+          | map(attribute='tag') | list)
+         + (singbox_config_reality_peers
+            | selectattr('tls.reality.public_key', 'defined')
+            | selectattr('tls.reality.public_key', 'equalto', '')
+            | map(attribute='tag') | list) }}
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+# --- Redirect target vs listen port ---
+#
+# The firewall redirects the hopping range to a single target port, while
+# sing-box listens on exactly one port. When those two disagree, every packet
+# in the hopping range is handed to whatever owns the target port and dropped,
+# yet sing-box itself is healthy and every other check passes. Both values are
+# therefore read from runtime state, never from configuration: comparing two
+# config values only proves the config is self-consistent, which is precisely
+# what failed to catch this.
+#
+# The comparison is gated on port hopping being *enabled*, not on the host
+# being a relay. A direct node with hopping enabled is exactly the host that
+# was broken, so gating on relay membership would skip the check where it
+# matters most and pass vacuously.
+
+- name: "[Sing-box] Resolve the hopping range under audit"
+  ansible.builtin.set_fact:
+    singbox_hopping_audit_enabled: >-
+      {{ (firewall_hysteria_hopping.enabled | default(false) | bool)
+         or (singbox_hopping_enabled | default(false) | bool) }}
+    singbox_hopping_audit_range: >-
+      {{ firewall_hysteria_hopping.port_range
+         | default(app_port_hysteria_hopping_range | default('')) }}
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Read the live Hysteria redirect target from the firewall"
+  become: true
+  ansible.builtin.shell: |
+    set -o pipefail 2>/dev/null || true
+    if command -v iptables >/dev/null 2>&1; then
+      iptables -t nat -S PREROUTING 2>/dev/null \
+        | awk -v range="{{ singbox_hopping_audit_range }}" '
+            range != "" && $0 ~ ("--dport " range) && /REDIRECT/ {
+              for (i = 1; i <= NF; i++) if ($i == "--to-ports") print $(i + 1)
+            }' \
+        | sort -u
+    fi
+  register: singbox_hysteria_redirect_probe
+  changed_when: false
+  failed_when: false
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Read the live Hysteria listen port from the deployed config"
+  become: true
+  ansible.builtin.shell: |
+    set -o pipefail 2>/dev/null || true
+    python3 - <<'PY'
+    import glob, json
+    ports = []
+    for path in sorted(glob.glob("{{ singbox_verify_config_dir }}/*.json")):
+        with open(path) as handle:
+            doc = json.load(handle)
+        for inbound in doc.get("inbounds") or []:
+            if inbound.get("type") == "hysteria2" and inbound.get("listen_port"):
+                ports.append(int(inbound["listen_port"]))
+    print(" ".join(str(p) for p in sorted(set(ports))))
+    PY
+  register: singbox_hysteria_listen_probe
+  changed_when: false
+  failed_when: false
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Collect redirect/listen port mismatches"
+  ansible.builtin.set_fact:
+    singbox_hysteria_redirect_target: >-
+      {{ (singbox_hysteria_redirect_probe.stdout | default('') | trim | split(' ')
+          | select('!=', '') | map('int') | list) }}
+    singbox_hysteria_listen_port: >-
+      {{ (singbox_hysteria_listen_probe.stdout | default('') | trim | split(' ')
+          | select('!=', '') | map('int') | list) }}
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Compare redirect target against the listening port"
+  ansible.builtin.set_fact:
+    # Symmetric comparison: a fault is a port present on one side only. A
+    # one-directional check would pass when the redirect points at a port
+    # nothing listens on, which is exactly the failure that blackholed traffic.
+    singbox_hysteria_redirect_mismatch: >-
+      {{ (singbox_hysteria_redirect_target
+          | difference(singbox_hysteria_listen_port))
+         + (singbox_hysteria_listen_port
+            | difference(singbox_hysteria_redirect_target)) }}
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Assert the redirect target matches the listening port"
+  ansible.builtin.assert:
+    that:
+      # Only meaningful where port hopping is switched on.
+      - not (singbox_hopping_audit_enabled | bool)
+        or singbox_hysteria_listen_port | length == 0
+        or singbox_hysteria_redirect_target | length == 0
+        or singbox_hysteria_redirect_mismatch | length == 0
+    fail_msg: >-
+      The firewall redirects the Hysteria hopping range to a port that
+      sing-box does not listen on. Traffic in the hopping range is handed to
+      whatever owns the redirect target and dropped, while sing-box itself
+      reports healthy. Align the redirect target with the Hysteria listen
+      port, or remove the redirect rule.
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Assert every route outbound reference resolves"
+  ansible.builtin.assert:
+    that:
+      - singbox_config_outbound_tags | length > 0
+      - singbox_config_route_outbound_refs | difference(singbox_config_outbound_tags) | length == 0
+      - singbox_relay_upstreams | default([]) | length == 0 or 'relay-failover-cluster' in singbox_config_outbound_tags
+    fail_msg: >-
+      sing-box configuration contains unresolved route outbound references or
+      omits the configured relay cluster.
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Assert auto-routing peers carry usable Reality material"
+  ansible.builtin.assert:
+    that:
+      - singbox_config_incomplete_reality_peers | length == 0
+    fail_msg: >-
+      A VLESS Reality peer outbound is missing its public_key or was rendered
+      with an empty public_key. The outbound tag still resolves, so route
+      reference checks pass, but the auto-routing urltest cluster would select
+      a member that can never complete a handshake. Populate the peer's
+      singbox_reality_public_key in inventory.
+  tags: [verify, services, singbox, phase5]

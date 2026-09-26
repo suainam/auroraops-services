@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,7 +16,20 @@ def test_wireguard_role_declares_parameters_and_defaults() -> None:
 
     assert "wireguard_native_enabled: false" in defaults
     assert "wireguard_native_interface: \"wg0\"" in defaults
-    assert "wireguard_native_port: 30059" in defaults
+    # There is no default listen port, and that is the contract. A default
+    # is a second copy of the port allocation: 30059 named a port the
+    # authority had already reassigned, so it stayed in place long after the
+    # reassignment and nothing noticed until a peer stopped arriving. The
+    # replacement is an empty value that preflight rejects, which is a
+    # stronger statement than a number nobody has to keep in sync.
+    assert 'wireguard_native_port: ""' in defaults
+    assert not re.search(r"wireguard_native_port:\s*\d", defaults), (
+        "a numeric default is back on the listen port"
+    )
+    preflight = read("tasks/preflight.yml")
+    assert "Refuse to deploy without an explicit listen port" in preflight
+    assert "wireguard_native_port | string | length > 0" in preflight
+    assert "wireguard_native_port | int < 65536" in preflight
     assert "wireguard_native_peers: []" in defaults
     assert "wireguard_native_private_key: \"\"" in defaults
 
