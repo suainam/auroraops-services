@@ -26,9 +26,19 @@ proxies: []
 {% set bp_providers  = namespace(items=[]) %}
 {% set sk_providers  = namespace(items=[]) %}
 {% for p in capability_providers %}
-{% if p.enabled | default(true) %}
 {% set pid = p['provider-id'] | default(p.name) %}
 {% set dg = p['display-group'] | default('') %}
+{% if not dg %}
+  {% if 'nat' in p.name | lower %}
+    {% set dg = 'NAT' %}
+  {% elif 'bp' in p.name | lower or 'baipiao' in p.name | lower %}
+    {% set dg = 'BP' %}
+  {% elif 'sk' in p.name | lower or 'sakura' in p.name | lower %}
+    {% set dg = 'SK' %}
+  {% else %}
+    {% set dg = 'VPS' %}
+  {% endif %}
+{% endif %}
 {% if dg == 'VPS' %}
 {% set vps_providers.items = vps_providers.items + [pid] %}
 {% elif dg == 'NAT' %}
@@ -38,9 +48,7 @@ proxies: []
 {% elif dg == 'SK' %}
 {% set sk_providers.items = sk_providers.items + [pid] %}
 {% endif %}
-{% endif %}
 {% endfor %}
-
 {% include 'sub_store_capability_profile/proxy_providers.yaml.j2' %}
 
 proxy-groups:
