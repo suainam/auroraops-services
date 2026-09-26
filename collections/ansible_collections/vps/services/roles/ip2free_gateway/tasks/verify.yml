@@ -1,96 +1,143 @@
 ---
-- name: 验证脚本文件存在
-  ansible.builtin.stat:
-    path: "{{ ip2free_gateway_ip2free_dir }}/{{ item }}"
-  loop:
-    - ip2free_agent.py
-    - health_check.py
-    - update_outbounds.py
-  register: ip2free_gateway__ip2free_scripts
-  failed_when: false
+# Both directions are asserted, because the capability flag is an input and the
+# host state is what has to match it. Everything in the first block asserts the
+# capability is installed when the flag is on; the block at the end asserts the
+# opposite when it is off. The playbook no longer gates this include on the
+# flag, so without an internal gate the assertions below would fire on the hosts
+# that never had the capability and never will.
+- name: Verify IP2Free is installed (capability on)
+  when: auroraops_roles['services']['ip2free_gateway'] | default(false) | bool
   tags: [verify, services, ip2free_gateway, phase5]
+  block:
+    - name: 验证脚本文件存在
+      ansible.builtin.stat:
+        path: "{{ ip2free_gateway_ip2free_dir }}/{{ item }}"
+      loop:
+        - ip2free_agent.py
+        - health_check.py
+        - update_outbounds.py
+      register: ip2free_gateway__ip2free_scripts
+      failed_when: false
 
-- name: 如果脚本不存在则报错
-  ansible.builtin.fail:
-    msg: "Missing script: {{ ip2free_gateway_ip2free_dir }}/{{ item.item }}"
-  loop: "{{ ip2free_gateway__ip2free_scripts.results }}"
-  when: not item.stat.exists
-  tags: [verify, services, ip2free_gateway, phase5]
+    - name: 如果脚本不存在则报错
+      ansible.builtin.fail:
+        msg: "Missing script: {{ ip2free_gateway_ip2free_dir }}/{{ item.item }}"
+      loop: "{{ ip2free_gateway__ip2free_scripts.results }}"
+      when: not item.stat.exists
 
-- name: 验证 config.json 存在
-  ansible.builtin.stat:
-    path: "{{ ip2free_gateway_ip2free_config_file }}"
-  register: ip2free_gateway__ip2free_cfg
-  tags: [verify, services, ip2free_gateway, phase5]
+    - name: 验证 config.json 存在
+      ansible.builtin.stat:
+        path: "{{ ip2free_gateway_ip2free_config_file }}"
+      register: ip2free_gateway__ip2free_cfg
 
-- name: 如果 config.json 不存在则报错
-  ansible.builtin.fail:
-    msg: "{{ ip2free_gateway_ip2free_config_file }} not found"
-  when: not ip2free_gateway__ip2free_cfg.stat.exists
-  tags: [verify, services, ip2free_gateway, phase5]
+    - name: 如果 config.json 不存在则报错
+      ansible.builtin.fail:
+        msg: "{{ ip2free_gateway_ip2free_config_file }} not found"
+      when: not ip2free_gateway__ip2free_cfg.stat.exists
 
-- name: Gather ip2free systemd timer facts
-  ansible.builtin.service_facts:
-  register: ip2free_gateway__service_facts
-  tags: [verify, services, ip2free_gateway, phase5]
+    - name: Gather ip2free systemd timer facts
+      ansible.builtin.service_facts:
+      register: ip2free_gateway__service_facts
 
-- name: 验证 systemd timer 已启用
-  ansible.builtin.assert:
-    that:
-      - item in ip2free_gateway__service_facts.ansible_facts.services
-      - ip2free_gateway__service_facts.ansible_facts.services[item].status == 'enabled'
-      - ip2free_gateway__service_facts.ansible_facts.services[item].state == 'running'
-    fail_msg: "{{ item }} 未启用或未运行"
-  loop:
-    - ip2free-agent.timer
-    - ip2free-health.timer
-  tags: [verify, services, ip2free_gateway, phase5]
+    - name: 验证 systemd timer 已启用
+      ansible.builtin.assert:
+        that:
+          - item in ip2free_gateway__service_facts.ansible_facts.services
+          - ip2free_gateway__service_facts.ansible_facts.services[item].status == 'enabled'
+          - ip2free_gateway__service_facts.ansible_facts.services[item].state == 'running'
+        fail_msg: "{{ item }} 未启用或未运行"
+      loop:
+        - ip2free-agent.timer
+        - ip2free-health.timer
 
-- name: Verify agent oneshot retry ownership and last result
-  ansible.builtin.command:
-    argv:
-      - systemctl
-      - show
-      - ip2free-agent.service
-      - --property=Type
-      - --property=Restart
-      - --property=Result
-  register: ip2free_gateway__ip2free_agent_properties
-  changed_when: false
-  failed_when: >-
-    ('Type=oneshot' not in ip2free_gateway__ip2free_agent_properties.stdout_lines)
-    or ('Restart=no' not in ip2free_gateway__ip2free_agent_properties.stdout_lines)
-    or (not (ip2free_gateway__ip2free_agent_properties.stdout_lines | select('in', ['Result=success', 'Result=']) | list))
-  tags: [verify, services, ip2free_gateway, phase5]
+    - name: Verify agent oneshot retry ownership and last result
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - ip2free-agent.service
+          - --property=Type
+          - --property=Restart
+          - --property=Result
+      register: ip2free_gateway__ip2free_agent_properties
+      changed_when: false
+      failed_when: >-
+        ('Type=oneshot' not in ip2free_gateway__ip2free_agent_properties.stdout_lines)
+        or ('Restart=no' not in ip2free_gateway__ip2free_agent_properties.stdout_lines)
+        or (not (ip2free_gateway__ip2free_agent_properties.stdout_lines | select('in', ['Result=success', 'Result=']) | list))
 
-- name: Check for a published last-good nodes file
-  ansible.builtin.stat:
-    path: "{{ ip2free_gateway_ip2free_dir }}/nodes.json"
-  register: ip2free_gateway__ip2free_nodes
-  failed_when: not ip2free_gateway__ip2free_nodes.stat.exists
-  tags: [verify, services, ip2free_gateway, phase5]
+    - name: Check for a published last-good nodes file
+      ansible.builtin.stat:
+        path: "{{ ip2free_gateway_ip2free_dir }}/nodes.json"
+      register: ip2free_gateway__ip2free_nodes
+      failed_when: not ip2free_gateway__ip2free_nodes.stat.exists
 
-- name: Validate last-good nodes JSON schema when present
-  ansible.builtin.command:
-    argv:
-      - "{{ ip2free_gateway_ip2free_python }}"
-      - -c
-      - >-
-        import json, pathlib;
-        p=pathlib.Path({{ (ip2free_gateway_ip2free_dir ~ '/nodes.json') | to_json }});
-        data=json.loads(p.read_text());
-        assert isinstance(data, list);
-        assert all(isinstance(n, dict) and isinstance(n.get('server'), str) and n['server']
-        and isinstance(n.get('port'), int) and 1 <= n['port'] <= 65535 for n in data)
-  changed_when: false
-  tags: [verify, services, ip2free_gateway, phase5]
+    - name: Validate last-good nodes JSON schema when present
+      ansible.builtin.command:
+        argv:
+          - "{{ ip2free_gateway_ip2free_python }}"
+          - -c
+          - >-
+            import json, pathlib;
+            p=pathlib.Path({{ (ip2free_gateway_ip2free_dir ~ '/nodes.json') | to_json }});
+            data=json.loads(p.read_text());
+            assert isinstance(data, list);
+            assert all(isinstance(n, dict) and isinstance(n.get('server'), str) and n['server']
+            and isinstance(n.get('port'), int) and 1 <= n['port'] <= 65535 for n in data)
+      changed_when: false
 
-- name: 输出定时器状态
-  ansible.builtin.debug:
-    msg: >-
-      {{
-        ['ip2free-agent.timer', 'ip2free-health.timer']
-        | map('extract', ip2free_gateway__service_facts.ansible_facts.services)
-        | list
-      }}
+    - name: 输出定时器状态
+      ansible.builtin.debug:
+        msg: >-
+          {{
+            ['ip2free-agent.timer', 'ip2free-health.timer']
+            | map('extract', ip2free_gateway__service_facts.ansible_facts.services)
+            | list
+          }}
+
+# The retirement assertions. This is the half that did not exist: the playbook
+# used to skip this role entirely when the flag was off, so a host that had been
+# declared retired was never checked, and "retired" was indistinguishable from
+# "off, and nothing was ever installed" -- which is the state a host that never
+# had the capability is also in. Asserting absence is what tells those two
+# apart.
+- name: Verify IP2Free is retired (capability off)
+  when: not (auroraops_roles['services']['ip2free_gateway'] | default(false) | bool)
   tags: [verify, services, ip2free_gateway, phase5]
+  block:
+    - name: Look for IP2Free systemd units
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      loop:
+        - { name: "ip2free-agent.timer", path: "/etc/systemd/system/ip2free-agent.timer" }
+        - { name: "ip2free-health.timer", path: "/etc/systemd/system/ip2free-health.timer" }
+        - { name: "ip2free-agent.service", path: "/etc/systemd/system/ip2free-agent.service" }
+        - { name: "ip2free-health.service", path: "/etc/systemd/system/ip2free-health.service" }
+      register: ip2free_gateway__retire_check_units
+      changed_when: false
+
+    - name: Look for the working directory and the generated fragment
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ ip2free_gateway_ip2free_dir }}"
+        - "{{ ip2free_gateway_ip2free_singbox_fragment }}"
+      register: ip2free_gateway__retire_check_paths
+      changed_when: false
+
+    # Any single leftover is a failure, and the message names all of them: the
+    # point of this check is that nobody has to go and look.
+    - name: Refuse to pass a host that still has the retired capability installed
+      ansible.builtin.assert:
+        that:
+          - (ip2free_gateway__retire_check_units.results | selectattr('stat.exists') | list | length) == 0
+          - (ip2free_gateway__retire_check_paths.results | selectattr('stat.exists') | list | length) == 0
+        fail_msg: >-
+          The ip2free_gateway capability is off, but this host still has:
+          {{ (ip2free_gateway__retire_check_units.results | selectattr('stat.exists')
+              | map(attribute='item.path') | list)
+          | union(ip2free_gateway__retire_check_paths.results | selectattr('stat.exists')
+              | map(attribute='item') | list) | join(', ') }}.
+          Run a deploy so the retirement path removes them. Leaving a timer in
+          place keeps it able to rewrite the sing-box configuration, which is
+          what made unrelated verify stages fail.
