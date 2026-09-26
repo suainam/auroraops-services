@@ -35,8 +35,7 @@ proxy-groups:
       - "🌐 外部 BP · AI"
       - "🌸 外部 SK · 全部"
       - DIRECT
-
-  - name: "📹 视频与大流量"
+  - name: "📹 YouTube"
     type: select
     proxies:
       - "⚡ BP 千兆优选"
@@ -46,7 +45,7 @@ proxy-groups:
       - "🌸 外部 SK · 全部"
       - DIRECT
 
-  - name: "🐙 GitHub & 开发"
+  - name: "🐙 GitHub"
     type: select
     proxies:
       - "🖥️ 自建 VPS"
@@ -144,6 +143,89 @@ proxy-groups:
     type: select
     use:
       - source-sakura
+
+  # 兼容现有规则引用（如 rules.yaml 中的 wget/chrome/bws.msuai.top 引用 ⚡ 快速节点）
+  - name: "⚡ 快速节点"
+    type: select
+    proxies:
+      - "⚡ BP 千兆优选"
+      - "🖥️ 自建 VPS"
+      - "🧭 自建 NAT"
+      - DIRECT
+    hidden: true
+
+  - name: "🛡️ 稳定优先"
+    type: select
+    proxies:
+      - "🖥️ 自建 VPS"
+      - "🧭 自建 NAT"
+      - "⚡ BP 千兆优选"
+      - DIRECT
+    hidden: true
+
+  - name: "⚡ 自动优选"
+    type: select
+    proxies:
+      - "⚡ BP 千兆优选"
+      - "🖥️ 自建 VPS"
+      - DIRECT
+    hidden: true
+
+  - name: "🌍 国际媒体"
+    type: select
+    proxies:
+      - "⚡ BP 千兆优选"
+      - "🖥️ 自建 VPS"
+      - DIRECT
+    hidden: true
+
+  - name: "📺 B站港澳台"
+    type: select
+    proxies:
+      - "🖥️ 自建 VPS"
+      - "🧭 自建 NAT"
+      - "⚡ BP 千兆优选"
+      - DIRECT
+  - name: "🎵 Spotify"
+    type: select
+    proxies:
+      - "⚡ BP 千兆优选"
+      - "🖥️ 自建 VPS"
+      - DIRECT
+    hidden: true
+
+  - name: "✈️ Telegram"
+    type: select
+    proxies:
+      - "🖥️ 自建 VPS"
+      - "🧭 自建 NAT"
+      - "⚡ BP 千兆优选"
+      - DIRECT
+    hidden: true
+
+  - name: "Ⓜ️ 微软服务"
+    type: select
+    proxies:
+      - DIRECT
+      - "🖥️ 自建 VPS"
+      - "⚡ BP 千兆优选"
+    hidden: true
+
+  - name: "🍎 苹果服务"
+    type: select
+    proxies:
+      - DIRECT
+      - "🖥️ 自建 VPS"
+      - "⚡ BP 千兆优选"
+    hidden: true
+
+  - name: "🎬 国际流媒体"
+    type: select
+    proxies:
+      - "⚡ BP 千兆优选"
+      - "🖥️ 自建 VPS"
+      - DIRECT
+    hidden: true
 
   # 兼顾现有规则集的兜底/直连组
   - name: "🐟 漏网之鱼"
