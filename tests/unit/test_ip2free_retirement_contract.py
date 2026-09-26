@@ -149,11 +149,20 @@ def test_retirement_removes_the_units_the_directory_and_the_fragment() -> None:
             # failure if the unit is absent, so it has to be guarded. The
             # daemon-reload is the exception: it names no unit and is already
             # conditional on whether any unit file was there.
-            if "name:" in step:
+            #
+            # The unit name lives in the *module arguments*, not in a key. The
+            # first version tested `"name:" in step`, which looks for a dict key
+            # spelled `name:` -- never present, because YAML gives `name`. The
+            # branch was dead: injecting an unguarded, loop-less, named systemd
+            # stop, exactly the shape this exists to reject, left all eight tests
+            # green.
+            module_args = step.get("ansible.builtin.systemd") or {}
+            if "name" in module_args:
                 assert "when" in step, (
-                    f"retirement step {step.get('name')!r} stops a named systemd "
-                    "unit with no condition, so a host that never had this "
-                    "capability fails on a unit that was never installed"
+                    f"retirement step {step.get('name')!r} stops the named unit "
+                    f"{module_args['name']!r} with no condition, so a host that "
+                    "never had this capability fails on a unit that was never "
+                    "installed"
                 )
             continue
         guards = str(step.get("when", ""))
