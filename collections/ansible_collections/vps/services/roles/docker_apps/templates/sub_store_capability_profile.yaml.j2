@@ -24,24 +24,15 @@ proxies: []
 
 proxy-groups:
   # ========================================================
-  # 1. 业务入口 (Top-Level Service Groups)
+  # 1. 顶层业务入口 (Top-Level Services, 常用排在最前面)
   # ========================================================
   - name: "🤖 AI 服务"
     type: select
     proxies:
       - "🛡️ 自建优先 (AI 容灾)"
-      - "🖥️ 自建 VPS · AI"
-      - "🧭 自建 NAT · AI"
-      - "🌐 外部 BP · AI"
-      - "🌸 外部 SK · 全部"
-      - DIRECT
-  - name: "📹 YouTube"
-    type: select
-    proxies:
-      - "⚡ BP 千兆优选"
       - "🖥️ 自建 VPS"
       - "🧭 自建 NAT"
-      - "🌐 外部 BP · 全部"
+      - "🌐 外部 BP · AI"
       - "🌸 外部 SK · 全部"
       - DIRECT
 
@@ -52,6 +43,24 @@ proxy-groups:
       - "🧭 自建 NAT"
       - "⚡ BP 千兆优选"
       - "🌸 外部 SK · 全部"
+      - DIRECT
+
+  - name: "📹 YouTube"
+    type: select
+    proxies:
+      - "⚡ BP 千兆优选"
+      - "🖥️ 自建 VPS"
+      - "🧭 自建 NAT"
+      - "🌐 外部 BP · 全部"
+      - "🌸 外部 SK · 全部"
+      - DIRECT
+
+  - name: "📺 B站港澳台"
+    type: select
+    proxies:
+      - "🧭 自建 NAT · 港澳"
+      - "🌐 外部 BP · 港澳台"
+      - "🌸 外部 SK · 港澳台"
       - DIRECT
 
   - name: "🚀 默认代理"
@@ -66,7 +75,33 @@ proxy-groups:
       - DIRECT
 
   # ========================================================
-  # 2. 自动化策略组 (Strategy Groups)
+  # 2. 底层节点实体池 (Entity Pools, 纯手动查看与调试，排在后面)
+  # ========================================================
+  - name: "🖥️ 自建 VPS"
+    type: select
+    use:
+      - source-cc15
+      - source-qqg1299
+
+  - name: "🧭 自建 NAT"
+    type: select
+    use:
+      - source-nat-hk084
+      - source-nat-hk216
+      - source-nat-jp3
+
+  - name: "🌐 外部 BP · 全部"
+    type: select
+    use:
+      - source-baipiao
+
+  - name: "🌸 外部 SK · 全部"
+    type: select
+    use:
+      - source-sakura
+
+  # ========================================================
+  # 3. 内部策略与定向子组 (全部 hidden: true, 前端彻底隐形)
   # ========================================================
   - name: "🛡️ 自建优先 (AI 容灾)"
     type: fallback
@@ -79,6 +114,7 @@ proxy-groups:
     interval: 300
     timeout: 3000
     lazy: true
+    hidden: true
 
   - name: "⚡ BP 千兆优选"
     type: url-test
@@ -89,10 +125,8 @@ proxy-groups:
     interval: 300
     tolerance: 50
     lazy: true
+    hidden: true
 
-  # ========================================================
-  # 3. 实体池与手动出口 (Entity Pools & Manual Exits)
-  # ========================================================
   - name: "🖥️ 自建 VPS · AI"
     type: fallback
     use:
@@ -101,12 +135,7 @@ proxy-groups:
     url: https://chatgpt.com/cdn-cgi/trace
     interval: 300
     lazy: true
-
-  - name: "🖥️ 自建 VPS"
-    type: select
-    use:
-      - source-cc15
-      - source-qqg1299
+    hidden: true
 
   - name: "🧭 自建 NAT · AI"
     type: fallback
@@ -117,121 +146,55 @@ proxy-groups:
     url: https://chatgpt.com/cdn-cgi/trace
     interval: 300
     lazy: true
+    hidden: true
 
-  - name: "🧭 自建 NAT"
-    type: select
-    use:
-      - source-nat-hk084
-      - source-nat-hk216
-      - source-nat-jp3
-
+  # 精准匹配真正的 AI 关键词，排除 [baipiao] 自身拼音干扰
   - name: "🌐 外部 BP · AI"
     type: fallback
     use:
       - source-baipiao
-    filter: "(?i)AI|Gemini|ChatGPT|GPT"
+    filter: "(?i)Gemini|ChatGPT|GPT|直连AI|[-_\\s]AI|AI[-_\\s$]"
     url: https://chatgpt.com/cdn-cgi/trace
     interval: 300
     lazy: true
+    hidden: true
 
-  - name: "🌐 外部 BP · 全部"
-    type: select
+  # B站港澳台专用定向子组
+  - name: "🧭 自建 NAT · 港澳"
+    type: fallback
+    use:
+      - source-nat-hk084
+      - source-nat-hk216
+      - source-nat-jp3
+    filter: "(?i)🇭🇰|港|hk|hong\\s*kong|🇹🇼|台|tw|taiwan"
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    lazy: true
+    hidden: true
+
+  - name: "🌐 外部 BP · 港澳台"
+    type: fallback
     use:
       - source-baipiao
+    filter: "(?i)🇭🇰|香港|🇹🇼|台湾|HK|TW"
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    lazy: true
+    hidden: true
 
-  - name: "🌸 外部 SK · 全部"
+  - name: "🌸 外部 SK · 港澳台"
     type: select
     use:
       - source-sakura
+    filter: "(?i)🇭🇰|香港|🇹🇼|台湾|HK|TW"
+    hidden: true
 
-  # 兼容现有规则引用（如 rules.yaml 中的 wget/chrome/bws.msuai.top 引用 ⚡ 快速节点）
+  # 兼容私有规则中的 ⚡ 快速节点 引用
   - name: "⚡ 快速节点"
     type: select
     proxies:
       - "⚡ BP 千兆优选"
       - "🖥️ 自建 VPS"
-      - "🧭 自建 NAT"
-      - DIRECT
-    hidden: true
-
-  - name: "🛡️ 稳定优先"
-    type: select
-    proxies:
-      - "🖥️ 自建 VPS"
-      - "🧭 自建 NAT"
-      - "⚡ BP 千兆优选"
-      - DIRECT
-    hidden: true
-
-  - name: "⚡ 自动优选"
-    type: select
-    proxies:
-      - "⚡ BP 千兆优选"
-      - "🖥️ 自建 VPS"
-      - DIRECT
-    hidden: true
-
-  - name: "🌍 国际媒体"
-    type: select
-    proxies:
-      - "⚡ BP 千兆优选"
-      - "🖥️ 自建 VPS"
-      - DIRECT
-    hidden: true
-
-  - name: "📺 B站港澳台"
-    type: select
-    proxies:
-      - "🖥️ 自建 VPS"
-      - "🧭 自建 NAT"
-      - "⚡ BP 千兆优选"
-      - DIRECT
-  - name: "🎵 Spotify"
-    type: select
-    proxies:
-      - "⚡ BP 千兆优选"
-      - "🖥️ 自建 VPS"
-      - DIRECT
-    hidden: true
-
-  - name: "✈️ Telegram"
-    type: select
-    proxies:
-      - "🖥️ 自建 VPS"
-      - "🧭 自建 NAT"
-      - "⚡ BP 千兆优选"
-      - DIRECT
-    hidden: true
-
-  - name: "Ⓜ️ 微软服务"
-    type: select
-    proxies:
-      - DIRECT
-      - "🖥️ 自建 VPS"
-      - "⚡ BP 千兆优选"
-    hidden: true
-
-  - name: "🍎 苹果服务"
-    type: select
-    proxies:
-      - DIRECT
-      - "🖥️ 自建 VPS"
-      - "⚡ BP 千兆优选"
-    hidden: true
-
-  - name: "🎬 国际流媒体"
-    type: select
-    proxies:
-      - "⚡ BP 千兆优选"
-      - "🖥️ 自建 VPS"
-      - DIRECT
-    hidden: true
-
-  # 兼顾现有规则集的兜底/直连组
-  - name: "🐟 漏网之鱼"
-    type: select
-    proxies:
-      - "🚀 默认代理"
       - DIRECT
     hidden: true
 

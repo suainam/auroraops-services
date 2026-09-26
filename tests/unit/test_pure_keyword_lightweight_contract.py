@@ -46,20 +46,26 @@ def test_proxy_providers_disables_health_check_for_metered_sakura():
     assert "url" not in sk["health-check"]
 
 
-def test_profile_template_generates_bounded_clean_13_groups():
-    """Ticket #31: Profile template must yield <= 15 proxy-groups with explicit manual entries."""
+def test_profile_template_generates_bounded_clean_visible_groups():
+    """Ticket #31: Profile template must yield exactly 9 visible groups in correct priority order."""
     top_template = (
         SERVICES_ROOT
         / "collections/ansible_collections/vps/services/roles/docker_apps/templates/sub_store_capability_profile.yaml.j2"
     ).read_text(encoding="utf-8")
+
+    rules_content = (TEMPLATES_DIR / "rules.yaml").read_text(encoding="utf-8")
 
     loader = jinja2.DictLoader(
         {
             "sub_store_capability_profile/proxy_providers.yaml.j2": (
                 TEMPLATES_DIR / "proxy_providers.yaml.j2"
             ).read_text(encoding="utf-8"),
-            "sub_store_capability_profile/rule_providers.yaml.j2": "rule-providers: {}\n",
-            "sub_store_capability_profile/routing_dns.yaml.j2": "rules: []\ndns: {}\n",
+            "sub_store_capability_profile/rule_providers.yaml.j2": (
+                TEMPLATES_DIR / "rule_providers.yaml.j2"
+            ).read_text(encoding="utf-8"),
+            "sub_store_capability_profile/routing_dns.yaml.j2": f"rules:\n{rules_content}\ndns: {{}}\n",
+            "sub_store_capability_profile/private_rules.yaml.j2": "",
+            "sub_store_capability_profile/rules.yaml": rules_content,
         }
     )
     env = make_jinja_env(loader=loader)
@@ -83,31 +89,55 @@ def test_profile_template_generates_bounded_clean_13_groups():
     payload = yaml.safe_load(rendered)
 
     groups = payload.get("proxy-groups", [])
-    assert 10 <= len(groups) <= 15, f"Expected ~13 groups, got {len(groups)}"
+    visible_groups = [g["name"] for g in groups if not g.get("hidden", False)]
+
+    # 1. Exactly 9 visible groups
+    assert len(visible_groups) == 9, f"Expected 9 visible groups, got {len(visible_groups)}: {visible_groups}"
+
+    # 2. Priority ordering: 5 services first, 4 entity pools last
+    expected_order = [
+        "🤖 AI 服务",
+        "🐙 GitHub",
+        "📹 YouTube",
+        "📺 B站港澳台",
+        "🚀 默认代理",
+        "🖥️ 自建 VPS",
+        "🧭 自建 NAT",
+        "🌐 外部 BP · 全部",
+        "🌸 外部 SK · 全部",
+    ]
+    assert visible_groups == expected_order
 
     group_map = {g["name"]: g for g in groups}
 
-    ai_service = group_map["🤖 AI 服务"]
-    assert "🛡️ 自建优先 (AI 容灾)" in ai_service["proxies"]
-    assert "🌸 外部 SK · 全部" in ai_service["proxies"]
+    # 3. Assert Bilibili group only contains meaningful HMT items
+    bili_group = group_map["📺 B站港澳台"]
+    assert bili_group["proxies"] == [
+        "🧭 自建 NAT · 港澳",
+        "🌐 外部 BP · 港澳台",
+        "🌸 外部 SK · 港澳台",
+        "DIRECT",
+    ]
 
-    ai_auto = group_map["🛡️ 自建优先 (AI 容灾)"]
-    assert ai_auto["type"] == "fallback"
-    assert ai_auto["url"] == "https://chatgpt.com/cdn-cgi/trace"
-    assert "🌸 外部 SK · 全部" not in ai_auto["proxies"]
-    assert "source-sakura" not in ai_auto.get("use", [])
+    # 4. Assert BP AI group uses precise regex avoiding baipiao match
+    bp_ai = group_map["🌐 外部 BP · AI"]
+    assert bp_ai["hidden"] is True
+    bp_ai_re = re.compile(bp_ai["filter"])
+    assert not bp_ai_re.search("[baipiao] 白嫖机场.com-官网")
+    assert not bp_ai_re.search("[baipiao] 剩余流量：858.94 GB")
+    assert bp_ai_re.search("[baipiao] 🇺🇸美国光速1-解锁GPT")
+    assert bp_ai_re.search("[baipiao] 🇹🇼台湾家宽Gemini")
+    assert bp_ai_re.search("[baipiao] 🇹🇼台湾trojan直连AI")
 
-    video_service = group_map["📹 视频与大流量"]
-    assert "⚡ BP 千兆优选" in video_service["proxies"]
-
-    bp_fast = group_map["⚡ BP 千兆优选"]
-    assert bp_fast["type"] == "url-test"
-    assert "1000M" in bp_fast["filter"]
-
+    # 5. Assert SK has zero probes
     sk_group = group_map["🌸 外部 SK · 全部"]
     assert sk_group["type"] == "select"
     assert "url" not in sk_group
     assert "interval" not in sk_group
+
+    sk_hmt = group_map["🌸 外部 SK · 港澳台"]
+    assert sk_hmt["type"] == "select"
+    assert "url" not in sk_hmt
 
 
 def test_mihomo_syntax_validation():
@@ -119,13 +149,19 @@ def test_mihomo_syntax_validation():
         / "collections/ansible_collections/vps/services/roles/docker_apps/templates/sub_store_capability_profile.yaml.j2"
     ).read_text(encoding="utf-8")
 
+    rules_content = (TEMPLATES_DIR / "rules.yaml").read_text(encoding="utf-8")
+
     loader = jinja2.DictLoader(
         {
             "sub_store_capability_profile/proxy_providers.yaml.j2": (
                 TEMPLATES_DIR / "proxy_providers.yaml.j2"
             ).read_text(encoding="utf-8"),
-            "sub_store_capability_profile/rule_providers.yaml.j2": "rule-providers: {}\n",
-            "sub_store_capability_profile/routing_dns.yaml.j2": "rules: []\ndns: {}\n",
+            "sub_store_capability_profile/rule_providers.yaml.j2": (
+                TEMPLATES_DIR / "rule_providers.yaml.j2"
+            ).read_text(encoding="utf-8"),
+            "sub_store_capability_profile/routing_dns.yaml.j2": f"rules:\n{rules_content}\ndns: {{}}\n",
+            "sub_store_capability_profile/private_rules.yaml.j2": "",
+            "sub_store_capability_profile/rules.yaml": rules_content,
         }
     )
     env = make_jinja_env(loader=loader)
