@@ -289,15 +289,14 @@
     - sub_store_capability_registry_enabled | bool
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
-- name: Render Sub-Store capability Mihomo profile template
+- name: Render Sub-Store capability Mihomo profile
   become: true
   ansible.builtin.template:
     src: sub_store_capability_profile.yaml.j2
-    dest: "{{ sub_store_capability_profile_template_path }}"
+    dest: "{{ sub_store_capability_profile_path }}"
     owner: root
     group: root
     mode: "0644"
-  when: sub_store_capability_pools_enabled | bool
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Run Sub-Store capability pool sync
