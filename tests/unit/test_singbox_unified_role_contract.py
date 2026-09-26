@@ -54,6 +54,37 @@ def test_wireguard_endpoint_inbound_is_strictly_system_mode_guarded() -> None:
     assert "singbox_wireguard_http_inbound | default(false) | bool" in wg_template
 
 
+def test_config_writes_notify_a_mode_aware_restart() -> None:
+    """Regression: docker mode never restarted after a configuration change.
+
+    Configuration tasks notified only the OpenRC restart handler, so a
+    docker-mode host wrote new configuration and kept serving the previous one.
+    The port move was written to disk, every check passed, and the container
+    was still listening on the old port hours later.
+    """
+    handlers = read("handlers/main.yml")
+    assert "Restart singbox service" in handlers, (
+        "a mode-aware restart handler must exist"
+    )
+    assert "include_tasks: restart.yml" in handlers
+
+    dispatcher = read("handlers/restart.yml")
+    assert "community.docker.docker_container" in dispatcher, (
+        "docker mode must be able to restart the container"
+    )
+    assert "restart: true" in dispatcher
+    assert "sing-box" in dispatcher, "native mode must still restart the service"
+
+    for task_file in ("tasks/configure_common.yml", "tasks/native.yml"):
+        text = read(task_file)
+        assert "notify: Restart singbox openrc service" not in text, (
+            f"{task_file} must not notify the OpenRC-only handler"
+        )
+        assert "notify: Restart singbox service" in text, (
+            f"{task_file} must notify the mode-aware restart handler"
+        )
+
+
 def test_docker_container_declares_explicit_run_command() -> None:
     """Regression: the sing-box image entrypoint is a bare `sing-box`.
 

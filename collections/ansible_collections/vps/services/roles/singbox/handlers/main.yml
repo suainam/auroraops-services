@@ -1,4 +1,13 @@
 ---
+# Mode-aware restart. Configuration tasks notify this handler rather than the
+# OpenRC one directly: notifying only the OpenRC handler meant a docker-mode
+# host wrote new configuration but never restarted, so it kept serving the
+# previous configuration indefinitely and every check still passed.
+- name: Restart singbox service
+  become: true
+  ansible.builtin.include_tasks: restart.yml
+  tags: [deploy, verify, rollback, services, singbox, phase5]
+
 - name: Restart singbox docker container
   become: true
   community.docker.docker_container:
