@@ -43,7 +43,7 @@
     {
       "type": "vless",
       "tag": "out-nat-jp3",
-      "server": "{{ singbox_jp3_host | default('173.239.246.29') }}",
+      "server": "{{ singbox_jp3_host | default(hostvars['nat-jp3'].nat_public_ipv4 | default('')) }}",
       "server_port": 30052,
       "uuid": "{{ singbox_uuid_aws }}",
       "flow": "xtls-rprx-vision",
@@ -53,8 +53,8 @@
         "utls": { "enabled": true, "fingerprint": "chrome" },
         "reality": {
           "enabled": true,
-          "public_key": "xl-LDCjn_VKbhRAPkpLIqqOAVSLKP_axioYoa3xS-jM",
-          "short_id": "f674722ffaaa070d"
+          "public_key": "{{ hostvars['nat-jp3'].singbox_reality_public_key | default('') }}",
+          "short_id": "{{ hostvars['nat-jp3'].singbox_reality_short_ids | default([''], true) | first }}"
         }
       }
     },

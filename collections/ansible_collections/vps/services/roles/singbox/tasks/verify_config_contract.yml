@@ -1,0 +1,109 @@
+---
+- name: "[Sing-box] Find JSON configuration fragments"
+  become: true
+  ansible.builtin.find:
+    paths: "{{ singbox_verify_config_dir }}"
+    patterns: "*.json"
+    file_type: file
+  register: singbox_config_fragments
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Read JSON configuration fragments"
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ item.path }}"
+  loop: "{{ singbox_config_fragments.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  register: singbox_config_contents
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Decode configuration fragments"
+  ansible.builtin.set_fact:
+    singbox_config_documents: >-
+      {{ singbox_config_contents.results
+         | map(attribute='content')
+         | map('b64decode')
+         | map('from_json')
+         | list }}
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Collect outbound tags"
+  ansible.builtin.set_fact:
+    singbox_config_outbound_tags: >-
+      {{ singbox_config_documents
+         | map(attribute='outbounds', default=[])
+         | flatten
+         | map(attribute='tag', default='')
+         | select('!=', '')
+         | list }}
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Collect route outbound references"
+  ansible.builtin.set_fact:
+    singbox_config_route_outbound_refs: >-
+      {{ singbox_config_documents
+         | map(attribute='route', default={})
+         | map(attribute='rules', default=[])
+         | flatten
+         | map(attribute='outbound', default='')
+         | select('!=', '')
+         | list }}
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Collect Reality-enabled peer outbounds"
+  ansible.builtin.set_fact:
+    singbox_config_reality_peers: >-
+      {{ singbox_config_documents
+         | map(attribute='outbounds', default=[])
+         | flatten
+         | selectattr('type', 'equalto', 'vless')
+         | selectattr('tls.reality.enabled', 'defined')
+         | selectattr('tls.reality.enabled')
+         | list }}
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Collect peers with missing or empty Reality public key"
+  ansible.builtin.set_fact:
+    # An auto-routing urltest cluster silently selects a member that can never
+    # handshake, so a peer must be flagged whether the key is absent entirely or
+    # merely rendered as an empty string.
+    singbox_config_incomplete_reality_peers: >-
+      {{ (singbox_config_reality_peers
+          | rejectattr('tls.reality.public_key', 'defined')
+          | map(attribute='tag') | list)
+         + (singbox_config_reality_peers
+            | selectattr('tls.reality.public_key', 'defined')
+            | selectattr('tls.reality.public_key', 'equalto', '')
+            | map(attribute='tag') | list) }}
+  no_log: true
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Assert every route outbound reference resolves"
+  ansible.builtin.assert:
+    that:
+      - singbox_config_outbound_tags | length > 0
+      - singbox_config_route_outbound_refs | difference(singbox_config_outbound_tags) | length == 0
+      - singbox_relay_upstreams | default([]) | length == 0 or 'relay-failover-cluster' in singbox_config_outbound_tags
+    fail_msg: >-
+      sing-box configuration contains unresolved route outbound references or
+      omits the configured relay cluster.
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Assert auto-routing peers carry usable Reality material"
+  ansible.builtin.assert:
+    that:
+      - singbox_config_incomplete_reality_peers | length == 0
+    fail_msg: >-
+      A VLESS Reality peer outbound is missing its public_key or was rendered
+      with an empty public_key. The outbound tag still resolves, so route
+      reference checks pass, but the auto-routing urltest cluster would select
+      a member that can never complete a handshake. Populate the peer's
+      singbox_reality_public_key in inventory.
+  tags: [verify, services, singbox, phase5]

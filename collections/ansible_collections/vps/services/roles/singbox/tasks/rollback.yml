@@ -1,10 +1,19 @@
 ---
+- name: Resolve singbox effective deployment mode for rollback
+  ansible.builtin.import_tasks: resolve.yml
+  tags: [rollback, services, singbox, phase5]
+
 - name: Stop singbox docker container
   become: true
   community.docker.docker_container:
     name: singbox
     state: stopped
-  failed_when: false
+  # A container that was never created is a legitimate no-op; any other
+  # failure (daemon unreachable, permission denied) must still fail closed.
+  failed_when: >-
+    singbox_rollback_docker_stop is failed
+    and 'No such container' not in (singbox_rollback_docker_stop.msg | default(''))
+  register: singbox_rollback_docker_stop
   when: singbox_effective_mode == 'docker'
   tags: [rollback, services, singbox, phase5]
 
@@ -13,7 +22,12 @@
   ansible.builtin.service:
     name: sing-box
     state: stopped
-  failed_when: false
+  # An absent OpenRC unit is a legitimate no-op on a never-deployed host.
+  failed_when: >-
+    singbox_rollback_native_stop is failed
+    and 'could not be found' not in (singbox_rollback_native_stop.msg | default(''))
+    and 'No such file' not in (singbox_rollback_native_stop.msg | default(''))
+  register: singbox_rollback_native_stop
   when: singbox_effective_mode == 'native'
   tags: [rollback, services, singbox, phase5]
 

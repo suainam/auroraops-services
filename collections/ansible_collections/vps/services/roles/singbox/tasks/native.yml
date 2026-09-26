@@ -13,7 +13,6 @@
   ansible.builtin.file:
     path: "{{ singbox_native_config_dir }}"
     state: directory
-    mode: "0755"
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box Native - Ensure certs directory exists
