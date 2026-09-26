@@ -67,6 +67,16 @@ REGION_MARKERS = {
     "region-other": "__FILTER_REGION_OTHER__",
 }
 
+REGION_GROUP_NAMES = {
+    "region-hk-mo": "🇭🇰 港澳 · 自动优选",
+    "region-tw": "🇹🇼 台湾 · 自动优选",
+    "region-jp": "🇯🇵 日本 · 自动优选",
+    "region-sg": "🇸🇬 新加坡 · 自动优选",
+    "region-us": "🇺🇸 美国 · 自动优选",
+    "region-europe": "🇪🇺 欧洲 · 自动优选",
+    "region-other": "🌐 其他 · 自动优选",
+}
+
 POOL_MARKERS = {
     "baseline": "__FILTER_BASELINE__",
     **{pool: f"__FILTER_{pool.upper().replace('-', '_')}__" for pool in POOL_CAPABILITIES},
@@ -321,14 +331,12 @@ def render_profile(
             value = "^$"
         else:
             value = existing_filters.get(pool, "")
-            # If LKG is stale or mismatched, gracefully fall back to baseline members to prevent emptyFallback: COMPATIBLE
-            if not value or "CC" in value:
-                baseline_names = member_names.get("baseline", [])
-                if baseline_names:
-                    value = exact_name_filter(baseline_names)
-                else:
-                    raise ValueError(f"capability pool {pool} is empty and has no LKG or baseline filter")
-            reused_lkg.append(pool)
+            # Never resurrect an empty capability or region pool by falling back to baseline.
+            # Doing so violates admission semantics and injects non-conforming nodes.
+            if not value:
+                value = "^$"
+            else:
+                reused_lkg.append(pool)
         rendered = rendered.replace(marker, json.dumps(value, ensure_ascii=False))
     if any(marker in rendered for marker in POOL_MARKERS.values()) or re.search(
         r"__FILTER_[A-Za-z0-9_-]+__", rendered
@@ -341,6 +349,31 @@ def render_profile(
         or not isinstance(payload.get("proxy-groups"), list)
     ):
         raise ValueError("capability profile is not a valid Mihomo profile")
+
+    # Post-process: clean up empty regional groups from '⚡ 自动优选' and prune empty regional groups
+    # so Mihomo never falls back to emptyFallback: COMPATIBLE / implicit DIRECT.
+    empty_region_groups = {
+        group_name
+        for pool, group_name in REGION_GROUP_NAMES.items()
+        if not member_names.get(pool)
+    }
+
+    groups = payload.get("proxy-groups", [])
+    for group in groups:
+        if group.get("name") == "⚡ 自动优选" and isinstance(group.get("proxies"), list):
+            group["proxies"] = [
+                p for p in group["proxies"]
+                if p not in empty_region_groups
+            ]
+            if not group["proxies"]:
+                group["proxies"] = ["🛡️ 稳定优先"]
+
+    payload["proxy-groups"] = [
+        group for group in groups
+        if group.get("name") not in empty_region_groups
+    ]
+
+    rendered = yaml.dump(payload, allow_unicode=True, sort_keys=False)
     return rendered, reused_lkg
 
 
