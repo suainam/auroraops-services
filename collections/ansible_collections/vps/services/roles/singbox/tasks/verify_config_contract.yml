@@ -85,6 +85,91 @@
   no_log: true
   tags: [verify, services, singbox, phase5]
 
+# --- Redirect target vs listen port ---
+#
+# The firewall redirects the hopping range to a single target port, while
+# sing-box listens on exactly one port. When those two disagree, every packet
+# in the hopping range is handed to whatever owns the target port and dropped,
+# yet sing-box itself is healthy and every other check passes. Both values are
+# therefore read from runtime state, never from configuration: comparing two
+# config values only proves the config is self-consistent, which is precisely
+# what failed to catch this.
+
+- name: "[Sing-box] Read the live Hysteria redirect target from the firewall"
+  become: true
+  ansible.builtin.shell: |
+    set -o pipefail 2>/dev/null || true
+    if command -v iptables >/dev/null 2>&1; then
+      iptables -t nat -S PREROUTING 2>/dev/null \
+        | awk -v range="{{ singbox_hopping_firewall_range | default('') }}" '
+            $0 ~ ("--dport " range) && /REDIRECT/ {
+              for (i = 1; i <= NF; i++) if ($i == "--to-ports") print $(i + 1)
+            }' \
+        | sort -u
+    fi
+  register: singbox_hysteria_redirect_probe
+  changed_when: false
+  failed_when: false
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Read the live Hysteria listen port from the deployed config"
+  become: true
+  ansible.builtin.shell: |
+    set -o pipefail 2>/dev/null || true
+    python3 - <<'PY'
+    import glob, json
+    ports = []
+    for path in sorted(glob.glob("{{ singbox_verify_config_dir }}/*.json")):
+        with open(path) as handle:
+            doc = json.load(handle)
+        for inbound in doc.get("inbounds") or []:
+            if inbound.get("type") == "hysteria2" and inbound.get("listen_port"):
+                ports.append(int(inbound["listen_port"]))
+    print(" ".join(str(p) for p in sorted(set(ports))))
+    PY
+  register: singbox_hysteria_listen_probe
+  changed_when: false
+  failed_when: false
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Collect redirect/listen port mismatches"
+  ansible.builtin.set_fact:
+    singbox_hysteria_redirect_target: >-
+      {{ (singbox_hysteria_redirect_probe.stdout | default('') | trim | split(' ')
+          | select('!=', '') | map('int') | list) }}
+    singbox_hysteria_listen_port: >-
+      {{ (singbox_hysteria_listen_probe.stdout | default('') | trim | split(' ')
+          | select('!=', '') | map('int') | list) }}
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Compare redirect target against the listening port"
+  ansible.builtin.set_fact:
+    # Symmetric comparison: a fault is a port present on one side only. A
+    # one-directional check would pass when the redirect points at a port
+    # nothing listens on, which is exactly the failure that blackholed traffic.
+    singbox_hysteria_redirect_mismatch: >-
+      {{ (singbox_hysteria_redirect_target
+          | difference(singbox_hysteria_listen_port))
+         + (singbox_hysteria_listen_port
+            | difference(singbox_hysteria_redirect_target)) }}
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Assert the redirect target matches the listening port"
+  ansible.builtin.assert:
+    that:
+      # Nothing to compare when the host does not use port hopping.
+      - singbox_relay_upstreams | default([]) | length == 0
+        or singbox_hysteria_listen_port | length == 0
+        or singbox_hysteria_redirect_target | length == 0
+        or singbox_hysteria_redirect_mismatch | length == 0
+    fail_msg: >-
+      The firewall redirects the Hysteria hopping range to a port that
+      sing-box does not listen on. Traffic in the hopping range is handed to
+      whatever owns the redirect target and dropped, while sing-box itself
+      reports healthy. Align the redirect target with the Hysteria listen
+      port, or remove the redirect rule.
+  tags: [verify, services, singbox, phase5]
+
 - name: "[Sing-box] Assert every route outbound reference resolves"
   ansible.builtin.assert:
     that:
