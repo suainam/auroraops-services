@@ -7,7 +7,8 @@
 # 主机特定配置在 host_vars/<host>.yml 中定义
 # ===========================================
 
-# 基础端口配置
+# 基础端口与安装状态默认值
+nginx_installed: true
 nginx_http_port: 80
 nginx_https_port: 443
 nginx_install_default_vhost: true
