@@ -220,6 +220,7 @@
     app_service_state: stopped
   when:
     - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_profiler_enabled | bool
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Deploy Sub-Store capability profiler timer
@@ -234,6 +235,7 @@
     app_timer_state: "{{ (sub_store_capability_profiler_enabled | bool) | ternary('started', 'stopped') }}"
   when:
     - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_profiler_enabled | bool
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Run Sub-Store capability profiler once now
@@ -273,6 +275,7 @@
     app_service_state: stopped
   when:
     - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_pools_enabled | bool
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Deploy Sub-Store capability pool sync timer
@@ -287,6 +290,7 @@
     app_timer_state: "{{ (sub_store_capability_pools_enabled | bool) | ternary('started', 'stopped') }}"
   when:
     - sub_store_capability_registry_enabled | bool
+    - sub_store_capability_pools_enabled | bool
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Render Sub-Store capability Mihomo profile
