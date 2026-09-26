@@ -1,4 +1,4 @@
-# Mihomo profile backed by existing Sub-Store sources and #220 capability facts.
+# Mihomo profile backed by Sub-Store sources with pure keyword-based lightweight grouping (#29).
 
 mixed-port: 7890
 allow-lan: false
@@ -19,32 +19,139 @@ geox-url:
 
 proxies: []
 {% set capability_providers = docker_apps_sub_store_capability_providers %}
-{% set provider_display_groups = sub_store_capability_provider_display_groups | default({}) %}
-{% set display_group_specs = [
-  {'key': 'BP', 'name': '🌐 BP'},
-  {'key': 'NAT', 'name': '🧭 NAT'},
-  {'key': 'VPS', 'name': '🖥️ VPS'},
-  {'key': 'SK', 'name': '🌸 SK'}
-] %}
-{% set provider_groups = namespace(names=[]) %}
-{% for provider in capability_providers %}
-{% if provider.enabled | default(true) %}
-{% set group_name = provider['provider-group'] | default(provider.name) %}
-{% if group_name not in provider_groups.names %}
-{% set provider_groups.names = provider_groups.names + [group_name] %}
-{% endif %}
-{% endif %}
-{% endfor %}
+
 {% include 'sub_store_capability_profile/proxy_providers.yaml.j2' %}
 
 proxy-groups:
-{% include 'sub_store_capability_profile/core_groups.yaml.j2' %}
+  # ========================================================
+  # 1. 业务入口 (Top-Level Service Groups)
+  # ========================================================
+  - name: "🤖 AI 服务"
+    type: select
+    proxies:
+      - "🛡️ 自建优先 (AI 容灾)"
+      - "🖥️ 自建 VPS · AI"
+      - "🧭 自建 NAT · AI"
+      - "🌐 外部 BP · AI"
+      - "🌸 外部 SK · 全部"
+      - DIRECT
 
-{% include 'sub_store_capability_profile/capability_groups.yaml.j2' %}
+  - name: "📹 视频与大流量"
+    type: select
+    proxies:
+      - "⚡ BP 千兆优选"
+      - "🖥️ 自建 VPS"
+      - "🧭 自建 NAT"
+      - "🌐 外部 BP · 全部"
+      - "🌸 外部 SK · 全部"
+      - DIRECT
 
-{% include 'sub_store_capability_profile/service_groups.yaml.j2' %}
+  - name: "🐙 GitHub & 开发"
+    type: select
+    proxies:
+      - "🖥️ 自建 VPS"
+      - "🧭 自建 NAT"
+      - "⚡ BP 千兆优选"
+      - "🌸 外部 SK · 全部"
+      - DIRECT
 
-{% include 'sub_store_capability_profile/regional_groups.yaml.j2' %}
+  - name: "🚀 默认代理"
+    type: select
+    proxies:
+      - "⚡ BP 千兆优选"
+      - "🛡️ 自建优先 (AI 容灾)"
+      - "🖥️ 自建 VPS"
+      - "🧭 自建 NAT"
+      - "🌐 外部 BP · 全部"
+      - "🌸 外部 SK · 全部"
+      - DIRECT
+
+  # ========================================================
+  # 2. 自动化策略组 (Strategy Groups)
+  # ========================================================
+  - name: "🛡️ 自建优先 (AI 容灾)"
+    type: fallback
+    proxies:
+      - "🖥️ 自建 VPS · AI"
+      - "🧭 自建 NAT · AI"
+      - "🌐 外部 BP · AI"
+      - DIRECT
+    url: https://chatgpt.com/cdn-cgi/trace
+    interval: 300
+    timeout: 3000
+    lazy: true
+
+  - name: "⚡ BP 千兆优选"
+    type: url-test
+    use:
+      - source-baipiao
+    filter: "(?i)1000M|神速|快"
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+    lazy: true
+
+  # ========================================================
+  # 3. 实体池与手动出口 (Entity Pools & Manual Exits)
+  # ========================================================
+  - name: "🖥️ 自建 VPS · AI"
+    type: fallback
+    use:
+      - source-cc15
+      - source-qqg1299
+    url: https://chatgpt.com/cdn-cgi/trace
+    interval: 300
+    lazy: true
+
+  - name: "🖥️ 自建 VPS"
+    type: select
+    use:
+      - source-cc15
+      - source-qqg1299
+
+  - name: "🧭 自建 NAT · AI"
+    type: fallback
+    use:
+      - source-nat-hk084
+      - source-nat-hk216
+      - source-nat-jp3
+    url: https://chatgpt.com/cdn-cgi/trace
+    interval: 300
+    lazy: true
+
+  - name: "🧭 自建 NAT"
+    type: select
+    use:
+      - source-nat-hk084
+      - source-nat-hk216
+      - source-nat-jp3
+
+  - name: "🌐 外部 BP · AI"
+    type: fallback
+    use:
+      - source-baipiao
+    filter: "(?i)AI|Gemini|ChatGPT|GPT"
+    url: https://chatgpt.com/cdn-cgi/trace
+    interval: 300
+    lazy: true
+
+  - name: "🌐 外部 BP · 全部"
+    type: select
+    use:
+      - source-baipiao
+
+  - name: "🌸 外部 SK · 全部"
+    type: select
+    use:
+      - source-sakura
+
+  # 兼顾现有规则集的兜底/直连组
+  - name: "🐟 漏网之鱼"
+    type: select
+    proxies:
+      - "🚀 默认代理"
+      - DIRECT
+    hidden: true
 
 {% include 'sub_store_capability_profile/rule_providers.yaml.j2' %}
 
