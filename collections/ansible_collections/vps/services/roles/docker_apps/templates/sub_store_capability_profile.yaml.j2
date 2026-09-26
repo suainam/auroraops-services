@@ -19,8 +19,7 @@ geox-url:
 
 proxies: []
 {% set capability_providers = docker_apps_sub_store_capability_providers %}
-
-{# 数据驱动：按 display-group 动态聚合 provider-id，彻底消除具体机器名称的硬编码 #}
+{% include 'sub_store_capability_profile/proxy_providers.yaml.j2' %}
 {% set vps_providers = namespace(items=[]) %}
 {% set nat_providers = namespace(items=[]) %}
 {% set bp_providers  = namespace(items=[]) %}
@@ -49,7 +48,6 @@ proxies: []
 {% set sk_providers.items = sk_providers.items + [pid] %}
 {% endif %}
 {% endfor %}
-{% include 'sub_store_capability_profile/proxy_providers.yaml.j2' %}
 
 proxy-groups:
   # ========================================================
