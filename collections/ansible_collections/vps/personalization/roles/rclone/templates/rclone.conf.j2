@@ -10,8 +10,13 @@ scope = drive
 token = {{ rclone_gdrive_token }}
 use_trash = false
 
-# 包含用户自定义的 rclone 配置
+# Include user-defined configuration snippets when configured.
 {% if rclone_include_user_configs | default(true) %}
+{% if ansible_system == 'Darwin' %}
 [include]
-  path = /root/.config/rclone/rclone.conf.d/*.conf
+  path = {{ rclone_darwin_user_config_dir }}/*.conf
+{% else %}
+[include]
+  path = {{ rclone_user_config_dir | default('/root/.config/rclone/rclone.conf.d') }}/*.conf
+{% endif %}
 {% endif %}
