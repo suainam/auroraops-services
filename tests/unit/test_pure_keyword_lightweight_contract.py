@@ -198,3 +198,12 @@ def test_mihomo_syntax_validation():
     Path(tmp_name).unlink()
 
     assert res.returncode == 0, f"Mihomo syntax check failed:\n{res.stdout}\n{res.stderr}"
+
+def test_github_routes_to_default_proxy_and_video_stays_on_video_development():
+    rules_text = (TEMPLATES_DIR / "rules.yaml").read_text(encoding="utf-8")
+    assert "RULE-SET,github,🚀 默认代理" in rules_text
+    assert "RULE-SET,github,📹 视频开发" not in rules_text
+    assert "RULE-SET,youtube,📹 视频开发" in rules_text
+    assert "RULE-SET,disney,📹 视频开发" in rules_text
+    assert "RULE-SET,netflix,📹 视频开发" in rules_text
+    assert "RULE-SET,spotify,📹 视频开发" in rules_text

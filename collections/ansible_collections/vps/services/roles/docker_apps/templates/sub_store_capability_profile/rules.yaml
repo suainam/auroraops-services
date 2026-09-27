@@ -47,14 +47,14 @@
   - RULE-SET,bilibili-hmt,📺 B站港澳
   - DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳
 
-  # 📹 视频开发 (GitHub + YouTube + 流媒体大流量加速)
-  - RULE-SET,github,📹 视频开发
+  # 📹 视频开发 (YouTube + 流媒体大流量加速)
   - RULE-SET,youtube,📹 视频开发
   - RULE-SET,disney,📹 视频开发
   - RULE-SET,netflix,📹 视频开发
   - RULE-SET,spotify,📹 视频开发
 
   # 🚀 默认代理
+  - RULE-SET,github,🚀 默认代理
   - RULE-SET,telegram,🚀 默认代理
   - RULE-SET,proxy-domains,🚀 默认代理
   - PROCESS-PATH,/usr/bin/wget,🚀 默认代理
