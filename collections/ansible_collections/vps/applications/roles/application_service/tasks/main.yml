@@ -1,7 +1,7 @@
 ---
 - name: Delegate to managed_service universal task library
   ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../../../../common/tasks/managed_service.yml"
+    file: "{{ role_path }}/../../../common/tasks/managed_service.yml"
   vars:
     service_name: "{{ app_service_name | default(application_service_name | default('')) }}"
     service_description: "{{ app_service_description | default(application_service_description | default('')) }}"

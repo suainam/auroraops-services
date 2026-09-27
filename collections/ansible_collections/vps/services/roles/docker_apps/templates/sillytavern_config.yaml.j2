@@ -73,10 +73,10 @@ basicAuthUser:
 enableCorsProxy: false
 # -- REQUEST PROXY CONFIGURATION --
 # 仅在 docker_apps_hysteria2_client_enabled 时启用代理（适用于需要代理的局域网主机）
-{% set proxy_enabled = docker_apps_hysteria2_client_enabled | default(false) | bool %}
+{% set proxy_enabled = docker_apps_sillytavern_proxy_enabled | default(docker_apps_hysteria2_client_enabled | default(false)) | bool %}
 requestProxy:
   enabled: {{ 'true' if proxy_enabled else 'false' }}
-  url: "http://hysteria2-client:10809"
+  url: "{{ docker_apps_sillytavern_proxy_url | default('http://hysteria2-client:10809') }}"
   bypass:
     - localhost
     - 127.0.0.1
