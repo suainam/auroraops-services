@@ -1,0 +1,17 @@
+---
+- name: Verify selected Docker app is absent after rollback
+  become: true
+  community.docker.docker_container_info:
+    name: sub_store
+  register: docker_apps_rollback_container_info
+  changed_when: false
+  failed_when: docker_apps_rollback_container_info.exists
+  when: rollback_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - rollback_verify
+    - services
+    - docker_apps
+    - docker_apps_manifest
+    - sub_store
+    - phase5
