@@ -24,6 +24,43 @@
         else nginx_sites_to_deploy
       }}
   tags: [verify, services, nginx, nginx_site_config, phase4]
+- name: Resolve effective Sub-Store providers for Nginx verification
+  ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_providers.yml
+  when:
+    - singbox_domain is defined
+    - singbox_domain in nginx_sites_to_mutate
+  tags: [verify, services, nginx, nginx_site_config, phase4]
+- name: Resolve capability provider catalog for Nginx verification
+  ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_capability_providers.yml
+  when:
+    - singbox_domain is defined
+    - singbox_domain in nginx_sites_to_mutate
+  tags: [verify, services, nginx, nginx_site_config, phase4]
+- name: Build configured Provider response paths for verification
+  ansible.builtin.set_fact:
+    nginx_provider_response_paths: >-
+      {{
+        sub_store_capability_provider_source_ids
+        | map('regex_replace', '^', sub_store_capability_source_provider_suffix ~ '-')
+        | map('regex_replace', '$', '.yaml')
+        | list
+      }}
+  when:
+    - singbox_domain is defined
+    - singbox_domain in nginx_sites_to_mutate
+  no_log: true
+  tags: [verify, services, nginx, nginx_site_config, phase4]
+- name: Assert at least one configured Provider URL is available to verify
+  ansible.builtin.assert:
+    that:
+      - nginx_provider_response_paths | length > 0
+    fail_msg: No configured Sub-Store Provider URLs are available for verification.
+  when:
+    - singbox_domain is defined
+    - singbox_domain in nginx_sites_to_mutate
+  no_log: true
+  tags: [verify, services, nginx, nginx_site_config, phase4]
+
 
 
 - name: 验证 Nginx 软件包是否已安装
@@ -284,3 +321,34 @@
     fail_msg: Nginx OpenRC service is not running or enabled
   when: (ansible_service_mgr | default('systemd')) != 'systemd'
   tags: [verify, services, nginx, nginx_verify_service, phase4]
+- name: Fetch each configured Sub-Store Provider URL
+  ansible.builtin.uri:
+    url: "https://{{ singbox_domain }}/{{ item }}"
+    method: GET
+    status_code: 200
+    return_content: true
+    follow_redirects: none
+    validate_certs: true
+    timeout: 20
+  loop: "{{ nginx_provider_response_paths | default([]) }}"
+  register: nginx_provider_responses
+  when:
+    - singbox_domain is defined
+    - singbox_domain in nginx_sites_to_mutate
+  no_log: true
+  tags: [verify, services, nginx, nginx_site_config, phase4]
+- name: Assert each Provider URL returns Mihomo YAML
+  ansible.builtin.assert:
+    that:
+      - >-
+        (item.content | from_yaml | default({}, true)) is mapping
+        and 'proxies' in (item.content | from_yaml | default({}, true))
+    fail_msg: A configured Sub-Store Provider URL did not return Mihomo YAML with a proxies key.
+  loop: "{{ nginx_provider_responses.results | default([]) }}"
+  loop_control:
+    label: Provider YAML response
+  when:
+    - singbox_domain is defined
+    - singbox_domain in nginx_sites_to_mutate
+  no_log: true
+  tags: [verify, services, nginx, nginx_site_config, phase4]

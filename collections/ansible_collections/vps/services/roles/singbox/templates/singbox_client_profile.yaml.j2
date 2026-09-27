@@ -49,7 +49,7 @@ proxies:
     udp: true
     client-fingerprint: chrome
     reality-opts:
-      public-key: "{{ singbox_reality_public_key | default(docker_apps_singbox_reality_public_key | default(singbox_reality_public_key_generated | default(''))) }}"
+      public-key: "{{ singbox_reality_public_key | default(docker_apps_singbox_reality_public_key | default(singbox_reality_public_key_generated | default(''), true), true) }}"
       short-id: "{{ (singbox_reality_short_ids | default(['']))[0] }}"
 {% else %}
     udp: true
@@ -71,7 +71,7 @@ proxies:
     udp: true
     client-fingerprint: chrome
     reality-opts:
-      public-key: "{{ singbox_reality_public_key | default(docker_apps_singbox_reality_public_key | default(singbox_reality_public_key_generated | default(''))) }}"
+      public-key: "{{ singbox_reality_public_key | default(docker_apps_singbox_reality_public_key | default(singbox_reality_public_key_generated | default(''), true), true) }}"
       short-id: "{{ (singbox_reality_short_ids | default(['']))[0] }}"
 {% else %}
     udp: true

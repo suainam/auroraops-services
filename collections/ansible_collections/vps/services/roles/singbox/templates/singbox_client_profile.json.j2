@@ -116,7 +116,7 @@
 {%- if node.reality | default(true) %},
         "reality": {
           "enabled": true,
-          "public_key": "{{ singbox_reality_public_key | default(docker_apps_singbox_reality_public_key | default(singbox_reality_public_key_generated | default(''))) }}",
+          "public_key": "{{ singbox_reality_public_key | default(docker_apps_singbox_reality_public_key | default(singbox_reality_public_key_generated | default(''), true), true) }}",
           "short_id": "{{ (singbox_reality_short_ids | default(['']))[0] }}"
         }
 {%- endif %}

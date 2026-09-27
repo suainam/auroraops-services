@@ -53,6 +53,44 @@ def test_wireguard_endpoint_inbound_is_strictly_system_mode_guarded() -> None:
     assert "singbox_wireguard_system | default(false) | bool" in wg_template
     assert "singbox_wireguard_http_inbound | default(false) | bool" in wg_template
 
+def test_reality_public_key_fallback_handles_empty_inventory_override() -> None:
+    import re
+    import yaml
+    from jinja2 import Environment
+
+    env = Environment()
+    env.filters["bool"] = lambda v: str(v).lower() in ("true", "1", "yes", "on") if not isinstance(v, bool) else v
+    env.tests["search"] = lambda value, pattern: re.search(pattern, str(value)) is not None
+    env.tests["regex"] = lambda value, pattern: re.search(pattern, str(value)) is not None
+    env.filters["to_json"] = lambda v: '""'
+    env.globals["now"] = lambda: "2026-09-27T00:00:00Z"
+    context = {
+        "singbox_nodes": [
+            {
+                "name": "vless-aws",
+                "type": "vless",
+                "uuid": "test-uuid",
+                "port": 30052,
+                "sni": "aws.amazon.com",
+                "reality": True,
+            }
+        ],
+        "singbox_reality_public_key": "",
+        "singbox_reality_public_key_generated": "SIMULATED_GEN_KEY",
+        "singbox_domain": "handclap6764.suai.eu.org",
+        "singbox_sub_token": "token",
+        "singbox_reality_short_ids": ["8b1ec27f"],
+        "docker_apps_country_flags": {"UNKNOWN": "🌍"},
+        "auroraops_roles": {"services": {"ip2free_gateway": False}},
+    }
+
+    provider_tpl = env.from_string(read("templates/singbox_provider_profile.yaml.j2"))
+    provider_out = yaml.safe_load(provider_tpl.render(context))
+    assert provider_out["proxies"][0]["reality-opts"]["public-key"] == "SIMULATED_GEN_KEY"
+
+    client_tpl = env.from_string(read("templates/singbox_client_profile.yaml.j2"))
+    client_out = yaml.safe_load(client_tpl.render(context))
+    assert client_out["proxies"][0]["reality-opts"]["public-key"] == "SIMULATED_GEN_KEY"
 
 def test_config_writes_notify_a_mode_aware_restart() -> None:
     """Regression: docker mode never restarted after a configuration change.

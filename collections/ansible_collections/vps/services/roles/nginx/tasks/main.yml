@@ -1,11 +1,11 @@
 ---
 - name: Resolve effective Sub-Store providers for Nginx templates
   ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_providers.yml
-  tags: [deploy, services, nginx, phase4]
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
 
 - name: Resolve capability provider catalog for Nginx templates
   ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_capability_providers.yml
-  tags: [deploy, services, nginx, phase4]
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
 
 - name: 合并 Nginx 站点列表
   ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml

@@ -749,6 +749,11 @@
         'RULE-SET,bilibili-hmt,📺 B站港澳台') <
         docker_apps_sub_store_capability_profile_payload['rules'].index(
         'RULE-SET,cn-domains,DIRECT')
+      - >-
+        docker_apps_sub_store_capability_profile_payload['rules'].index(
+        'RULE-SET,github,🚀 默认代理') <
+        docker_apps_sub_store_capability_profile_payload['rules'].index(
+        'RULE-SET,microsoft,DIRECT')
       - "'__FILTER_' not in docker_apps_sub_store_capability_profile.content"
     fail_msg: "Capability profile must preserve Provider boundaries, user-facing groups, runtime network policy, rules, and resolved filters"
   when:
