@@ -4,6 +4,9 @@
   community.docker.docker_container:
     name: singbox
     image: "{{ singbox_image }}"
+    # The image entrypoint is a bare `sing-box`; without an explicit run
+    # command it prints help and exits, leaving the container in a restart loop.
+    command: run -C /etc/sing-box
     state: started
     restart_policy: unless-stopped
     network_mode: host

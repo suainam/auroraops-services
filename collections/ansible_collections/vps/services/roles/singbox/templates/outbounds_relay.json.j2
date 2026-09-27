@@ -24,7 +24,7 @@
       "type": "vless",
       "tag": "zt-relay-out",
       "server": "{{ singbox_zt_peer_ip }}",
-      "server_port": {{ singbox_zt_relay_port | default(40052) }},
+      "server_port": {{ singbox_zt_relay_port }},
       "uuid": "{{ singbox_uuid_aws }}",
       "domain_resolver": "cf-dns"
     },

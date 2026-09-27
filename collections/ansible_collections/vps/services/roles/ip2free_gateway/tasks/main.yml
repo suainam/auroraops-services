@@ -5,6 +5,95 @@
 #   - singbox_role 必须为 direct (生成订阅)
 #   - 通过 auroraops_roles['services']['ip2free_gateway'] 控制
 
+# Retirement path.
+#
+# This used to be unreachable. The playbook gated the whole include on the
+# capability flag, so switching the flag off meant this role never ran -- and
+# everything it had installed stayed installed: four systemd units, the working
+# directory, and 06_ip2free.json, which the agent timer rewrites every 30
+# minutes straight to disk, outside Ansible's control. "The flag says off" and
+# "the host still has it running" were two unrelated facts, and a deploy could
+# not make them agree.
+#
+# That last artifact is why this matters beyond tidiness. A timer rewriting part
+# of the sing-box configuration made other roles' verify stages and idempotence
+# checks fail for reasons unrelated to whatever they were checking, and nothing
+# in those failures pointed at a capability that was supposed to be off.
+#
+# So the cleanup lives here, where a deploy reaches it, and it is idempotent: a
+# host that never had the capability passes through without changing anything.
+- name: Retire IP2Free (capability off)
+  when: not (auroraops_roles['services']['ip2free_gateway'] | default(false) | bool)
+  tags: [deploy, services, ip2free_gateway, ip2free_gateway_config, phase5]
+  block:
+    - name: Look for IP2Free systemd units left behind
+      become: true
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      loop:
+        - { name: "ip2free-agent.timer", path: "/etc/systemd/system/ip2free-agent.timer" }
+        - { name: "ip2free-health.timer", path: "/etc/systemd/system/ip2free-health.timer" }
+        - { name: "ip2free-agent.service", path: "/etc/systemd/system/ip2free-agent.service" }
+        - { name: "ip2free-health.service", path: "/etc/systemd/system/ip2free-health.service" }
+      register: ip2free_gateway__retire_units
+      changed_when: false
+
+    # Stopping a unit that does not exist is an error, so the unit files are
+    # probed first rather than assumed. A host that never ran this role has
+    # nothing to stop and must not be made to fail.
+    - name: Stop and disable any IP2Free timers still present
+      become: true
+      ansible.builtin.systemd:
+        name: "{{ item.item.name }}"
+        state: stopped
+        enabled: false
+        daemon_reload: true
+      loop: "{{ ip2free_gateway__retire_units.results }}"
+      when:
+        - item.stat.exists
+        - item.item.name.endswith('.timer')
+      failed_when: false
+
+    - name: Stop any IP2Free services still present
+      become: true
+      ansible.builtin.systemd:
+        name: "{{ item.item.name }}"
+        state: stopped
+        failed_when: false
+      loop: "{{ ip2free_gateway__retire_units.results }}"
+      when:
+        - item.stat.exists
+        - item.item.name.endswith('.service')
+
+    # Order matters: the timers go first, so nothing can rewrite the artifact
+    # between removing it and the daemon-reload below.
+    - name: Remove the IP2Free systemd unit files
+      become: true
+      ansible.builtin.file:
+        path: "{{ item.item.path }}"
+        state: absent
+      loop: "{{ ip2free_gateway__retire_units.results }}"
+      when: item.stat.exists
+
+    - name: Reload systemd after removing the IP2Free units
+      become: true
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: ip2free_gateway__retire_units.results | selectattr('stat.exists') | list | length > 0
+
+    - name: Remove the generated sing-box fragment
+      become: true
+      ansible.builtin.file:
+        path: "{{ ip2free_gateway_ip2free_singbox_fragment }}"
+        state: absent
+
+    - name: Remove the IP2Free working directory
+      become: true
+      ansible.builtin.file:
+        path: "{{ ip2free_gateway_ip2free_dir }}"
+        state: absent
+
+
 - name: Ensure base prerequisites for IP2Free deploy
   ansible.builtin.include_role:
     name: vps.system.base
@@ -131,7 +220,10 @@
 
 - name: IP2Free Gateway 跳过 (条件未满足)
   ansible.builtin.debug:
-    msg: "IP2Free Gateway skipped: singbox not deployed or not in direct mode"
+    msg: >-
+      IP2Free Gateway skipped: singbox not deployed or not in direct mode.
+      If the capability flag is off, the retirement block above has already
+      removed whatever this role previously installed.
   vars:
     __sb_containers: >-
       {{

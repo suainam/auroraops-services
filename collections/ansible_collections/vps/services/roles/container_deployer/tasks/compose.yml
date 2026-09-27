@@ -19,6 +19,10 @@
     src: "{{ container_deployer_compose_template }}"
     dest: "{{ container_deployer_base_path }}/{{ container_deployer_name }}/docker-compose.yml"
     mode: "0644"
+  # Compose templates are rendered from cdp_compose_vars, which can carry
+  # secrets (for example manifest's BETTER_AUTH_SECRET). `make check` runs
+  # --check --diff, so without this the rendered secret is printed in plaintext.
+  no_log: "{{ not (container_deployer_debug | bool | default(false)) }}"
 
 - name: Deploy compose stack
   community.docker.docker_compose_v2:
@@ -27,5 +31,7 @@
     pull: "{{ container_deployer_compose_pull }}"
     remove_orphans: "{{ container_deployer_compose_remove_orphans }}"
     state: present
+  # Compose stacks are templated from cdp_env as well; keep secrets out of the log.
+  no_log: "{{ not (container_deployer_debug | bool | default(false)) }}"
   notify: Restart compose stack
   tags: [deploy, services, container_deployer, phase5]

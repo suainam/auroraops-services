@@ -15,3 +15,20 @@
     fail_msg: "wireguard_native_address and wireguard_native_private_key must be configured."
   when: wireguard_native_enabled | bool
   tags: [deploy, services, wireguard_native, wireguard_native_preflight, phase3]
+
+# There is deliberately no default listen port. Without this assertion an
+# unconfigured host would let wg-quick pick a random port: the role would
+# report success, the firewall would keep opening the planned port, and the
+# tunnel would only fail later and somewhere else entirely.
+- name: Refuse to deploy without an explicit listen port
+  ansible.builtin.assert:
+    that:
+      - wireguard_native_port | string | length > 0
+      - wireguard_native_port | int > 0
+      - wireguard_native_port | int < 65536
+    fail_msg: >-
+      wireguard_native_port must be set explicitly from the port authority
+      (app_port_wireguard_spoke or app_port_wireguard_hub). The role has no
+      default because a default is a second copy of the port allocation.
+  when: wireguard_native_enabled | bool
+  tags: [deploy, services, wireguard_native, wireguard_native_preflight, phase3]

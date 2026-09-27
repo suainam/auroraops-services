@@ -1,0 +1,44 @@
+---
+# Read-only capability probe. This stage must never create, generate or modify
+# state: the configuration directory and the sing-box binary are deploy
+# artifacts, so their absence is reported as a diagnostic, never asserted.
+- name: Resolve singbox effective deployment mode for preflight
+  ansible.builtin.import_tasks: resolve.yml
+  tags: [preflight, services, singbox]
+
+- name: Probe sing-box binary availability without changing state
+  become: true
+  ansible.builtin.shell: |
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    sing-box version
+  register: singbox_preflight_version
+  changed_when: false
+  failed_when: false
+  tags: [preflight, services, singbox]
+
+- name: Probe sing-box configuration directory without changing state
+  become: true
+  ansible.builtin.stat:
+    path: "{{ singbox_native_config_dir if singbox_effective_mode == 'native' else singbox_config_dir }}"
+  register: singbox_preflight_config_dir
+  tags: [preflight, services, singbox]
+
+- name: Assert sing-box preflight platform is supported
+  ansible.builtin.assert:
+    that:
+      - singbox_effective_mode in ['native', 'docker']
+      - ansible_facts['os_family'] in ['Debian', 'Alpine']
+      - ansible_facts['architecture'] in ['x86_64', 'aarch64']
+    fail_msg: >-
+      sing-box preflight supports Debian/Alpine on x86_64/aarch64 only.
+      Resolved mode '{{ singbox_effective_mode }}' on
+      {{ ansible_facts['os_family'] }}/{{ ansible_facts['architecture'] }}.
+  tags: [preflight, services, singbox]
+
+- name: Report sing-box preflight observations
+  ansible.builtin.debug:
+    msg:
+      - "effective_mode: {{ singbox_effective_mode }}"
+      - "config_dir_present: {{ singbox_preflight_config_dir.stat.exists }}"
+      - "binary_available: {{ singbox_preflight_version.rc == 0 }}"
+  tags: [preflight, services, singbox]

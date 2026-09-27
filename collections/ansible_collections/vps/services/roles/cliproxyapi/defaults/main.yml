@@ -27,12 +27,43 @@ cliproxyapi_config_seed_file: ""
 cliproxyapi_force_overwrite: false
 
 cliproxyapi_docker_dir: "/opt/dockers/cliproxyapi"
+# Where the running container actually reads its configuration from.
+#
+# File mode: bind-mounted into the container, so the host path is the source.
+# S3 mode: the config.yaml/auths bind mounts are dropped and the server instead
+# keeps a local mirror at <OBJECTSTORE_LOCAL_PATH>/objectstore, which it watches
+# and mirrors to the bucket in both directions. Reconciling the old host path in
+# S3 mode wrote a file the container never reads, so the role reported `changed`
+# while the effective configuration stayed untouched.
+# The driver alone decides the mode. It must NOT be inferred from a non-empty
+# endpoint: the R2 keys live in the Vault, so "endpoint is set" is true for every
+# host whether or not object storage is wanted. Inferring the mode from that made
+# `cliproxyapi_storage_driver: file` powerless — the container stayed on the object
+# store, the config.yaml/auths bind mounts never came back, and the role kept
+# reconciling the object-store mirror while reporting a change on every run.
+cliproxyapi_object_store_active: >-
+  {{ cliproxyapi_docker_storage_driver == 's3' }}
+cliproxyapi_docker_config_path: >-
+  {{
+    (cliproxyapi_docker_dir ~ '/objectstore/config/config.yaml')
+    if (cliproxyapi_object_store_active | bool)
+    else (cliproxyapi_docker_dir ~ '/config.yaml')
+  }}
+# Bind-mount source for the file-mode branch. Distinct from the path above
+# because a volume spec is assembled inside a Jinja expression, where each entry
+# is a string literal: a nested `{{ }}` is not re-evaluated and reaches Docker
+# verbatim, which rejects it as an invalid volume name.
+cliproxyapi_docker_host_config_path: "{{ cliproxyapi_docker_dir }}/config.yaml"
 cliproxyapi_docker_auth_dir: "{{ cliproxyapi_docker_dir }}/auths"
 cliproxyapi_image: "eceasy/cli-proxy-api:v7.3.2"
 cliproxyapi_docker_image: "{{ cliproxyapi_image }}"
 cliproxyapi_docker_memory: "128m"
 cliproxyapi_docker_memory_reservation: "32m"
 cliproxyapi_docker_networks: "{{ cliproxyapi_networks | default([{'name': 'sweb'}]) }}"
+# cc15 类主机通过 sysctl 关闭 IPv6，但宿主机 /etc/resolv.conf 仍保留 IPv6 DNS。
+# Go 解析器会把不可达的 IPv6 nameserver 当作整次解析失败，导致 R2 对象存储
+# 引导直接 network is unreachable。显式钉死 IPv4 DNS 与宿主 resolv.conf 解耦。
+cliproxyapi_docker_dns: "{{ cliproxyapi_dns | default(['8.8.8.8', '8.8.4.4']) }}"
 cliproxyapi_docker_storage_driver: "{{ cliproxyapi_storage_driver | default('file') }}"
 cliproxyapi_docker_use_postgres: "{{ cliproxyapi_use_postgres | default(false) }}"
 cliproxyapi_docker_pg_host: "{{ cliproxyapi_pg_host | default('host.docker.internal') }}"

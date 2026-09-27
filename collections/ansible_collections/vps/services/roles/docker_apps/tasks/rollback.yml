@@ -30,7 +30,18 @@
     docker_app_rollback_name_map:
       vertex: vertex-proxy
     rollback_container_name: "{{ docker_app_rollback_name_map[rollback_docker_app_name] | default(rollback_docker_app_name) }}"
-  when: rollback_docker_app_name is defined
+  when: >-
+    rollback_docker_app_name is defined
+    and not (rollback_docker_app_name == 'singbox'
+             and (
+               (singbox_deploy_mode | default('auto') | lower) in ['native', 'docker']
+               and (singbox_deploy_mode | default('auto') | lower) == 'native'
+               or (singbox_deploy_mode | default('auto') | lower) not in ['native', 'docker']
+                 and (
+                   (ansible_facts.distribution | default(ansible_distribution | default(''))) == 'Alpine'
+                   or (ansible_memtotal_mb | default(1024)) < 512
+                 )
+             ))
   tags:
     - rollback
     - services
