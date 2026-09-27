@@ -722,7 +722,7 @@
         < docker_apps_sub_store_public_mihomo_rules.index('NETWORK,udp,DIRECT')
       - >-
         docker_apps_sub_store_public_mihomo_rules[-1] == 'MATCH,🚀 默认代理'
-  fail_msg: "Public Sub-Store Mihomo rules violate the first-match routing contract"
+    fail_msg: "Public Sub-Store Mihomo rules violate the first-match routing contract"
   when: verify_docker_app_name | default('') == 'sub_store'
   no_log: true
   tags:

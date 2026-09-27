@@ -115,6 +115,8 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
         if item.get("name")
         == "Validate public Sub-Store destination rules precede process fallbacks"
     )
+    assert "fail_msg" in task["ansible.builtin.assert"]
+    assert "fail_msg" in process_fallback_task["ansible.builtin.assert"]
 
     process_fallback_rules = {
         "GEOSITE,category-ads-all,REJECT",
