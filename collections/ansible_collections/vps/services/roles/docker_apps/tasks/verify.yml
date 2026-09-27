@@ -634,6 +634,54 @@
         docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳')
         < docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,bilibili.com,DIRECT')
       - >-
+        docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳')
+        < docker_apps_sub_store_public_mihomo_rules.index(
+          docker_apps_sub_store_public_mihomo_rules
+          | select('match', '^PROCESS-NAME-REGEX,') | first
+        )
+      - >-
+        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,bilibili-hmt,📺 B站港澳')
+        < docker_apps_sub_store_public_mihomo_rules.index(
+          docker_apps_sub_store_public_mihomo_rules
+          | select('match', '^PROCESS-NAME-REGEX,') | first
+        )
+      - >-
+        docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳')
+        < docker_apps_sub_store_public_mihomo_rules.index(
+          docker_apps_sub_store_public_mihomo_rules
+          | select('match', '^PROCESS-NAME-REGEX,') | first
+        )
+      - >-
+        docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,bilibili.com,DIRECT')
+        < docker_apps_sub_store_public_mihomo_rules.index(
+          docker_apps_sub_store_public_mihomo_rules
+          | select('match', '^PROCESS-NAME-REGEX,') | first
+        )
+      - >-
+        docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳')
+        < docker_apps_sub_store_public_mihomo_rules.index(
+          docker_apps_sub_store_public_mihomo_rules
+          | select('match', '^PROCESS-PATH') | first
+        )
+      - >-
+        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,bilibili-hmt,📺 B站港澳')
+        < docker_apps_sub_store_public_mihomo_rules.index(
+          docker_apps_sub_store_public_mihomo_rules
+          | select('match', '^PROCESS-PATH') | first
+        )
+      - >-
+        docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳')
+        < docker_apps_sub_store_public_mihomo_rules.index(
+          docker_apps_sub_store_public_mihomo_rules
+          | select('match', '^PROCESS-PATH') | first
+        )
+      - >-
+        docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,bilibili.com,DIRECT')
+        < docker_apps_sub_store_public_mihomo_rules.index(
+          docker_apps_sub_store_public_mihomo_rules
+          | select('match', '^PROCESS-PATH') | first
+        )
+      - >-
         docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,github,🚀 默认代理')
         < docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,microsoft,DIRECT')
       - >-

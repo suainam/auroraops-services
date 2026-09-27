@@ -26,11 +26,15 @@ def test_rendered_rules_keep_private_and_specific_routes_ahead_of_fallbacks():
             "sub_store_capability_user_rules": [
                 "DOMAIN-SUFFIX,private-example.test,DIRECT",
             ],
+            "sub_store_capability_user_fake_ip_filter": [
+                "+.private-example.test",
+            ],
             "sub_store_capability_fake_ip_range": "198.19.0.0/16",
             "singbox_domain": "proxy.example.test",
         }
     )
-    rules = yaml.safe_load(rendered)["rules"]
+    profile = yaml.safe_load(rendered)
+    rules = profile["rules"]
     expected_rules = [
         "DOMAIN-SUFFIX,private-example.test,DIRECT",
         "GEOSITE,category-ads-all,REJECT",
@@ -89,6 +93,7 @@ def test_rendered_rules_keep_private_and_specific_routes_ahead_of_fallbacks():
         "MATCH,🚀 默认代理",
     ]
     assert rules == expected_rules
+    assert "+.private-example.test" in profile["dns"]["fake-ip-filter"]
 
 
 def test_verify_checks_served_profile_rule_precedence_without_logging():
@@ -159,6 +164,20 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
             and "select('match','^PROCESS-NAME-REGEX,')" in assertion
             for assertion in normalized_assertions
         )
+
+    for rule in (
+        "DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳",
+        "RULE-SET,bilibili-hmt,📺 B站港澳",
+        "DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳",
+        broad_bilibili,
+    ):
+        normalized_rule = re.sub(r"\s+", "", rule)
+        for process_selector in ("^PROCESS-NAME-REGEX,", "^PROCESS-PATH"):
+            assert any(
+                f"index('{normalized_rule}')<" in assertion
+                and f"select('match','{process_selector}')" in assertion
+                for assertion in normalized_assertions
+            )
 
     assert "RULE-SET,proxy-domains,🚀 默认代理" in all_assertions
     assert "AND,((NETWORK,UDP),(DST-PORT,443)),REJECT" in all_assertions
