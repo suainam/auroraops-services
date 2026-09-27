@@ -10,9 +10,10 @@
   tags: [deploy, services, docker_apps, phase5]
 
 - name: 创建 Docker 外部网络 sweb
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   community.docker.docker_network:
     name: sweb
     state: present
+    docker_host: "{{ docker_host | default(omit) }}"
   when: (ansible_facts.pkg_mgr | default(ansible_pkg_mgr | default(''))) != 'apk' and ((docker_apps_deploy_mode | default('auto')) != 'native')
   tags: [deploy, services, docker_apps, phase5]
