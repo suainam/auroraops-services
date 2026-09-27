@@ -10,3 +10,5 @@
     timer_user: "{{ app_timer_user | default(application_timer_user | default('root')) }}"
     timer_state: "{{ app_timer_state | default(application_timer_state | default('started')) }}"
     timer_enabled: "{{ app_timer_enabled | default(application_timer_enabled | default(true)) }}"
+    timer_environment_file: "{{ app_timer_environment_file | default(application_timer_environment_file | default('')) }}"
+    timer_environment: "{{ app_timer_environment | default(application_timer_environment | default({})) }}"
