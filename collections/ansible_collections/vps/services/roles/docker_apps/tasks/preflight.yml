@@ -1,0 +1,48 @@
+---
+- name: Merge Docker Apps inventory for preflight
+  ansible.builtin.import_tasks: "{{ role_path }}/../../../common/tasks/merge_list_vars.yml"
+  vars:
+    merge_var_name: docker_apps_containers
+  tags: [preflight, services, docker_apps]
+
+- name: Assert selected Docker App is configured
+  ansible.builtin.assert:
+    that:
+      - docker_apps_target is defined
+      - docker_apps_target in docker_apps_containers
+    fail_msg: "The selected Docker App is not configured for this host."
+  tags: [preflight, services, docker_apps]
+
+- name: Probe Docker daemon for preflight
+  become: true
+  ansible.builtin.command:
+    argv: [docker, info]
+  register: docker_apps_preflight_daemon
+  changed_when: false
+  failed_when: false
+  no_log: true
+  tags: [preflight, services, docker_apps]
+
+- name: Assert Docker daemon is available
+  ansible.builtin.assert:
+    that:
+      - docker_apps_preflight_daemon.rc == 0
+    fail_msg: "Docker daemon is unavailable to the preflight execution context."
+  tags: [preflight, services, docker_apps]
+
+- name: Probe Docker Compose plugin for preflight
+  become: true
+  ansible.builtin.command:
+    argv: [docker, compose, version]
+  register: docker_apps_preflight_compose
+  changed_when: false
+  failed_when: false
+  no_log: true
+  tags: [preflight, services, docker_apps]
+
+- name: Assert Docker Compose plugin is available
+  ansible.builtin.assert:
+    that:
+      - docker_apps_preflight_compose.rc == 0
+    fail_msg: "Docker Compose plugin is unavailable to the preflight execution context."
+  tags: [preflight, services, docker_apps]

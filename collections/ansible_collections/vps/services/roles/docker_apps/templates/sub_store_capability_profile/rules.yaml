@@ -1,5 +1,4 @@
-  # Preserve the work-mac ordering: private exceptions, process/path selectors,
-  # and Bilibili HMT must be evaluated before generic China rules.
+  # Private rules are injected by the parent inventory before this shared policy.
 
   # 广告拦截
   - GEOSITE,category-ads-all,REJECT
@@ -7,7 +6,7 @@
   - DOMAIN-SUFFIX,doubleclick.net,REJECT
   - DOMAIN-KEYWORD,tracker,REJECT
 
-  # 本地与私有直连
+  # 本地与明确直连
   - DOMAIN-SUFFIX,argotunnel.com,DIRECT
   - DOMAIN-SUFFIX,cftunnel.com,DIRECT
   - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
@@ -24,13 +23,8 @@
   - DOMAIN-SUFFIX,163.com,DIRECT
   - DOMAIN-SUFFIX,netease.com,DIRECT
   - DOMAIN-SUFFIX,uuremote.com,DIRECT
-  - DOMAIN-SUFFIX,bilibili.com,DIRECT
-  - RULE-SET,cn-domains,DIRECT
-  - GEOIP,CN,DIRECT
-  - RULE-SET,microsoft,DIRECT
-  - RULE-SET,apple,DIRECT
 
-  # 🤖 AI 服务
+  # 明确 AI 服务
   - RULE-SET,ai-services,🤖 AI 服务
   - DOMAIN-SUFFIX,googleapis.com,🤖 AI 服务
   - DOMAIN-KEYWORD,cloudaicompanion,🤖 AI 服务
@@ -39,31 +33,43 @@
   - DOMAIN-SUFFIX,gemini.ai,🤖 AI 服务
   - DOMAIN-SUFFIX,gemini.google.com,🤖 AI 服务
   - DOMAIN-SUFFIX,aistudio.google.com,🤖 AI 服务
-  - PROCESS-NAME-REGEX,(?i)^(claude|chatgpt|gpt|gemini|agy|antigravity|opencode|pi|omp|oh-my-pi|cursor|windsurf)(\.exe)?$,🤖 AI 服务
-  - PROCESS-NAME-REGEX,(?i)^(Claude|ChatGPT|Cursor|Windsurf|Antigravity)\s+Helper.*$,🤖 AI 服务
 
-  # 📺 B站港澳
+  # Bilibili API 与港澳台在通用 bilibili.com 直连规则之前。
   - DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳
   - RULE-SET,bilibili-hmt,📺 B站港澳
   - DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳
+  - DOMAIN-SUFFIX,bilibili.com,DIRECT
 
-  # 📹 视频开发 (GitHub + YouTube + 流媒体大流量加速)
-  - RULE-SET,github,📹 视频开发
+  # 专项服务规则先于宽 Google、进程规则和通用代理集合。
   - RULE-SET,youtube,📹 视频开发
   - RULE-SET,disney,📹 视频开发
   - RULE-SET,netflix,📹 视频开发
   - RULE-SET,spotify,📹 视频开发
-
-  # 🚀 默认代理
   - RULE-SET,telegram,🚀 默认代理
-  - RULE-SET,proxy-domains,🚀 默认代理
+  - RULE-SET,github,🚀 默认代理
+  - RULE-SET,microsoft,DIRECT
+  - RULE-SET,apple,DIRECT
+
+  # Broad Google routing follows Google service-specific rules above.
+  - GEOSITE,google,🤖 AI 服务
+
+  # Process rules are application-routing fallbacks; destination rules win first.
+  - PROCESS-NAME-REGEX,(?i)^(claude|chatgpt|gpt|gemini|agy|antigravity|opencode|pi|omp|oh-my-pi|cursor|windsurf)(\.exe)?$,🤖 AI 服务
+  - PROCESS-NAME-REGEX,(?i)^(Claude|ChatGPT|Cursor|Windsurf|Antigravity)\s+Helper.*$,🤖 AI 服务
   - PROCESS-PATH,/usr/bin/wget,🚀 默认代理
   - PROCESS-PATH-WILDCARD,/usr/*/wget,🚀 默认代理
   - PROCESS-PATH-REGEX,.*bin/wget,🚀 默认代理
   - PROCESS-PATH,C:\Program Files\Google\Chrome\Application\chrome.exe,🚀 默认代理
   - PROCESS-PATH-REGEX,(?i).*Application\\chrome.*,🚀 默认代理
 
-  # 协议保底
+  # General proxy-domain policy is broader than destination and process selectors.
+  - RULE-SET,proxy-domains,🚀 默认代理
+
+  # QUIC guard must match UDP and destination port 443 together.
   - AND,((NETWORK,UDP),(DST-PORT,443)),REJECT
+
+  # Country rules and network fallbacks stay last.
+  - RULE-SET,cn-domains,DIRECT
+  - GEOIP,CN,DIRECT
   - NETWORK,udp,DIRECT
   - MATCH,🚀 默认代理

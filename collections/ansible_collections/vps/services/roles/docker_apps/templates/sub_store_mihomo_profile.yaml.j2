@@ -6,6 +6,11 @@ mode: rule
 log-level: info
 ipv6: false
 
+geox-url:
+  geoip: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"
+  geosite: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat"
+  mmdb: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb"
+
 # Nodes are loaded dynamically from Sub-Store.
 proxies: []
 proxy-providers:
@@ -21,6 +26,8 @@ proxy-providers:
       timeout: 5000
       lazy: true
       expected-status: 204
+
+{% include 'sub_store_capability_profile/rule_providers.yaml.j2' %}
 
 proxy-groups:
   - name: "🚀 节点选择"
@@ -53,9 +60,52 @@ proxy-groups:
     interval: 300
     lazy: true
 
+  # Policy groups referenced by the ordered rules below.
+  - name: "🚀 默认代理"
+    type: select
+    proxies:
+      - "🚀 节点选择"
+      - "⚡️ 自动延迟"
+      - "🛡️ 自动稳定"
+      - DIRECT
+
+  - name: "⚡ 快速节点"
+    type: select
+    proxies:
+      - "⚡️ 自动延迟"
+      - "🛡️ 自动稳定"
+      - "🚀 节点选择"
+      - DIRECT
+
+  - name: "🤖 AI 服务"
+    type: select
+    proxies:
+      - "🛡️ 自动稳定"
+      - "⚡️ 自动延迟"
+      - "🚀 节点选择"
+      - DIRECT
+
+  - name: "📺 B站港澳"
+    type: url-test
+    use:
+      - aurora-substore
+    filter: "(?i)🇭🇰|港|hk|hong\\s*kong|🇹🇼|台|tw|taiwan"
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+    lazy: true
+
+  - name: "📹 视频开发"
+    type: select
+    proxies:
+      - "⚡️ 自动延迟"
+      - "🛡️ 自动稳定"
+      - "🚀 节点选择"
+      - DIRECT
+
 rules:
-  - GEOIP,CN,DIRECT
-  - MATCH,🚀 节点选择
+{% include 'sub_store_capability_profile/private_rules.yaml.j2' %}
+{% include 'sub_store_capability_profile/rules.yaml' %}
 
 dns:
   enable: true
@@ -74,3 +124,6 @@ dns:
     - https://doh.pub/dns-query
   fake-ip-filter:
     - "{{ singbox_domain }}"
+{% for domain in sub_store_capability_user_fake_ip_filter | default([]) %}
+    - "{{ domain }}"
+{% endfor %}
