@@ -207,3 +207,6 @@ def test_github_routes_to_default_proxy_and_video_stays_on_video_development():
     assert "RULE-SET,disney,📹 视频开发" in rules_text
     assert "RULE-SET,netflix,📹 视频开发" in rules_text
     assert "RULE-SET,spotify,📹 视频开发" in rules_text
+    assert rules_text.index("RULE-SET,github,🚀 默认代理") < rules_text.index(
+        "RULE-SET,microsoft,DIRECT"
+    )

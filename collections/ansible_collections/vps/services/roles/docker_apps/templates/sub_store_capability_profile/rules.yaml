@@ -27,6 +27,10 @@
   - DOMAIN-SUFFIX,bilibili.com,DIRECT
   - RULE-SET,cn-domains,DIRECT
   - GEOIP,CN,DIRECT
+
+  # Route GitHub before Microsoft; its upstream rule set includes GitHub.
+  - RULE-SET,github,🚀 默认代理
+
   - RULE-SET,microsoft,DIRECT
   - RULE-SET,apple,DIRECT
 
@@ -39,7 +43,7 @@
   - DOMAIN-SUFFIX,gemini.ai,🤖 AI 服务
   - DOMAIN-SUFFIX,gemini.google.com,🤖 AI 服务
   - DOMAIN-SUFFIX,aistudio.google.com,🤖 AI 服务
-  - PROCESS-NAME-REGEX,(?i)^(claude|chatgpt|gpt|gemini|agy|antigravity|opencode|pi|omp|oh-my-pi|cursor|windsurf)(\.exe)?$,🤖 AI 服务
+  - PROCESS-NAME-REGEX,(?i)^(claude|chatgpt|gpt|gemini|agy|antigravity|opencode|pi|oh-my-pi|cursor|windsurf)(\.exe)?$,🤖 AI 服务
   - PROCESS-NAME-REGEX,(?i)^(Claude|ChatGPT|Cursor|Windsurf|Antigravity)\s+Helper.*$,🤖 AI 服务
 
   # 📺 B站港澳
@@ -54,7 +58,6 @@
   - RULE-SET,spotify,📹 视频开发
 
   # 🚀 默认代理
-  - RULE-SET,github,🚀 默认代理
   - RULE-SET,telegram,🚀 默认代理
   - RULE-SET,proxy-domains,🚀 默认代理
   - PROCESS-PATH,/usr/bin/wget,🚀 默认代理
