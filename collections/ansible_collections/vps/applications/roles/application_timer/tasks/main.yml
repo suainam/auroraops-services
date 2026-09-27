@@ -1,7 +1,7 @@
 ---
 - name: Delegate to managed_timer universal task library
   ansible.builtin.include_tasks:
-    file: "{{ role_path }}/../../../../common/tasks/managed_timer.yml"
+    file: "{{ role_path }}/../../../common/tasks/managed_timer.yml"
   vars:
     timer_name: "{{ app_timer_name | default(application_timer_name | default('')) }}"
     timer_description: "{{ app_timer_description | default(application_timer_description | default('')) }}"
