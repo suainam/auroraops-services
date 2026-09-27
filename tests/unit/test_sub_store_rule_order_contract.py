@@ -96,6 +96,56 @@ def test_rendered_rules_keep_private_and_specific_routes_ahead_of_fallbacks():
     assert "+.private-example.test" in profile["dns"]["fake-ip-filter"]
 
 
+def test_served_mihomo_profile_uses_the_ordered_policy_and_defines_its_targets():
+    jinja2 = pytest.importorskip("jinja2")
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(str(TEMPLATES)),
+        undefined=jinja2.StrictUndefined,
+    )
+    template = env.get_template("sub_store_mihomo_profile.yaml.j2")
+    synthetic_policy = {
+        "singbox_domain": "proxy.example.test",
+        "sub_store_mihomo_provider_suffix": "provider-example.yaml",
+        "sub_store_capability_user_rules": [
+            "DOMAIN-SUFFIX,private-example.test,DIRECT",
+        ],
+        "sub_store_capability_user_fake_ip_filter": [
+            "+.private-example.test",
+        ],
+        "sub_store_capability_fake_ip_range": "198.19.0.0/16",
+    }
+    profile = yaml.safe_load(template.render(synthetic_policy))
+    shared_policy = yaml.safe_load(
+        env.get_template("sub_store_capability_profile/routing_dns.yaml.j2").render(
+            synthetic_policy
+        )
+    )
+
+    rules = profile["rules"]
+    assert rules == shared_policy["rules"]
+    assert rules[0] == "DOMAIN-SUFFIX,private-example.test,DIRECT"
+    assert rules[-1] == "MATCH,🚀 默认代理"
+    assert rules.index("RULE-SET,github,🚀 默认代理") < rules.index("RULE-SET,microsoft,DIRECT")
+    assert "+.private-example.test" in profile["dns"]["fake-ip-filter"]
+
+    group_names = {group["name"] for group in profile["proxy-groups"]}
+    assert {"🚀 默认代理", "⚡ 快速节点", "🤖 AI 服务", "📺 B站港澳", "📹 视频开发"} <= group_names
+    assert {
+        "ai-services",
+        "bilibili-hmt",
+        "disney",
+        "netflix",
+        "spotify",
+        "youtube",
+        "telegram",
+        "github",
+        "microsoft",
+        "apple",
+        "proxy-domains",
+        "cn-domains",
+    } <= set(profile["rule-providers"])
+
+
 def test_verify_checks_served_profile_rule_precedence_without_logging():
     tasks = yaml.safe_load(
         (
@@ -103,6 +153,25 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
             / "collections/ansible_collections/vps/services/roles/docker_apps/tasks/verify.yml"
         ).read_text(encoding="utf-8")
     )
+    structure_task = next(
+        item
+        for item in tasks
+        if item.get("name") == "Validate public Sub-Store Mihomo profile structure"
+    )
+    structure_assertions = "\n".join(structure_task["ansible.builtin.assert"]["that"])
+    assert structure_task["no_log"] is True
+    for required_name in (
+        "🚀 默认代理",
+        "⚡ 快速节点",
+        "🤖 AI 服务",
+        "📺 B站港澳",
+        "📹 视频开发",
+        "bilibili-hmt",
+        "github",
+        "proxy-domains",
+    ):
+        assert required_name in structure_assertions
+
     task = next(
         item
         for item in tasks

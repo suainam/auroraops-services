@@ -546,6 +546,43 @@
       - "'aurora-substore' in docker_apps_sub_store_public_mihomo_payload['proxy-providers']"
       - (docker_apps_sub_store_public_mihomo_payload['proxy-groups'] | type_debug) == 'list'
       - docker_apps_sub_store_public_mihomo_payload['proxy-groups'] | length >= 3
+      - (docker_apps_sub_store_public_mihomo_payload['rule-providers'] | type_debug) == 'dict'
+      - >-
+        (
+          [
+            '🚀 默认代理',
+            '⚡ 快速节点',
+            '🤖 AI 服务',
+            '📺 B站港澳',
+            '📹 视频开发'
+          ]
+          | difference(
+              docker_apps_sub_store_public_mihomo_payload['proxy-groups']
+              | map(attribute='name') | list
+            )
+          | length
+        ) == 0
+      - >-
+        (
+          [
+            'ai-services',
+            'bilibili-hmt',
+            'disney',
+            'netflix',
+            'spotify',
+            'youtube',
+            'telegram',
+            'github',
+            'microsoft',
+            'apple',
+            'proxy-domains',
+            'cn-domains'
+          ]
+          | difference(
+              docker_apps_sub_store_public_mihomo_payload['rule-providers'].keys() | list
+            )
+          | length
+        ) == 0
       - (docker_apps_sub_store_public_mihomo_payload['rules'] | type_debug) == 'list'
       - docker_apps_sub_store_public_mihomo_payload['rules'] | length >= 1
     fail_msg: "Public Sub-Store Mihomo profile is missing providers, proxy groups, or rules"
