@@ -1,12 +1,12 @@
 ---
 - name: "确保目录存在: {{ backup_source_docker_dir }}"
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.file:
     path: "{{ backup_source_docker_dir }}"
     state: directory
     mode: '0711'
-    owner: root
-    group: root
+    owner: "{{ docker_apps_dir_owner | default('root') if ((ansible_system | default('Linux')) != 'Darwin') else omit }}"
+    group: "{{ docker_apps_dir_group | default('root') if ((ansible_system | default('Linux')) != 'Darwin') else omit }}"
   tags: [deploy, services, docker_apps, phase5]
 
 - name: 创建 Docker 外部网络 sweb
