@@ -27,7 +27,7 @@
   ansible.builtin.assert:
     that:
       - docker_apps_preflight_daemon.rc == 0
-    fail_msg: "Docker daemon is unavailable to the managed user."
+    fail_msg: "Docker daemon is unavailable to the preflight execution context."
   tags: [preflight, services, docker_apps]
 
 - name: Probe Docker Compose plugin for preflight
@@ -44,5 +44,5 @@
   ansible.builtin.assert:
     that:
       - docker_apps_preflight_compose.rc == 0
-    fail_msg: "Docker Compose plugin is unavailable to the managed user."
+    fail_msg: "Docker Compose plugin is unavailable to the preflight execution context."
   tags: [preflight, services, docker_apps]

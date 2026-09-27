@@ -732,6 +732,59 @@
     - sub_store
     - phase5
 
+- name: Validate public Sub-Store destination rules precede process fallbacks
+  vars:
+    docker_apps_sub_store_public_mihomo_rules: "{{ docker_apps_sub_store_public_mihomo_payload['rules'] }}"
+  ansible.builtin.assert:
+    that:
+      - >-
+        docker_apps_sub_store_public_mihomo_rules.index(item)
+        < docker_apps_sub_store_public_mihomo_rules.index(
+          docker_apps_sub_store_public_mihomo_rules
+          | select('match', '^PROCESS-NAME-REGEX,') | first
+        )
+      - >-
+        docker_apps_sub_store_public_mihomo_rules.index(item)
+        < docker_apps_sub_store_public_mihomo_rules.index(
+          docker_apps_sub_store_public_mihomo_rules
+          | select('match', '^PROCESS-PATH') | first
+        )
+    fail_msg: "Public Sub-Store destination rules must precede process fallbacks"
+  loop:
+    - GEOSITE,category-ads-all,REJECT
+    - DOMAIN,ad.com,REJECT
+    - DOMAIN-SUFFIX,doubleclick.net,REJECT
+    - DOMAIN-KEYWORD,tracker,REJECT
+    - RULE-SET,ai-services,🤖 AI 服务
+    - DOMAIN-SUFFIX,googleapis.com,🤖 AI 服务
+    - DOMAIN-KEYWORD,cloudaicompanion,🤖 AI 服务
+    - DOMAIN-KEYWORD,cloudcode,🤖 AI 服务
+    - DOMAIN-SUFFIX,chat.openai.com,🤖 AI 服务
+    - DOMAIN-SUFFIX,gemini.ai,🤖 AI 服务
+    - DOMAIN-SUFFIX,gemini.google.com,🤖 AI 服务
+    - DOMAIN-SUFFIX,aistudio.google.com,🤖 AI 服务
+    - DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳
+    - RULE-SET,bilibili-hmt,📺 B站港澳
+    - DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳
+    - DOMAIN-SUFFIX,bilibili.com,DIRECT
+    - RULE-SET,youtube,📹 视频开发
+    - RULE-SET,disney,📹 视频开发
+    - RULE-SET,netflix,📹 视频开发
+    - RULE-SET,spotify,📹 视频开发
+    - RULE-SET,telegram,🚀 默认代理
+    - RULE-SET,github,🚀 默认代理
+    - RULE-SET,microsoft,DIRECT
+    - RULE-SET,apple,DIRECT
+    - GEOSITE,google,🤖 AI 服务
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
 - name: Verify public Sub-Store Mihomo provider
   become: true
   ansible.builtin.uri:

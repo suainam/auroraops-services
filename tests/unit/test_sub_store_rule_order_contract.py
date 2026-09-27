@@ -109,6 +109,47 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
         if item.get("name") == "Validate public Sub-Store Mihomo rule precedence"
     )
 
+    process_fallback_task = next(
+        item
+        for item in tasks
+        if item.get("name")
+        == "Validate public Sub-Store destination rules precede process fallbacks"
+    )
+
+    process_fallback_rules = {
+        "GEOSITE,category-ads-all,REJECT",
+        "DOMAIN,ad.com,REJECT",
+        "DOMAIN-SUFFIX,doubleclick.net,REJECT",
+        "DOMAIN-KEYWORD,tracker,REJECT",
+        "RULE-SET,ai-services,🤖 AI 服务",
+        "DOMAIN-SUFFIX,googleapis.com,🤖 AI 服务",
+        "DOMAIN-KEYWORD,cloudaicompanion,🤖 AI 服务",
+        "DOMAIN-KEYWORD,cloudcode,🤖 AI 服务",
+        "DOMAIN-SUFFIX,chat.openai.com,🤖 AI 服务",
+        "DOMAIN-SUFFIX,gemini.ai,🤖 AI 服务",
+        "DOMAIN-SUFFIX,gemini.google.com,🤖 AI 服务",
+        "DOMAIN-SUFFIX,aistudio.google.com,🤖 AI 服务",
+        "DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳",
+        "RULE-SET,bilibili-hmt,📺 B站港澳",
+        "DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳",
+        "DOMAIN-SUFFIX,bilibili.com,DIRECT",
+        "RULE-SET,youtube,📹 视频开发",
+        "RULE-SET,disney,📹 视频开发",
+        "RULE-SET,netflix,📹 视频开发",
+        "RULE-SET,spotify,📹 视频开发",
+        "RULE-SET,telegram,🚀 默认代理",
+        "RULE-SET,github,🚀 默认代理",
+        "RULE-SET,microsoft,DIRECT",
+        "RULE-SET,apple,DIRECT",
+        "GEOSITE,google,🤖 AI 服务",
+    }
+    assert process_fallback_task["no_log"] is True
+    assert set(process_fallback_task["loop"]) == process_fallback_rules
+    process_assertions = "\n".join(process_fallback_task["ansible.builtin.assert"]["that"])
+    assert "item" in process_assertions
+    assert "^PROCESS-NAME-REGEX," in process_assertions
+    assert "^PROCESS-PATH" in process_assertions
+
     assert task["no_log"] is True
     assertions = task["ansible.builtin.assert"]["that"]
     normalized_assertions = [re.sub(r"\s+", "", assertion) for assertion in assertions]
