@@ -149,6 +149,10 @@ docker_apps_sillytavern_basic_auth_username: >-
   {{ sillytavern_basic_auth_username | default(vault_slt_name) }}
 docker_apps_sillytavern_basic_auth_password: >-
   {{ sillytavern_basic_auth_password | default(vault_slt_password) }}
+docker_apps_sillytavern_memory: >-
+  {{ sillytavern_memory | default('1024m') }}
+docker_apps_sillytavern_memory_reservation: >-
+  {{ sillytavern_memory_reservation | default('256m') }}
 
 # Sing-box Role 内部输入；旧 inventory 名只作为单向兼容回退。
 docker_apps_singbox_optimizer_subdomain: >-
