@@ -316,6 +316,28 @@
   when: not ansible_check_mode
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
+- name: Configure vaultwarden IP_HEADER in env
+  become: true
+  ansible.builtin.lineinfile:
+    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    regexp: '^IP_HEADER='
+    line: "IP_HEADER={{ docker_apps_vaultwarden_ip_header }}"
+    create: true
+    mode: "0600"
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, vaultwarden, phase5]
+
+- name: Configure vaultwarden IP_HEADER_TRUSTED_PROXIES in env
+  become: true
+  ansible.builtin.lineinfile:
+    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    regexp: '^IP_HEADER_TRUSTED_PROXIES='
+    line: "IP_HEADER_TRUSTED_PROXIES={{ docker_apps_vaultwarden_ip_header_trusted_proxies }}"
+    create: true
+    mode: "0600"
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, vaultwarden, phase5]
+
 - name: Check rendered Vaultwarden env file for container dry-run
   become: true
   ansible.builtin.stat:

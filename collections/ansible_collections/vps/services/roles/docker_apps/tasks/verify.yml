@@ -399,6 +399,17 @@
     - docker_apps_vaultwarden_state == 'started'
   tags: [verify, services, docker_apps, vaultwarden, phase5]
 
+- name: Verify Vaultwarden IP_HEADER environment in container
+  ansible.builtin.assert:
+    that:
+      - "'IP_HEADER=' ~ (docker_apps_vaultwarden_ip_header | default('X-Forwarded-For')) in docker_apps_container_info.container.Config.Env"
+      - "'IP_HEADER_TRUSTED_PROXIES=' ~ (docker_apps_vaultwarden_ip_header_trusted_proxies | default('127.0.0.1,172.18.0.0/16')) in docker_apps_container_info.container.Config.Env"
+    fail_msg: "Vaultwarden must have IP_HEADER and IP_HEADER_TRUSTED_PROXIES configured in container env"
+  when:
+    - verify_docker_app_name | default('') == 'vaultwarden'
+    - docker_apps_vaultwarden_state == 'started'
+  tags: [verify, services, docker_apps, vaultwarden, phase5]
+
 - name: Verify Vaultwarden local health endpoint
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ docker_apps_app_port_vaultwarden_http }}/alive"
