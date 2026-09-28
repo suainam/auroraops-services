@@ -741,7 +741,12 @@
       - docker_apps_sub_store_capability_profile_payload['tun']['enable'] | bool
       - docker_apps_sub_store_capability_profile_payload['tun']['stack'] == 'mixed'
       - "'172.16.0.0/12' in docker_apps_sub_store_capability_profile_payload['tun']['route-exclude-address']"
-      - "'geosite:cn' in docker_apps_sub_store_capability_profile_payload['dns']['fake-ip-filter']"
+      - docker_apps_sub_store_capability_profile_payload['dns']['respect-rules'] | bool
+      - docker_apps_sub_store_capability_profile_payload['dns']['nameserver'][:2] == ['223.5.5.5', '119.29.29.29']
+      - docker_apps_sub_store_capability_profile_payload['dns']['proxy-server-nameserver'] == ['223.5.5.5', '119.29.29.29']
+      - '"fallback" not in docker_apps_sub_store_capability_profile_payload["dns"]'
+      - '"fallback-filter" not in docker_apps_sub_store_capability_profile_payload["dns"]'
+      - "'geosite:cn' not in docker_apps_sub_store_capability_profile_payload['dns']['fake-ip-filter']"
       - "'DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳台' in docker_apps_sub_store_capability_profile_payload['rules']"
       - "'DOMAIN-SUFFIX,bilibili.com,DIRECT' in docker_apps_sub_store_capability_profile_payload['rules']"
       - >-
