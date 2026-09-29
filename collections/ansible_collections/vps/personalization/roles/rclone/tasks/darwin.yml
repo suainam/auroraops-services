@@ -1,0 +1,33 @@
+---
+- name: Check rclone binary on Darwin
+  ansible.builtin.command: rclone version
+  environment:
+    PATH: "{{ ansible_env.PATH | default('') }}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+  register: rclone_darwin_check
+  failed_when: false
+  changed_when: false
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: Fail if rclone is not installed on Darwin
+  ansible.builtin.fail:
+    msg: "rclone is not installed or not in PATH on Darwin. Please install via Homebrew ('brew install rclone')."
+  when: rclone_darwin_check.rc != 0
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: Ensure Darwin Rclone configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0700"
+  loop:
+    - "{{ rclone_darwin_config_dir }}"
+    - "{{ rclone_darwin_user_config_dir }}"
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: Deploy Darwin rclone.conf
+  no_log: true
+  ansible.builtin.template:
+    src: rclone.conf.j2
+    dest: "{{ rclone_darwin_config_path }}"
+    mode: "0600"
+  tags: [deploy, personalization, rclone, phase2]

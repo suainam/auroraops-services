@@ -1,4 +1,10 @@
 ---
+- name: Verify Sing-box native configuration contract
+  ansible.builtin.include_tasks: verify_config_contract.yml
+  vars:
+    singbox_verify_config_dir: "{{ singbox_native_config_dir }}"
+  tags: [verify, services, singbox, phase5]
+
 - name: Verify Sing-box native service is active and enabled on OpenRC
   become: true
   ansible.builtin.command: rc-service sing-box status

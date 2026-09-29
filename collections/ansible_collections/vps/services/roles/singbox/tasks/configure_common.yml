@@ -6,7 +6,7 @@
     src: base.json.j2
     dest: "{{ singbox_config_dir }}/01_base.json"
     mode: "0644"
-  notify: Restart singbox openrc service
+  notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box - Deploy 02_outbounds (Direct)
@@ -17,7 +17,7 @@
     dest: "{{ singbox_config_dir }}/02_outbounds.json"
     mode: "0644"
   when: singbox_role | default('direct') == 'direct'
-  notify: Restart singbox openrc service
+  notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box - Deploy 02_outbounds (Relay)
@@ -28,7 +28,7 @@
     dest: "{{ singbox_config_dir }}/02_outbounds.json"
     mode: "0644"
   when: singbox_role | default('direct') != 'direct'
-  notify: Restart singbox openrc service
+  notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box - Deploy 03_dns
@@ -38,7 +38,7 @@
     src: dns.json.j2
     dest: "{{ singbox_config_dir }}/03_dns.json"
     mode: "0644"
-  notify: Restart singbox openrc service
+  notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box - Deploy 04_inbounds (Direct)
@@ -49,7 +49,7 @@
     dest: "{{ singbox_config_dir }}/04_inbounds.json"
     mode: "0644"
   when: singbox_role | default('direct') == 'direct'
-  notify: Restart singbox openrc service
+  notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box - Deploy 04_inbounds (Relay)
@@ -60,7 +60,7 @@
     dest: "{{ singbox_config_dir }}/04_inbounds.json"
     mode: "0644"
   when: singbox_role | default('direct') != 'direct'
-  notify: Restart singbox openrc service
+  notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box - Deploy 05_route (Direct)
@@ -71,7 +71,7 @@
     dest: "{{ singbox_config_dir }}/05_route.json"
     mode: "0644"
   when: singbox_role | default('direct') == 'direct'
-  notify: Restart singbox openrc service
+  notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box - Deploy 05_route (Relay)
@@ -82,7 +82,7 @@
     dest: "{{ singbox_config_dir }}/05_route.json"
     mode: "0644"
   when: singbox_role | default('direct') != 'direct'
-  notify: Restart singbox openrc service
+  notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box - Deploy 06_wireguard
@@ -93,7 +93,7 @@
     dest: "{{ singbox_config_dir }}/06_wireguard.json"
     mode: "0644"
   when: singbox_wireguard_enabled | default(false) | bool
-  notify: Restart singbox openrc service
+  notify: Restart singbox service
   tags: [deploy, services, singbox, wireguard, phase5]
 
 - name: Sing-box - Remove 06_wireguard when disabled
@@ -102,7 +102,7 @@
     path: "{{ singbox_config_dir }}/06_wireguard.json"
     state: absent
   when: not (singbox_wireguard_enabled | default(false) | bool)
-  notify: Restart singbox openrc service
+  notify: Restart singbox service
   tags: [deploy, services, singbox, wireguard, phase5]
 
 - name: Sing-box - Generate Client Profile (YAML)

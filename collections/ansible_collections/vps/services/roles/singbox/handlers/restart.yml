@@ -1,0 +1,23 @@
+---
+# Restart whichever runtime the resolved mode selects. Kept in its own file so
+# both handlers can delegate to one implementation.
+- name: Restart singbox docker container
+  become: true
+  community.docker.docker_container:
+    name: singbox
+    state: started
+    restart: true
+  when:
+    - not ansible_check_mode
+    - (singbox_effective_mode | default('docker')) == 'docker'
+  tags: [deploy, verify, rollback, services, singbox, phase5]
+
+- name: Restart singbox openrc service
+  become: true
+  ansible.builtin.service:
+    name: sing-box
+    state: restarted
+  when:
+    - not ansible_check_mode
+    - (singbox_effective_mode | default('native')) == 'native'
+  tags: [deploy, verify, rollback, services, singbox, phase5]

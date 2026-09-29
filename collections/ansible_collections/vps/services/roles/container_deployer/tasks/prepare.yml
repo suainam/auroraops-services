@@ -1,12 +1,12 @@
 ---
 - name: Ensure data directories exist
-  become: true
+  become: "{{ ((ansible_system | default('Linux')) != 'Darwin') }}"
   ansible.builtin.file:
     path: "{{ container_deployer_base_path }}/{{ container_deployer_name }}/{{ item }}"
     state: directory
     mode: "{{ container_deployer_dir_mode }}"
-    owner: "{{ container_deployer_dir_owner }}"
-    group: "{{ container_deployer_dir_group }}"
+    owner: "{{ container_deployer_dir_owner if ((ansible_system | default('Linux')) != 'Darwin') and (container_deployer_dir_owner | length > 0) else omit }}"
+    group: "{{ container_deployer_dir_group if ((ansible_system | default('Linux')) != 'Darwin') and (container_deployer_dir_group | length > 0) else omit }}"
   loop: "{{ container_deployer_dirs }}"
   when: container_deployer_dirs | length > 0
   tags: [deploy, services, container_deployer, phase5]

@@ -77,12 +77,21 @@
       - "{{ capability.label }} · {{ prefix | regex_replace('^\\[|\\]$', '') }} 稳定"
 {% endif %}
 {% endfor %}
+{% if capability.key == 'ai' %}
+    url: https://chatgpt.com/cdn-cgi/trace
+    interval: 300
+    timeout: 3000
+    max-failed-times: 3
+    lazy: true
+    hidden: true
+{% else %}
     url: https://www.gstatic.com/generate_204
     interval: 300
     timeout: 5000
     max-failed-times: 5
     lazy: true
     hidden: true
+{% endif %}
 
   - name: "{{ capability.label }} · 自动优选"
     type: url-test

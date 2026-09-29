@@ -323,6 +323,13 @@
     - shellcrash
     - optimizer
     - manifest
+  # Deliberately not gated on the capability flag. The flag selects between two
+  # outcomes inside the role, and both are work: deploy when on, retire when
+  # off. Gating the include on the flag meant the second outcome had no way to
+  # happen, which is how a capability was declared retired while its timers went
+  # on rewriting the sing-box configuration every 30 minutes. Note also that the
+  # old gate defaulted to `true` when the key was absent, so deleting the line
+  # from host_vars would have kept the capability on.
   - name: 部署 services.ip2free_gateway
     include_role:
       name: vps.services.ip2free_gateway
@@ -333,7 +340,6 @@
         - phase5
         - services
         - ip2free_gateway
-    when: auroraops_roles['services']['ip2free_gateway'] | default(true) | bool
     tags:
     - deploy
     - phase5

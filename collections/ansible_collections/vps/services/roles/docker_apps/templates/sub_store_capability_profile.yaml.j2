@@ -1,4 +1,4 @@
-# Mihomo profile backed by existing Sub-Store sources and #220 capability facts.
+# Mihomo profile backed by Sub-Store sources with data-driven keyword grouping (#29, #46, #47).
 
 mixed-port: 7890
 allow-lan: false
@@ -19,32 +19,231 @@ geox-url:
 
 proxies: []
 {% set capability_providers = docker_apps_sub_store_capability_providers %}
-{% set provider_display_groups = sub_store_capability_provider_display_groups | default({}) %}
-{% set display_group_specs = [
-  {'key': 'BP', 'name': '🌐 BP'},
-  {'key': 'NAT', 'name': '🧭 NAT'},
-  {'key': 'VPS', 'name': '🖥️ VPS'},
-  {'key': 'SK', 'name': '🌸 SK'}
-] %}
-{% set provider_groups = namespace(names=[]) %}
-{% for provider in capability_providers %}
-{% if provider.enabled | default(true) %}
-{% set group_name = provider['provider-group'] | default(provider.name) %}
-{% if group_name not in provider_groups.names %}
-{% set provider_groups.names = provider_groups.names + [group_name] %}
+{% include 'sub_store_capability_profile/proxy_providers.yaml.j2' %}
+{% set vps_providers = namespace(items=[]) %}
+{% set nat_providers = namespace(items=[]) %}
+{% set bp_providers  = namespace(items=[]) %}
+{% set sk_providers  = namespace(items=[]) %}
+{% for p in capability_providers %}
+{% set pid = p['provider-id'] | default(p.name) %}
+{% set dg = p['display-group'] | default('') %}
+{% if not dg %}
+  {% if 'nat' in p.name | lower %}
+    {% set dg = 'NAT' %}
+  {% elif 'bp' in p.name | lower or 'baipiao' in p.name | lower %}
+    {% set dg = 'BP' %}
+  {% elif 'sk' in p.name | lower or 'sakura' in p.name | lower %}
+    {% set dg = 'SK' %}
+  {% else %}
+    {% set dg = 'VPS' %}
+  {% endif %}
 {% endif %}
+{% if dg == 'VPS' %}
+{% set vps_providers.items = vps_providers.items + [pid] %}
+{% elif dg == 'NAT' %}
+{% set nat_providers.items = nat_providers.items + [pid] %}
+{% elif dg == 'BP' %}
+{% set bp_providers.items = bp_providers.items + [pid] %}
+{% elif dg == 'SK' %}
+{% set sk_providers.items = sk_providers.items + [pid] %}
 {% endif %}
 {% endfor %}
-{% include 'sub_store_capability_profile/proxy_providers.yaml.j2' %}
 
 proxy-groups:
-{% include 'sub_store_capability_profile/core_groups.yaml.j2' %}
+  # ========================================================
+  # 1. 顶层业务入口 (Top-Level Services, 常用排在最前面)
+  # ========================================================
+  - name: "🚀 默认代理"
+    type: select
+    proxies:
+      - "⚡ 千兆优选"
+      - "🛡️ AI 容灾"
+      - "🖥️ VPS"
+      - "🧭 NAT"
+      - "🌐 BP"
+      - "🌸 SK"
+      - DIRECT
 
-{% include 'sub_store_capability_profile/capability_groups.yaml.j2' %}
+  - name: "🤖 AI 服务"
+    type: select
+    proxies:
+      - "🛡️ AI 容灾"
+      - "🖥️ VPS"
+      - "🧭 NAT"
+      - "🌐 BP · AI"
+      - "🌸 SK"
+      - DIRECT
 
-{% include 'sub_store_capability_profile/service_groups.yaml.j2' %}
+  - name: "🛡️ AI 容灾"
+    type: fallback
+    proxies:
+      - "🖥️ VPS · AI"
+      - "🧭 NAT · AI"
+      - "🌐 BP · AI"
+      - DIRECT
+    url: https://chatgpt.com/cdn-cgi/trace
+    interval: 300
+    timeout: 3000
+    lazy: true
 
-{% include 'sub_store_capability_profile/regional_groups.yaml.j2' %}
+  - name: "📹 视频开发"
+    type: select
+    proxies:
+      - "⚡ 千兆优选"
+      - "🖥️ VPS"
+      - "🧭 NAT"
+      - "🌐 BP"
+      - "🌸 SK"
+      - DIRECT
+
+  - name: "⚡ 千兆优选"
+    type: fallback
+    use:
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)1000M|神速|快"
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    lazy: true
+
+  - name: "📺 B站港澳"
+    type: select
+    proxies:
+      - "香港优选"
+      - "🧭 NAT · 港澳"
+      - "🌐 BP · 港澳"
+      - "🌸 SK · 港澳"
+      - DIRECT
+
+  # ========================================================
+  # 2. 底层节点实体池 (Entity Pools, 纯手动查看与单选)
+  # ========================================================
+  - name: "🖥️ VPS"
+    type: select
+    use:
+{% for pid in vps_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+
+  - name: "🧭 NAT"
+    type: select
+    use:
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+
+  - name: "🌐 BP"
+    type: select
+    use:
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+
+  - name: "🌸 SK"
+    type: select
+    use:
+{% for pid in sk_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+
+  # ========================================================
+  # 3. 内部策略与定向子组 (全部 hidden: true, 前端隐形)
+  # ========================================================
+  # 香港最低延迟竞速优选组，专门为 📺 B站港澳 默认调用
+  - name: "香港优选"
+    type: url-test
+    use:
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)🇭🇰|港|hk|hong\\s*kong"
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+    lazy: true
+    hidden: true
+
+  - name: "🖥️ VPS · AI"
+    type: fallback
+    use:
+{% for pid in vps_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    url: https://chatgpt.com/cdn-cgi/trace
+    interval: 300
+    lazy: true
+    hidden: true
+
+  - name: "🧭 NAT · AI"
+    type: fallback
+    use:
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    url: https://chatgpt.com/cdn-cgi/trace
+    interval: 300
+    lazy: true
+    hidden: true
+
+  # 精准匹配真正的 AI 关键词，彻底排除 [baipiao] 自身拼音误命中
+  - name: "🌐 BP · AI"
+    type: fallback
+    use:
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)Gemini|ChatGPT|GPT|直连AI|[-_\\s]AI|AI[-_\\s$]"
+    url: https://chatgpt.com/cdn-cgi/trace
+    interval: 300
+    lazy: true
+    hidden: true
+
+  # 港澳定向子组
+  - name: "🧭 NAT · 港澳"
+    type: fallback
+    use:
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)🇭🇰|港|hk|hong\\s*kong|🇹🇼|台|tw|taiwan"
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    lazy: true
+    hidden: true
+
+  - name: "🌐 BP · 港澳"
+    type: fallback
+    use:
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)🇭🇰|香港|🇹🇼|台湾|HK|TW"
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    lazy: true
+    hidden: true
+
+  - name: "🌸 SK · 港澳"
+    type: select
+    use:
+{% for pid in sk_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)🇭🇰|香港|🇹🇼|台湾|HK|TW"
+    hidden: true
+
+  # 兼容私有规则中的 ⚡ 快速节点 引用
+  - name: "⚡ 快速节点"
+    type: select
+    proxies:
+      - "⚡ 千兆优选"
+      - "🖥️ VPS"
+      - DIRECT
+    hidden: true
 
 {% include 'sub_store_capability_profile/rule_providers.yaml.j2' %}
 

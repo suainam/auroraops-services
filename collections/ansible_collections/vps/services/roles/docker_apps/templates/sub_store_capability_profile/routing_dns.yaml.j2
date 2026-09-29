@@ -44,12 +44,13 @@ dns:
   fake-ip-filter:
     - +.argotunnel.com
     - +.cftunnel.com
-    - +.suai.eu.org
-    - +.suainam.eu.org
     - +.163.com
     - +.netease.com
     - +.uuremote.com
     - "{{ singbox_domain }}"
+{% for domain in sub_store_capability_user_fake_ip_filter | default([]) %}
+    - "{{ domain }}"
+{% endfor %}
 {% for domain in sub_store_capability_private_fake_ip_filter | default([]) %}
     - "{{ domain }}"
 {% endfor %}

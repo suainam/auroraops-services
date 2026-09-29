@@ -10,12 +10,17 @@ proxy-providers:
     interval: 3600
     override:
       additional-prefix: {{ (prefix ~ ' ') | to_json }}
-    health-check: &cap_health_{{ loop.index0 }}
+{% if provider.role | default('') == 'metered' or provider.metered | default(false) or 'sakura' in provider.name or 'sk' in provider.name %}
+    health-check:
+      enable: false
+{% else %}
+    health-check:
       enable: true
       url: https://www.gstatic.com/generate_204
       interval: 300
       timeout: 5000
       lazy: true
       expected-status: 204
+{% endif %}
 {% endif %}
 {% endfor %}
