@@ -1,0 +1,7 @@
+---
+- name: Verify Docker role execution prerequisites
+  ansible.builtin.assert:
+    that:
+      - docker_state | default('present') in ['present', 'absent']
+    fail_msg: "docker_state must be 'present' or 'absent'"
+  tags: [preflight, services, docker]

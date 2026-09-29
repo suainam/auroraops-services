@@ -47,6 +47,8 @@ cloudflared_credentials_path: "/etc/cloudflared/{{ cloudflared_tunnel_id }}.json
 cloudflared_fact_path: /etc/ansible/facts.d/cloudflared.fact
 cloudflared_metrics_address: 127.0.0.1:20241
 cloudflared_metrics_url: "http://{{ cloudflared_metrics_address }}/ready"
+cloudflared_service_state: "started"
+cloudflared_service_enabled: true
 cloudflared_watchdog_enabled: true
 cloudflared_watchdog_service_name: cloudflared-watchdog
 cloudflared_watchdog_timer_name: cloudflared-watchdog

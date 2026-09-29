@@ -103,9 +103,9 @@
     cdp_fix_uid: "{{ docker_apps_docker_user_uid }}"
     cdp_fix_gid: "{{ docker_apps_docker_user_gid }}"
     cdp_fix_mode: "0777"
-    cdp_memory: "256m"
+    cdp_memory: "{{ docker_apps_sillytavern_memory | default('1024m') }}"
     cdp_cpus: "1.0"
-    cdp_memory_reservation: "192m"
+    cdp_memory_reservation: "{{ docker_apps_sillytavern_memory_reservation | default('256m') }}"
     cdp_oom_score_adj: "{{ '-500' if ((ansible_system | default('Linux')) != 'Darwin') else omit }}"
     cdp_restart_policy: "unless-stopped"
     cdp_networks: [name: "sweb"]

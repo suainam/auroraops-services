@@ -15,6 +15,7 @@
     src: "vaultwarden.env"
     dest: "/opt/dockers/vaultwarden/vaultwarden.env"
     mode: "0600"
+    force: false
   no_log: true
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
@@ -311,6 +312,28 @@
     path: "/opt/dockers/vaultwarden/vaultwarden.env"
     regexp: '^DOMAIN='
     line: "DOMAIN=https://{{ docker_apps_vaultwarden_domain | default('bws.msuai.top') }}"
+    create: true
+    mode: "0600"
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, vaultwarden, phase5]
+
+- name: Configure vaultwarden IP_HEADER in env
+  become: true
+  ansible.builtin.lineinfile:
+    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    regexp: '^IP_HEADER='
+    line: "IP_HEADER={{ docker_apps_vaultwarden_ip_header }}"
+    create: true
+    mode: "0600"
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, vaultwarden, phase5]
+
+- name: Configure vaultwarden IP_HEADER_TRUSTED_PROXIES in env
+  become: true
+  ansible.builtin.lineinfile:
+    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    regexp: '^IP_HEADER_TRUSTED_PROXIES='
+    line: "IP_HEADER_TRUSTED_PROXIES={{ docker_apps_vaultwarden_ip_header_trusted_proxies }}"
     create: true
     mode: "0600"
   when: not ansible_check_mode

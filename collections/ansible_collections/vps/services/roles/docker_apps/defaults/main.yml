@@ -93,6 +93,10 @@ docker_apps_vaultwarden_admin_token_hash_file: >-
   {{ vaultwarden_admin_token_hash_file | default('/opt/dockers/vaultwarden/.admin_token.argon2') }}
 docker_apps_vaultwarden_admin_token_fingerprint_file: >-
   {{ vaultwarden_admin_token_fingerprint_file | default('/opt/dockers/vaultwarden/.admin_token.sha256') }}
+docker_apps_vaultwarden_ip_header: >-
+  {{ vaultwarden_ip_header | default('X-Forwarded-For') }}
+docker_apps_vaultwarden_ip_header_trusted_proxies: >-
+  {{ vaultwarden_ip_header_trusted_proxies | default('127.0.0.1,172.18.0.0/16') }}
 
 # Gemini Balance
 docker_apps_app_port_gemini_balance: "{{ app_port_gemini_balance | default(30009) }}"
@@ -145,6 +149,10 @@ docker_apps_sillytavern_basic_auth_username: >-
   {{ sillytavern_basic_auth_username | default(vault_slt_name) }}
 docker_apps_sillytavern_basic_auth_password: >-
   {{ sillytavern_basic_auth_password | default(vault_slt_password) }}
+docker_apps_sillytavern_memory: >-
+  {{ sillytavern_memory | default('1024m') }}
+docker_apps_sillytavern_memory_reservation: >-
+  {{ sillytavern_memory_reservation | default('256m') }}
 
 # Sing-box Role 内部输入；旧 inventory 名只作为单向兼容回退。
 docker_apps_singbox_optimizer_subdomain: >-
