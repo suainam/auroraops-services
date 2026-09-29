@@ -11,7 +11,7 @@
 {%- set display_name = node.name if has_flag else (current_flag + ' ' + node.name) -%}
 {%- set is_reality = node.reality | default(true) | bool -%}
 {%- set use_port = node.port if is_reality else 443 -%}
-{%- set _pbk = node.relay_public_key | default(singbox_reality_public_key | default(docker_apps_singbox_reality_public_key | default(singbox_reality_public_key_generated | default('')))) -%}
+{%- set _pbk = node.relay_public_key | default(singbox_reality_public_key | default('') or docker_apps_singbox_reality_public_key | default('') or singbox_reality_public_key_generated | default('')) -%}
 {%- set _sid = node.relay_short_id | default((singbox_reality_short_ids | default(['']))[0]) -%}
 {% if node.type == 'vless' -%}
 {% if node.transport is defined and node.transport == 'grpc' -%}
