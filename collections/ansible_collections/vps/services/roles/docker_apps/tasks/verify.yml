@@ -308,9 +308,11 @@
   ansible.builtin.assert:
     that:
       - >-
-        (docker_apps_container_info.container.NetworkSettings.Ports['80/tcp'][0].HostIp == '127.0.0.1')
-        if (docker_apps_container_info.container.NetworkSettings.Ports | default({})).get('80/tcp')
-        else (docker_apps_container_info.container.HostConfig.PortBindings['80/tcp'][0].HostIp == '127.0.0.1')
+        ((docker_apps_container_info.container.NetworkSettings.Ports | default({})).get('80/tcp')
+        | ternary(
+            (docker_apps_container_info.container.NetworkSettings.Ports['80/tcp'][0].HostIp | default('')) == '127.0.0.1',
+            (docker_apps_container_info.container.HostConfig.PortBindings['80/tcp'][0].HostIp | default('')) == '127.0.0.1'
+          ))
       - "'3012/tcp' not in docker_apps_container_info.container.NetworkSettings.Ports"
     fail_msg: "vaultwarden must only publish through loopback"
   when: verify_docker_app_name | default('') == 'vaultwarden'
