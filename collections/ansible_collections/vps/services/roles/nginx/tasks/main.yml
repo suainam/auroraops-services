@@ -1,11 +1,11 @@
 ---
 - name: Resolve effective Sub-Store providers for Nginx templates
   ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_providers.yml
-  tags: [deploy, services, nginx, phase4]
+  tags: [deploy, services, nginx_site_config, nginx, phase4]
 
 - name: Resolve capability provider catalog for Nginx templates
   ansible.builtin.import_tasks: ../../../common/tasks/resolve_sub_store_capability_providers.yml
-  tags: [deploy, services, nginx, phase4]
+  tags: [deploy, services, nginx_site_config, nginx, phase4]
 
 - name: 合并 Nginx 站点列表
   ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
@@ -13,6 +13,7 @@
     merge_var_name: nginx_sites_to_deploy
   tags:
     - deploy
+    - check
     - services
     - nginx
     - nginx_site_config
@@ -26,8 +27,11 @@
   failed_when: false
   tags:
     - deploy
+    - check
+    - verify
     - services
     - nginx
+    - nginx_site_config
     - phase4
 - name: Set skip flag (considering force overwrite)
   ansible.builtin.set_fact:
@@ -35,8 +39,10 @@
     nginx_skip_all: "{{ nginx_check.rc == 0 and not (nginx_force_overwrite | default(false) | bool) }}"
   tags:
     - deploy
+    - check
     - services
     - nginx
+    - nginx_site_config
     - phase4
 - name: Nginx pre-installed - skip all (safe mode)
   ansible.builtin.debug:
@@ -44,8 +50,10 @@
   when: nginx_skip_all | bool
   tags:
     - deploy
+    - check
     - services
     - nginx
+    - nginx_site_config
     - phase4
 - name: Deploy Nginx
   when: not (nginx_skip_all | default(false) | bool)
@@ -72,7 +80,6 @@
 - name: Deploy Camouflage Site
   ansible.builtin.import_tasks: camouflage.yml
   tags: [deploy, services, nginx, nginx_camouflage, phase4]
-
 - name: Deploy Nginx Site Configurations
   ansible.builtin.import_tasks: sites.yml
   when: (nginx_installed | bool) or not ansible_check_mode
