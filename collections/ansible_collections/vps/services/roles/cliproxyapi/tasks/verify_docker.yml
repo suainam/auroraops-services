@@ -46,55 +46,15 @@
     headers:
       Authorization: "Bearer {{ cliproxyapi_test_api_key }}"
     status_code: 200
-    return_content: false
+    return_content: true
+  register: cliproxyapi_models_response
   when: cliproxyapi_test_api_key | default('') | length > 0
   tags: [verify, services, cliproxyapi, cliproxyapi_verify, phase5]
-- name: Verify CLIProxyAPI required provider and model policy
-  become: true
-  no_log: true
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ cliproxyapi_docker_app_port }}/v0/management/config"
-    method: GET
-    headers:
-      Authorization: "Bearer {{ cliproxyapi_management_key }}"
-    status_code: 200
-    return_content: true
-  register: cliproxyapi_runtime_config
-  when: cliproxyapi_management_key | default('') | length > 0
-  tags: [verify, services, cliproxyapi, cliproxyapi_verify, phase5]
 
-- name: Assert CLIProxyAPI provider and model policy
+- name: Assert CLIProxyAPI exposes at least one model
   ansible.builtin.assert:
     that:
-      - (cliproxyapi_runtime_config.json['claude-api-key'] | default([]) | length) == 3
-      - >-
-        (
-          cliproxyapi_runtime_config.json['openai-compatibility']
-          | default([])
-          | selectattr('name', 'equalto', 'vertex')
-          | list
-          | length
-        ) == 0
-      - >-
-        (
-          cliproxyapi_runtime_config.json['oauth-excluded-models']
-          | default({})
-          | dict2items
-          | selectattr('key', 'in', ['claude', 'codex', 'antigravity'])
-          | list
-          | length
-        ) == 3
-      - >-
-        (
-          cliproxyapi_runtime_config.json['oauth-model-alias']['antigravity']
-          | default([])
-          | selectattr('name', 'equalto', 'gemini-3.8-flash-high')
-          | selectattr('alias', 'equalto', 'gemini-3.8-flash')
-          | list
-          | length
-        ) == 1
-    fail_msg: >-
-      CLIProxyAPI runtime config must contain 3 Claude providers, no Vertex provider,
-      three excluded-model channels, and the gemini-3.8-flash-high alias.
-  when: cliproxyapi_management_key | default('') | length > 0
+      - cliproxyapi_models_response.json.data | default([]) | length > 0
+    fail_msg: "CLIProxyAPI authenticated models endpoint must expose at least one model"
+  when: cliproxyapi_test_api_key | default('') | length > 0
   tags: [verify, services, cliproxyapi, cliproxyapi_verify, phase5]

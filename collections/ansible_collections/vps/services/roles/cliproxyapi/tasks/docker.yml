@@ -208,7 +208,9 @@
     owner: root
     group: root
     mode: '0600'
-  when: cliproxyapi_config.stat.exists
+  when:
+    - cliproxyapi_config.stat.exists
+    - cliproxyapi_force_overwrite | bool
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
 - name: Read CLIProxyAPI config before alias migration
@@ -217,7 +219,9 @@
   ansible.builtin.slurp:
     src: "{{ cliproxyapi_docker_config_path }}"
   register: cliproxyapi_config_contents
-  when: cliproxyapi_config.stat.exists
+  when:
+    - cliproxyapi_config.stat.exists
+    - cliproxyapi_force_overwrite | bool
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
 - name: Reconcile shared CLIProxyAPI OpenAI Provider block
@@ -237,6 +241,7 @@
     replace: "{{ lookup('template', 'cliproxyapi_openai_compatibility.yaml.j2') }}"
   when:
     - cliproxyapi_config.stat.exists
+    - cliproxyapi_force_overwrite | bool
     - cliproxyapi_openai_compatibility is defined
   notify: restart cliproxyapi
   tags: [deploy, services, cliproxyapi, cliproxyapi_config, phase5]
@@ -251,6 +256,7 @@
     replace: ''
   when:
     - cliproxyapi_config.stat.exists
+    - cliproxyapi_force_overwrite | bool
     - >-
       (
         (
@@ -276,6 +282,7 @@
     replace: ''
   when:
     - cliproxyapi_config.stat.exists
+    - cliproxyapi_force_overwrite | bool
     - >-
       (
         (
@@ -301,7 +308,9 @@
     insertafter: EOF
     block: >-
       {{ lookup('template', 'cliproxyapi_antigravity_config.yaml.j2') }}
-  when: cliproxyapi_config.stat.exists
+  when:
+    - cliproxyapi_config.stat.exists
+    - cliproxyapi_force_overwrite | bool
   notify: restart cliproxyapi
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
@@ -315,7 +324,9 @@
     replace: >-
       {{ 'api-keys:\n'
          ~ lookup('template', 'cliproxyapi_api_keys.yaml.j2') }}
-  when: cliproxyapi_config.stat.exists
+  when:
+    - cliproxyapi_config.stat.exists
+    - cliproxyapi_force_overwrite | bool
   notify: restart cliproxyapi
   tags: [deploy, services, docker_apps, cliproxyapi, phase5]
 
@@ -332,6 +343,7 @@
          ~ lookup('template', 'cliproxyapi_api_keys.yaml.j2') }}
   when:
     - cliproxyapi_config.stat.exists
+    - cliproxyapi_force_overwrite | bool
     - >-
       (
         cliproxyapi_config_contents.content
