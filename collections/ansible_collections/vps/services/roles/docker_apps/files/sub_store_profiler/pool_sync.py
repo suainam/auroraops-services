@@ -321,14 +321,16 @@ def render_profile(
             value = "^$"
         else:
             value = existing_filters.get(pool, "")
-            # If LKG is stale or mismatched, gracefully fall back to baseline members to prevent emptyFallback: COMPATIBLE
+            # If LKG is stale or mismatched, gracefully fall back to baseline members or fail closed to prevent emptyFallback: COMPATIBLE
             if not value or "CC" in value:
                 baseline_names = member_names.get("baseline", [])
                 if baseline_names:
                     value = exact_name_filter(baseline_names)
+                    reused_lkg.append(pool)
                 else:
-                    raise ValueError(f"capability pool {pool} is empty and has no LKG or baseline filter")
-            reused_lkg.append(pool)
+                    value = "^$"
+            else:
+                reused_lkg.append(pool)
         rendered = rendered.replace(marker, json.dumps(value, ensure_ascii=False))
     if any(marker in rendered for marker in POOL_MARKERS.values()) or re.search(
         r"__FILTER_[A-Za-z0-9_-]+__", rendered
