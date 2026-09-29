@@ -894,22 +894,38 @@
     - sub_store_capability_profiler_enabled | bool
   tags: [verify, services, docker_apps, sub_store, phase5]
 
-- name: Read Sub-Store capability registry state
+- name: Summarize Sub-Store capability registry on the remote host
   become: true
-  ansible.builtin.slurp:
-    src: "{{ sub_store_capability_registry_state_path }}"
-  register: docker_apps_sub_store_registry_raw
-  no_log: true
-  when:
-    - verify_docker_app_name | default('') == 'sub_store'
-    - sub_store_capability_registry_enabled | bool
-    - sub_store_capability_profiler_enabled | bool
-  tags: [verify, services, docker_apps, sub_store, phase5]
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        import json
+        import sys
 
-- name: Parse Sub-Store capability registry state
-  ansible.builtin.set_fact:
-    docker_apps_sub_store_registry_payload: >-
-      {{ docker_apps_sub_store_registry_raw.content | b64decode | from_json }}
+        with open(sys.argv[1], encoding="utf-8") as stream:
+            registry = json.load(stream)
+
+        forbidden = {"uuid", "password", "token", "private_key", "psk", "obfs_password"}
+
+        def has_forbidden_key(value):
+            if isinstance(value, dict):
+                return any(
+                    key.casefold() in forbidden or has_forbidden_key(item)
+                    for key, item in value.items()
+                )
+            if isinstance(value, list):
+                return any(has_forbidden_key(item) for item in value)
+            return False
+
+        print(json.dumps({
+            "nonempty_mapping": isinstance(registry, dict) and bool(registry),
+            "forbidden_keys": has_forbidden_key(registry),
+        }))
+      - "{{ sub_store_capability_registry_state_path }}"
+  register: docker_apps_sub_store_registry_summary
+  changed_when: false
   no_log: true
   when:
     - verify_docker_app_name | default('') == 'sub_store'
@@ -925,11 +941,8 @@
       - docker_apps_sub_store_registry_stat.stat.exists
       - docker_apps_sub_store_registry_stat.stat.isreg
       - docker_apps_sub_store_registry_stat.stat.mode == '0600'
-      - (docker_apps_sub_store_registry_payload | type_debug) == 'dict'
-      - docker_apps_sub_store_registry_payload | length > 0
-      - >-
-        (docker_apps_sub_store_registry_payload | to_json)
-        is not regex('(?i)"(uuid|password|token|private_key|psk|obfs_password)"\\s*:')
+      - (docker_apps_sub_store_registry_summary.stdout | from_json).nonempty_mapping
+      - not (docker_apps_sub_store_registry_summary.stdout | from_json).forbidden_keys
     fail_msg: "Sub-Store capability profiler timer/registry runtime validation failed"
   no_log: true
   when:
