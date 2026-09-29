@@ -24,6 +24,7 @@ cliproxyapi_auths_dir: "{{ inventory_dir ~ '/files/cliproxyapi/auths' }}"
 cliproxyapi_direct_providers: []
 cliproxyapi_direct_claude: false
 cliproxyapi_config_seed_file: ""
+# Preserve existing runtime config and credentials; explicitly enable to reconcile/overwrite.
 cliproxyapi_force_overwrite: false
 
 cliproxyapi_docker_dir: "/opt/dockers/cliproxyapi"
