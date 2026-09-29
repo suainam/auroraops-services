@@ -85,16 +85,6 @@
   when: sub_store_capability_registry_enabled | bool
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
-- name: Install Sub-Store capability pool sync
-  become: true
-  ansible.builtin.copy:
-    src: sub_store_profiler/pool_sync.py
-    dest: "{{ sub_store_capability_registry_dir }}/pool_sync.py"
-    owner: root
-    group: root
-    mode: "0755"
-  when: sub_store_capability_registry_enabled | bool
-  tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Ensure capability registry state directory exists
   become: true
@@ -150,7 +140,7 @@
   loop: "{{ docker_apps_sub_store_capability_providers | default([]) }}"
   when:
     - sub_store_capability_registry_enabled | bool
-    - sub_store_capability_profiler_enabled | bool or sub_store_capability_pools_enabled | bool
+    - sub_store_capability_profiler_enabled | bool
     - sub_store_capability_nodes_input_path | length == 0
   no_log: true
   tags: [deploy, services, docker_apps, sub_store, phase5]
@@ -165,7 +155,7 @@
     mode: "0600"
   when:
     - sub_store_capability_registry_enabled | bool
-    - sub_store_capability_profiler_enabled | bool or sub_store_capability_pools_enabled | bool
+    - sub_store_capability_profiler_enabled | bool
     - sub_store_capability_nodes_input_path | length == 0
   no_log: true
   tags: [deploy, services, docker_apps, sub_store, phase5]
@@ -249,49 +239,6 @@
     - sub_store_capability_profiler_run_now | bool
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
-- name: Deploy Sub-Store capability pool sync service
-  ansible.builtin.include_role:
-    name: vps.applications.application_service
-  vars:
-    app_service_name: "sub-store-capability-pools"
-    app_service_description: "Synchronize #220 capability filters into Mihomo profile"
-    app_service_type: oneshot
-    app_service_exec_start: >-
-      {% if sub_store_capability_pools_enabled | bool %}
-      /usr/bin/python3 {{ sub_store_capability_registry_dir | quote }}/pool_sync.py
-      --state {{ sub_store_capability_registry_state_path | quote }}
-      --provider-catalog {{ sub_store_capability_provider_catalog_path | quote }}
-      --template-path {{ sub_store_capability_profile_template_path | quote }}
-      --profile-path {{ sub_store_capability_profile_path | quote }}
-      --pure-max-abuse-score {{ sub_store_capability_pool_pure_max_abuse_score }}
-      {% else %}
-      /usr/bin/true
-      {% endif %}
-    app_service_timeout: "{{ sub_store_capability_pool_sync_timeout_seconds }}"
-    app_service_restart: "no"
-    app_service_user: "root"
-    app_service_group: "root"
-    app_service_enabled: false
-    app_service_state: stopped
-  when:
-    - sub_store_capability_registry_enabled | bool
-    - sub_store_capability_pools_enabled | bool
-  tags: [deploy, services, docker_apps, sub_store, phase5]
-
-- name: Deploy Sub-Store capability pool sync timer
-  ansible.builtin.include_role:
-    name: vps.applications.application_timer
-  vars:
-    app_timer_name: "sub-store-capability-pools"
-    app_timer_description: "Timer for Sub-Store capability pool sync"
-    app_timer_on_calendar: "{{ sub_store_capability_pool_sync_on_calendar }}"
-    app_timer_persistent: false
-    app_timer_enabled: "{{ sub_store_capability_pools_enabled | bool }}"
-    app_timer_state: "{{ (sub_store_capability_pools_enabled | bool) | ternary('started', 'stopped') }}"
-  when:
-    - sub_store_capability_registry_enabled | bool
-    - sub_store_capability_pools_enabled | bool
-  tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Render Sub-Store capability Mihomo profile
   become: true
@@ -303,22 +250,9 @@
     mode: "0644"
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
-- name: Run Sub-Store capability pool sync
-  become: true
-  ansible.builtin.systemd_service:
-    name: sub-store-capability-pools.service
-    state: started
-  when:
-    - not ansible_check_mode
-    - sub_store_capability_registry_enabled | bool
-    - sub_store_capability_pools_enabled | bool
-  tags: [deploy, services, docker_apps, sub_store, phase5]
-
 - name: Gather stale capability service facts
   ansible.builtin.service_facts:
-  when: >-
-    not (sub_store_capability_registry_enabled | bool)
-    or not (sub_store_capability_pools_enabled | bool)
+  when: not (sub_store_capability_registry_enabled | bool)
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Disable stale capability profiler service
@@ -335,7 +269,7 @@
     - item in ansible_facts.services
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
-- name: Disable stale capability pool service
+- name: Unconditionally disable retired capability pools timer and service
   become: true
   ansible.builtin.systemd_service:
     name: "{{ item }}"
@@ -344,9 +278,11 @@
   loop:
     - sub-store-capability-pools.service
     - sub-store-capability-pools.timer
-  when:
-    - not (sub_store_capability_pools_enabled | bool)
-    - item in ansible_facts.services
+  # Capability pools (#221) are retired; the timer/service may still exist
+  # from earlier deployments and fire every 15 minutes, overwriting the
+  # static profile template with pool_sync.py legacy output. Stop them
+  # unconditionally; ignore 'not found' errors (systemd will skip cleanly).
+  failed_when: false
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Render Sub-Store Mihomo profile
@@ -458,7 +394,6 @@
   loop: "{{ docker_apps_sub_store_capability_providers | default([]) }}"
   when:
     - not ansible_check_mode
-    - sub_store_capability_pools_enabled | bool
     - item.name != sub_store_subscription_name
   no_log: true
   tags: [deploy, services, docker_apps, sub_store, phase5]
@@ -471,9 +406,7 @@
     status_code: 200
     return_content: true
   register: docker_apps_sub_store_collections_probe
-  when:
-    - not ansible_check_mode
-    - sub_store_capability_pools_enabled | bool
+  when: not ansible_check_mode
   no_log: true
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
@@ -484,9 +417,7 @@
     docker_apps_sub_store_existing_collection_names: >-
       {{ (docker_apps_sub_store_collections_probe.content | from_json)['data']
          | map(attribute='name') | list }}
-  when:
-    - not ansible_check_mode
-    - sub_store_capability_pools_enabled | bool
+  when: not ansible_check_mode
   no_log: true
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
@@ -496,9 +427,7 @@
       - docker_apps_sub_store_collections_payload['status'] == 'success'
       - (docker_apps_sub_store_collections_payload['data'] | type_debug) == 'list'
     fail_msg: "Sub-Store collections API returned an unexpected response"
-  when:
-    - not ansible_check_mode
-    - sub_store_capability_pools_enabled | bool
+  when: not ansible_check_mode
   no_log: true
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
@@ -522,9 +451,7 @@
         {{ docker_apps_sub_store_capability_providers | map(attribute='name') | list }}
     status_code: [200, 201]
     return_content: false
-  when:
-    - not ansible_check_mode
-    - sub_store_capability_pools_enabled | bool
+  when: not ansible_check_mode
   no_log: true
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
@@ -538,9 +465,7 @@
     method: GET
     status_code: 200
     return_content: false
-  when:
-    - not ansible_check_mode
-    - sub_store_capability_pools_enabled | bool
+  when: not ansible_check_mode
   no_log: true
   tags: [deploy, services, docker_apps, sub_store, phase5]
 

@@ -135,8 +135,6 @@ def test_jp3_outbound_resolves_reality_material_from_hostvars() -> None:
 # the debt explicit and fails if a NEW hardcoded peer is introduced.
 KNOWN_HARDCODED_PEER_DEBT = {
     ("outbounds_direct.json.j2", "out-cc15"),
-    ("outbounds_direct.json.j2", "out-nat-hk216"),
-    ("outbounds_direct.json.j2", "out-nat-hk084"),
     ("outbounds_relay.json.j2", "public-relay-fallback"),
 }
 
