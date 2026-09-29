@@ -228,12 +228,12 @@
 - name: Flush cloudflared handlers
   ansible.builtin.meta: flush_handlers
 
-- name: Enable and start cloudflared service
+- name: Manage cloudflared service state
   become: true
   ansible.builtin.service:
     name: "{{ cloudflared_service_name }}"
-    enabled: true
-    state: started
+    enabled: "{{ cloudflared_service_enabled | bool }}"
+    state: "{{ cloudflared_service_state }}"
 
 - name: Deploy cloudflared watchdog systemd service
   ansible.builtin.include_role:
