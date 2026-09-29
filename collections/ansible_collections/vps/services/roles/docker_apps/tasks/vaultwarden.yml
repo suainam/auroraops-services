@@ -15,6 +15,7 @@
     src: "vaultwarden.env"
     dest: "/opt/dockers/vaultwarden/vaultwarden.env"
     mode: "0600"
+    force: false
   no_log: true
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
