@@ -148,14 +148,20 @@ def load_provider_catalog_nodes(
             f"{sub_store_base_url.rstrip('/')}/download/"
             f"{urllib.parse.quote(template, safe='')}?{query}"
         )
-        with opener.open(download_url, timeout=timeout) as response:
-            payload = json.load(response)
+        try:
+            with opener.open(download_url, timeout=timeout) as response:
+                payload = json.load(response)
+        except Exception as exc:
+            print(f"[warning] failed to fetch provider {name}: {exc}", file=sys.stderr)
+            continue
         for node in singbox_nodes(payload):
             enriched = dict(node)
             enriched["provider"] = name
             enriched["provider_prefix"] = prefix
             enriched["owned"] = item.get("owned") is True
             nodes.append(enriched)
+    if not nodes:
+        raise ValueError("no nodes could be loaded from any catalog provider")
     return nodes
 
 
