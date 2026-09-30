@@ -70,7 +70,9 @@ proxy-groups:
     type: select
     proxies:
       - "🛡️ AI 容灾"
-      - "🖥️ VPS · AI"
+{% for pid in vps_providers.items %}
+      - "🖥️ {{ pid | upper }} · AI"
+{% endfor %}
       - "🧭 NAT · AI"
       - "🌐 BP · AI"
       - "🌸 SK"
@@ -79,13 +81,15 @@ proxy-groups:
   - name: "🛡️ AI 容灾"
     type: fallback
     proxies:
-      - "🖥️ VPS · AI"
+{% for pid in vps_providers.items %}
+      - "🖥️ {{ pid | upper }} · AI"
+{% endfor %}
       - "🧭 NAT · AI"
       - "🌐 BP · AI"
       - DIRECT
     url: https://www.gstatic.com/generate_204
     interval: 300
-    timeout: 5000
+    timeout: 2500
     lazy: true
 
   - name: "📹 视频开发"
@@ -169,17 +173,6 @@ proxy-groups:
     lazy: true
     hidden: true
 
-  - name: "🖥️ VPS · AI"
-    type: fallback
-    proxies:
-{% for pid in vps_providers.items %}
-      - "🖥️ {{ pid | upper }} · AI"
-{% endfor %}
-    url: https://www.gstatic.com/generate_204
-    interval: 300
-    timeout: 5000
-    lazy: true
-    hidden: true
 
 {% for pid in vps_providers.items %}
   - name: "🖥️ {{ pid | upper }} · AI"
