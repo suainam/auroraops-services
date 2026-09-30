@@ -30,6 +30,13 @@ singbox_reality_sni_candidates:
   - www.microsoft.com
 singbox_reality_short_id_count: 8
 
+# Optional authenticated SOCKS5 exits: tag, server, server_port, username,
+# password. Store credentials in the controller's Vault.
+singbox_socks_outbounds: []
+# A VLESS extra node may set shared_inbound to a primary VLESS node's name.
+# It must use that listener's port/SNI/Reality settings and a unique UUID/name;
+# relay_outbound selects its fixed exit by auth_user, without another listener.
+
 # WireGuard Userspace Guard
 singbox_wireguard_enabled: false
 singbox_wireguard_system: false

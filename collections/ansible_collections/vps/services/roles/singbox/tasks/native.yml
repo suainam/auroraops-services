@@ -43,7 +43,7 @@
     src: "{{ singbox_config_dir }}/"
     dest: "{{ singbox_native_config_dir }}/"
     remote_src: true
-    mode: "0644"
+    mode: "{{ '0600' if singbox_socks_outbounds | default([]) | length > 0 else '0644' }}"
   notify: Restart singbox service
   when: not ansible_check_mode
   tags: [deploy, services, singbox, phase5]

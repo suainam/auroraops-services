@@ -2,7 +2,7 @@
   "inbounds": [
     {%- set ns = namespace(first_inbound=true) -%}
     {%- set all_in_nodes = (docker_apps_singbox_processed_nodes | default(singbox_nodes)) + (singbox_extra_nodes | default([])) -%}
-    {%- for node in all_in_nodes if not (node.external | default(false) | bool) -%}
+    {%- for node in all_in_nodes if not (node.external | default(false) | bool) and node.shared_inbound is not defined -%}
     {%- if not ns.first_inbound %},
     {%- endif -%}
     {%- set ns.first_inbound = false -%}
@@ -24,6 +24,13 @@
           "uuid": "{{ node.uuid }}"{% if has_flow %},
           "flow": "xtls-rprx-vision"{% endif %}
         }
+        {% for shared in all_in_nodes if shared.shared_inbound | default('') == node.name %},
+        {
+          "name": {{ shared.name | to_json }},
+          "uuid": {{ shared.uuid | to_json }}{% if has_flow %},
+          "flow": "xtls-rprx-vision"{% endif %}
+        }
+        {% endfor %}
       ]{% if has_tls %},
       "tls": {
         "enabled": true,
