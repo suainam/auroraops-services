@@ -420,7 +420,7 @@
       {{
         {
           'TZ': 'Asia/Shanghai',
-          'GOMEMLIMIT': '220MiB',
+          'GOMEMLIMIT': cliproxyapi_gomemlimit,
           'MANAGEMENT_PASSWORD': cliproxyapi_management_key,
           'MANAGEMENT_STATIC_PATH': '/CLIProxyAPI/static/management.html'
         }
