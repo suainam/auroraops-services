@@ -30,7 +30,7 @@ docker_apps_hysteria2_client_networks: >-
 
 # Sub-Store
 docker_apps_sub_store_pull: false
-
+sub_store_capability_pools_enabled: false
 # Shared Docker data root used by backup-aware setup tasks.  Keep the role
 # runnable when the parent inventory does not import the optional backup.yml.
 backup_source_docker_dir: "/opt/dockers"
