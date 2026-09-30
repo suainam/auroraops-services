@@ -11,7 +11,8 @@ cliproxyapi_bind_host: "{{ cliproxyapi_bind_address.split(':')[0] | default('127
 cliproxyapi_bind_port: "{{ (cliproxyapi_bind_address.split(':')[1] | default('30011')) | int }}"
 cliproxyapi_restart_hour: "04"
 cliproxyapi_restart_schedule: "*-*-* {{ cliproxyapi_restart_hour }}:00:00"
-cliproxyapi_gomemlimit: "220MiB"
+cliproxyapi_gomemlimit_ratio: 0.78
+cliproxyapi_gomemlimit: "{{ (cliproxyapi_docker_memory | regex_replace('[^0-9]','') | int * cliproxyapi_gomemlimit_ratio) | round | int }}MiB"
 cliproxyapi_http_proxy: ""
 cliproxyapi_proxy_url: "http://127.0.0.1:7890"
 cliproxyapi_download_proxy: "http://127.0.0.1:7890"
