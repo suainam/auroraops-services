@@ -36,6 +36,9 @@ dns:
     "{{ singbox_domain }}":
       - https://dns.alidns.com/dns-query
       - https://doh.pub/dns-query
+    "+.stun.*":
+      - 223.5.5.5
+      - 119.29.29.29
 {% for domain in sub_store_capability_private_fake_ip_filter | default([]) %}
     "{{ domain }}":
       - https://dns.alidns.com/dns-query
@@ -47,6 +50,7 @@ dns:
     - +.163.com
     - +.netease.com
     - +.uuremote.com
+    - "+.stun.*"
     - "{{ singbox_domain }}"
 {% for domain in sub_store_capability_user_fake_ip_filter | default([]) %}
     - "{{ domain }}"

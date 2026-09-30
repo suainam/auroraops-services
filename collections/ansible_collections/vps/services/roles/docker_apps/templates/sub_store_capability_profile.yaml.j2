@@ -25,6 +25,7 @@ proxies: []
 {% set bp_providers  = namespace(items=[]) %}
 {% set sk_providers  = namespace(items=[]) %}
 {% for p in capability_providers %}
+{% if p.enabled | default(true) %}
 {% set pid = p['provider-id'] | default(p.name) %}
 {% set dg = p['display-group'] | default('') %}
 {% if not dg %}
@@ -46,6 +47,7 @@ proxies: []
 {% set bp_providers.items = bp_providers.items + [pid] %}
 {% elif dg == 'SK' %}
 {% set sk_providers.items = sk_providers.items + [pid] %}
+{% endif %}
 {% endif %}
 {% endfor %}
 
@@ -184,11 +186,12 @@ proxy-groups:
 {% for pid in nat_providers.items %}
       - source-{{ pid }}
 {% endfor %}
+    # 严格限定具备 AI 出口能力的节点（如 nat-jp3），彻底过滤香港节点（OpenAI 403 阻断）(#110)
+    filter: "(?i)🇯🇵|jp|japan|smart-ai|us|united\\s*states"
     url: https://chatgpt.com/cdn-cgi/trace
     interval: 300
     lazy: true
     hidden: true
-
   # 精准匹配真正的 AI 关键词，彻底排除 [baipiao] 自身拼音误命中
   - name: "🌐 BP · AI"
     type: fallback
