@@ -171,15 +171,31 @@ proxy-groups:
 
   - name: "🖥️ VPS · AI"
     type: fallback
-    use:
+    proxies:
 {% for pid in vps_providers.items %}
-      - source-{{ pid }}
+      - "🖥️ {{ pid | upper }} · AI"
 {% endfor %}
     url: https://www.gstatic.com/generate_204
     interval: 300
     timeout: 5000
     lazy: true
     hidden: true
+
+{% for pid in vps_providers.items %}
+  - name: "🖥️ {{ pid | upper }} · AI"
+    type: fallback
+    use:
+      - source-{{ pid }}
+{% if 'qqg' in pid | lower %}
+    # 严格门禁：qqg1299 仅允许 smart-ai 专用出口进入 AI 容灾，排除机房原生节点（避免送中漂移）
+    filter: "(?i)smart-ai"
+{% endif %}
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    timeout: 5000
+    lazy: true
+    hidden: true
+{% endfor %}
 
   - name: "🧭 NAT · AI"
     type: fallback
@@ -188,7 +204,7 @@ proxy-groups:
       - source-{{ pid }}
 {% endfor %}
     # 严格限定具备 AI 出口能力的节点（如 nat-jp3），彻底过滤香港节点（OpenAI 403 阻断）(#110)
-    filter: "(?i)🇯🇵|jp|japan|smart-ai|us|united\\s*states"
+    filter: "(?i)🇯🇵|jp|japan|smart-ai"
     url: https://www.gstatic.com/generate_204
     interval: 300
     timeout: 5000
