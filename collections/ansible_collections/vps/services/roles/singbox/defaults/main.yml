@@ -70,3 +70,14 @@ singbox_wireguard_server_port: ""
 singbox_wireguard_http_port: ""
 singbox_wireguard_allowed_ips: ["10.144.10.0/24"]
 singbox_wireguard_keepalive: 25
+# Empty on purpose. A private key that lives in the repository is a key every
+# host reading it shares, and the repository's own copy goes stale the moment a
+# host regenerates -- which is how Issue #140 became unresolvable: the stored
+# key no longer derived the stored public key beside it. Left empty, the role
+# generates one on the host and only the public half is ever registered. Supply
+# a value here only to pin a specific key; otherwise the host owns it.
+singbox_wireguard_private_key: ""
+# Owner-only. sing-box is invoked with -C (directory mode) and reads *.json, so
+# a .key file sitting beside the fragments is inert to it -- the key is read by
+# this role at render time and never shipped as a separate config input.
+singbox_wireguard_private_key_file: "{{ singbox_native_config_dir }}/wg_priv.key"

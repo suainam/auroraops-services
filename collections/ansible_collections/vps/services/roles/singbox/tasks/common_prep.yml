@@ -163,3 +163,64 @@
       }}
   no_log: true
   tags: [deploy, services, singbox, phase5]
+
+# --- WireGuard private key: generated on the host, never in the repository -----
+# The repository holds public keys only. Generating here rather than defaulting
+# a value keeps one key from being shared by every peer that reads the file, and
+# keeps the private half off the controller entirely.
+- name: Sing-box - Check for existing host-local WireGuard private key
+  become: true
+  ansible.builtin.stat:
+    path: "{{ singbox_wireguard_private_key_file }}"
+  register: singbox_wireguard_private_key_stat
+  when:
+    - singbox_wireguard_enabled | default(false) | bool
+    - (singbox_wireguard_private_key | default('')) | length == 0
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box - Generate host-local WireGuard private key
+  become: true
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - >-
+        import os, base64, sys;
+        fd = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600);
+        os.write(fd, base64.b64encode(os.urandom(32)));
+        os.close(fd)
+      - "{{ singbox_wireguard_private_key_file }}"
+  when:
+    - singbox_wireguard_enabled | default(false) | bool
+    - (singbox_wireguard_private_key | default('')) | length == 0
+    - not singbox_wireguard_private_key_stat.stat.exists | default(false)
+    - not ansible_check_mode
+  changed_when: true
+  no_log: true
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box - Load host-local WireGuard private key
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ singbox_wireguard_private_key_file }}"
+  register: singbox_wireguard_private_key_raw
+  when:
+    - singbox_wireguard_enabled | default(false) | bool
+    - (singbox_wireguard_private_key | default('')) | length == 0
+    - not ansible_check_mode
+  no_log: true
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box - Render with the host-local WireGuard private key
+  ansible.builtin.set_fact:
+    singbox_wireguard_private_key: >-
+      {{
+        singbox_wireguard_private_key_raw.content | b64decode | trim
+        if singbox_wireguard_private_key_raw.content is defined
+        else 'SIMULATED_WIREGUARD_PRIVATE_KEY'
+      }}
+  when:
+    - singbox_wireguard_enabled | default(false) | bool
+    - (singbox_wireguard_private_key | default('')) | length == 0
+  no_log: true
+  tags: [deploy, services, singbox, phase5]

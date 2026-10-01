@@ -13,6 +13,17 @@
     "rules": [
       { "protocol": "dns", "action": "hijack-dns" },
       { "action": "resolve", "strategy": "prefer_ipv4" },
+      {# The mesh has to be routed before the private-range reject below can
+         swallow it. 10.144.10.0/24 sits inside 10.0.0.0/8, so without this rule
+         every mesh destination is discarded a few lines before wg-hub is ever
+         consulted -- the tunnel is up and the traffic still never moves, with
+         nothing in the logs to say the peer was at fault. Rule order is the
+         whole fix; there is no later rule that could win over a reject.
+         Guarded on singbox_wireguard_enabled so a host without the endpoint is
+         not left pointing at an outbound that does not exist. #}
+      {% if singbox_wireguard_enabled | default(false) | bool %}
+      { "ip_cidr": {{ singbox_wireguard_allowed_ips | default(['10.144.10.0/24']) | to_json }}, "outbound": "wg-{{ singbox_wireguard_peer_tag | default('hub') }}" },
+      {% endif %}
       {
         "ip_cidr": [
           "0.0.0.0/8",
