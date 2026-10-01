@@ -15,7 +15,8 @@
   ansible.builtin.template:
     src: outbounds_direct.json.j2
     dest: "{{ singbox_config_dir }}/02_outbounds.json"
-    mode: "0644"
+    mode: "{{ '0600' if singbox_socks_outbounds | default([]) | length > 0 else '0644' }}"
+  no_log: "{{ singbox_socks_outbounds | default([]) | length > 0 }}"
   when: singbox_role | default('direct') == 'direct'
   notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]
@@ -47,7 +48,7 @@
   ansible.builtin.template:
     src: inbounds_direct.json.j2
     dest: "{{ singbox_config_dir }}/04_inbounds.json"
-    mode: "0644"
+    mode: "{{ '0600' if singbox_socks_outbounds | default([]) | length > 0 else '0644' }}"
   when: singbox_role | default('direct') == 'direct'
   notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]

@@ -21,6 +21,16 @@
   failed_when: singbox_native_check.rc != 0
   tags: [verify, services, singbox, phase5]
 
+- name: Verify the Sing-box binary itself runs
+  become: true
+  ansible.builtin.command: "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }} version"
+  register: singbox_native_binary_check
+  changed_when: false
+  failed_when: singbox_native_binary_check.rc != 0
+  # Asserting the service alone is not enough: a half-installed host has
+  # /etc/init.d/sing-box but no binary, and rc-service still answers.
+  tags: [verify, services, singbox, phase5]
+
 - name: Verify Sing-box native reality port is listening
   ansible.builtin.wait_for:
     host: 127.0.0.1

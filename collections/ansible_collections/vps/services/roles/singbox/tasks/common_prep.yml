@@ -20,14 +20,30 @@
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box - Generate Short IDs if missing
-  become: true
-  ansible.builtin.shell: |
-    set -eu
-    count={{ singbox_reality_short_id_count | default(8) }}
-    for i in $(seq 1 $count); do
-      openssl rand -hex 8
-    done > "{{ singbox_data_dir }}/short_ids.txt"
+  become: false
+  delegate_to: localhost
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_playbook_python }}"
+      - -c
+      - "import secrets; print('\\n'.join(secrets.token_hex(8) for _ in range({{ singbox_reality_short_id_count | default(8) | int }})))"
+  register: singbox_short_ids_gen
+  check_mode: false
+  changed_when: false
+  no_log: true
   when: not singbox_short_ids_stat.stat.exists
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box - Save generated Short IDs
+  become: true
+  ansible.builtin.copy:
+    dest: "{{ singbox_data_dir }}/short_ids.txt"
+    content: "{{ singbox_short_ids_gen.stdout }}\n"
+    mode: "0600"
+  when:
+    - not singbox_short_ids_stat.stat.exists
+    - not ansible_check_mode
+  no_log: true
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box - Read Short IDs
@@ -36,11 +52,12 @@
     src: "{{ singbox_data_dir }}/short_ids.txt"
   register: singbox_short_ids_raw
   no_log: true
+  when: singbox_short_ids_stat.stat.exists
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box - Parse Short IDs list
   ansible.builtin.set_fact:
-    singbox_reality_short_ids: "{{ (singbox_short_ids_raw.content | b64decode).strip().splitlines() }}"
+    singbox_reality_short_ids: "{{ (singbox_short_ids_raw.content | b64decode).strip().splitlines() if singbox_short_ids_stat.stat.exists else singbox_short_ids_gen.stdout.splitlines() }}"
   no_log: true
   tags: [deploy, services, singbox, phase5]
 
@@ -69,18 +86,26 @@
   no_log: true
   tags: [deploy, services, singbox, phase5]
 
-- name: Sing-box Native - Generate Reality Keypair
-  become: true
+- name: Sing-box Native - Generate Reality Keypair on controller
+  become: false
+  delegate_to: localhost
   ansible.builtin.command:
     argv:
-      - sing-box
-      - generate
-      - reality-keypair
+      - "{{ ansible_playbook_python }}"
+      - -c
+      - |
+        import base64
+        from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+        key = X25519PrivateKey.generate()
+        encode = lambda data: base64.urlsafe_b64encode(data).decode().rstrip("=")
+        print("PrivateKey:", encode(key.private_bytes_raw()))
+        print("PublicKey:", encode(key.public_key().public_bytes_raw()))
   register: singbox_native_reality_key_gen
+  check_mode: false
+  changed_when: false
   when:
     - not singbox_reality_key_stat.stat.exists
     - singbox_effective_mode == 'native'
-    - not ansible_check_mode
   no_log: true
   tags: [deploy, services, singbox, phase5]
 
@@ -108,6 +133,17 @@
   register: singbox_reality_key_raw
   when:
     - singbox_reality_key_stat.stat.exists or not ansible_check_mode
+  no_log: true
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Use ephemeral real keys for pristine check
+  ansible.builtin.set_fact:
+    singbox_reality_key_raw:
+      content: "{{ singbox_native_reality_key_gen.stdout | b64encode }}"
+  when:
+    - ansible_check_mode
+    - not singbox_reality_key_stat.stat.exists
+    - singbox_effective_mode == 'native'
   no_log: true
   tags: [deploy, services, singbox, phase5]
 

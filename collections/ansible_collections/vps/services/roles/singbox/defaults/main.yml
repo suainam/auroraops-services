@@ -30,6 +30,25 @@ singbox_reality_sni_candidates:
   - www.microsoft.com
 singbox_reality_short_id_count: 8
 
+# Optional authenticated SOCKS5 exits: tag, server, server_port, username,
+# password. Store credentials in the controller's Vault.
+singbox_socks_outbounds: []
+# A VLESS extra node may set shared_inbound to a primary VLESS node's name.
+# It must use that listener's port/SNI/Reality settings and a unique UUID/name;
+# relay_outbound selects its fixed exit by auth_user, without another listener.
+
+# Slim binary for memory-constrained guests. The Alpine package is a 46 MiB
+# universal binary; unpacking it inside a 64 MiB guest's cgroup gets the install
+# OOM-killed, which leaves an OpenRC init script with no binary behind it.
+# When enabled, the native branch installs the supplied binary instead of
+# managing the distro package. Off by default: every other node is unaffected.
+singbox_native_custom_binary: false
+# Controller-side path or URL of the prebuilt binary.
+singbox_native_slim_source: ""
+# Required when custom_binary is on. The install refuses to run without it --
+# silently falling back to apk is exactly what OOMs the guest.
+singbox_native_slim_sha256: ""
+
 # WireGuard Userspace Guard
 singbox_wireguard_enabled: false
 singbox_wireguard_system: false

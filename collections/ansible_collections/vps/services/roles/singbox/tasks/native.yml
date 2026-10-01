@@ -5,7 +5,113 @@
     name:
       - sing-box
       - sing-box-openrc
+      - openssl
     state: present
+  # Mutually exclusive with the slim-binary path below. A guest that supplies its
+  # own binary must never also attempt the package install, because unpacking the
+  # 46 MiB package is what OOM-kills a 64 MiB guest.
+  when: not (singbox_native_custom_binary | default(false) | bool)
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Validate slim binary inputs
+  become: true
+  ansible.builtin.assert:
+    that:
+      - singbox_native_slim_source | default('') | length > 0
+      - singbox_native_slim_sha256 | default('') | length > 0
+    fail_msg: >-
+      singbox_native_custom_binary requires both singbox_native_slim_source and
+      singbox_native_slim_sha256. Refusing to fall back to the distro package:
+      unpacking it is what exhausts a constrained guest's memory budget.
+  when: singbox_native_custom_binary | default(false) | bool
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Stage slim binary beside the destination
+  become: true
+  ansible.builtin.copy:
+    src: "{{ singbox_native_slim_source }}"
+    dest: "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}.new"
+    mode: "0755"
+    # remote_src defaults to true: on a memory-constrained guest, copying through
+    # a Python module is itself OOM-killed (rc=137 transferring a ~32 MiB file
+    # under a 64 MiB cap). Streaming the artifact with plain ssh cat costs no guest
+    # memory, so the transport is delegated and the role keeps the parts that
+    # matter: digest verification and an atomic, idempotent install.
+    remote_src: "{{ singbox_native_slim_remote_src | default(true) | bool }}"
+  # Staged, never installed straight over the running binary: a corrupt transfer
+  # must not replace a working one.
+  when:
+    - singbox_native_custom_binary | default(false) | bool
+    - not ansible_check_mode
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Checksum the staged slim binary
+  become: true
+  ansible.builtin.command:
+    argv:
+      - sha256sum
+      - "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}.new"
+  register: singbox_slim_digest
+  changed_when: false
+  when:
+    - singbox_native_custom_binary | default(false) | bool
+    - not ansible_check_mode
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Verify staged slim binary matches the expected digest
+  become: true
+  ansible.builtin.assert:
+    that:
+      - singbox_slim_digest.stdout.split()[0] == singbox_native_slim_sha256
+    fail_msg: >-
+      Staged slim binary digest {{ singbox_slim_digest.stdout.split()[0] }} does
+      not match singbox_native_slim_sha256. Refusing to install it.
+  when:
+    - singbox_native_custom_binary | default(false) | bool
+    - not ansible_check_mode
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Remove an unusable slim binary
+  become: true
+  ansible.builtin.file:
+    path: "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}.new"
+    state: absent
+  when:
+    - singbox_native_custom_binary | default(false) | bool
+    - not ansible_check_mode
+    - singbox_slim_digest.stdout.split()[0] != singbox_native_slim_sha256
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Read the installed slim binary digest
+  become: true
+  ansible.builtin.command:
+    argv:
+      - sha256sum
+      - "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}"
+  register: singbox_installed_digest_raw
+  changed_when: false
+  failed_when: false
+  when:
+    - singbox_native_custom_binary | default(false) | bool
+    - not ansible_check_mode
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Install slim binary if the running one is not the expected build
+  become: true
+  ansible.builtin.command:
+    argv:
+      - mv
+      - "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}.new"
+      - "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}"
+  register: singbox_slim_installed
+  # Idempotence: a guest already running the expected digest is left alone, so a
+  # repeat deploy reports changed=0 rather than reinstalling every time.
+  when:
+    - singbox_native_custom_binary | default(false) | bool
+    - not ansible_check_mode
+    - (singbox_installed_digest_raw.stdout | default('') | split | first | default('')) != singbox_native_slim_sha256
+  changed_when: true
+  notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box Native - Ensure system config directory exists
@@ -21,6 +127,46 @@
     path: "{{ singbox_native_config_dir }}/certs"
     state: directory
     mode: "0755"
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Create persistent self-signed private key
+  become: true
+  ansible.builtin.command:
+    argv: [openssl, genrsa, -out, "{{ singbox_native_config_dir }}/certs/key.pem", "2048"]
+    creates: "{{ singbox_native_config_dir }}/certs/key.pem"
+  when: singbox_native_self_signed_enabled | default(false) | bool
+  no_log: true
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Create self-signed certificate without replacing key
+  become: true
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - req
+      - -new
+      - -x509
+      - -key
+      - "{{ singbox_native_config_dir }}/certs/key.pem"
+      - -out
+      - "{{ singbox_native_config_dir }}/certs/cert.pem"
+      - -days
+      - "3650"
+      - -subj
+      - "/CN={{ singbox_domain }}"
+    creates: "{{ singbox_native_config_dir }}/certs/cert.pem"
+  when: singbox_native_self_signed_enabled | default(false) | bool
+  no_log: true
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Protect persistent self-signed key
+  become: true
+  ansible.builtin.file:
+    path: "{{ singbox_native_config_dir }}/certs/key.pem"
+    mode: "0600"
+  when:
+    - singbox_native_self_signed_enabled | default(false) | bool
+    - not ansible_check_mode
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box Native - Configure OpenRC environment defaults
@@ -43,7 +189,7 @@
     src: "{{ singbox_config_dir }}/"
     dest: "{{ singbox_native_config_dir }}/"
     remote_src: true
-    mode: "0644"
+    mode: "{{ '0600' if singbox_socks_outbounds | default([]) | length > 0 else '0644' }}"
   notify: Restart singbox service
   when: not ansible_check_mode
   tags: [deploy, services, singbox, phase5]

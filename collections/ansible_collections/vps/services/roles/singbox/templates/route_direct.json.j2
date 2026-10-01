@@ -44,7 +44,11 @@
       { "rule_set": ["geosite-openai", "geosite-anthropic", "geosite-google"], "outbound": "warp-out" },
       {%- endif %}
 {% for node in singbox_extra_nodes | default([]) if node.relay_outbound is defined %}
+      {% if node.shared_inbound is defined %}
+      { "auth_user": [{{ node.name | to_json }}], "outbound": {{ node.relay_outbound | to_json }} },
+      {% else %}
       { "inbound": ["in-{{ node.name | regex_replace('[^a-zA-Z0-9-]', '') | lower }}"], "outbound": "{{ node.relay_outbound }}" },
+      {% endif %}
 {% endfor %}
       { "outbound": "direct-out" }
     ],

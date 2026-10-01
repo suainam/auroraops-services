@@ -10,6 +10,17 @@
     },
     {%- endif %}
     { "type": "block", "tag": "block" }
+{% for outbound in singbox_socks_outbounds | default([]) %},
+    {
+      "type": "socks",
+      "tag": {{ outbound.tag | to_json }},
+      "server": {{ outbound.server | to_json }},
+      "server_port": {{ outbound.server_port | int }},
+      "version": "5",
+      "username": {{ outbound.username | to_json }},
+      "password": {{ outbound.password | to_json }}
+    }
+{% endfor %}
 {% if singbox_relay_upstreams | default([]) | length > 0 %},
     {
       "type": "urltest",
