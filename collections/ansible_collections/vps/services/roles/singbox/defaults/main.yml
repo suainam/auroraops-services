@@ -70,3 +70,32 @@ singbox_wireguard_server_port: ""
 singbox_wireguard_http_port: ""
 singbox_wireguard_allowed_ips: ["10.144.10.0/24"]
 singbox_wireguard_keepalive: 25
+# Empty on purpose. A private key that lives in the repository is a key every
+# host reading it shares, and the repository's own copy goes stale the moment a
+# host regenerates -- which is how Issue #140 became unresolvable: the stored
+# key no longer derived the stored public key beside it. Left empty, the role
+# generates one on the host and only the public half is ever registered. Supply
+# a value here only to pin a specific key; otherwise the host owns it.
+singbox_wireguard_private_key: ""
+# Owner-only. sing-box is invoked with -C (directory mode) and reads *.json, so
+# a .key file sitting beside the fragments is inert to it -- the key is read by
+# this role at render time and never shipped as a separate config input.
+singbox_wireguard_private_key_file: "{{ singbox_native_config_dir }}/wg_priv.key"
+# A loopback SOCKS inbound is the only way a process on one of these guests can
+# originate mesh traffic. They have no CAP_NET_ADMIN and no /dev/net/tun, so a
+# tun inbound cannot exist, and the host's own routing table never learns the
+# mesh -- a shell curl to 10.144.10.1 is answered by the default gateway and
+# times out no matter how healthy the tunnel is. Without an inbound, sing-box
+# only ever sees traffic that arrived from a remote client, so the mesh can
+# carry keepalives and nothing else.
+#
+# Loopback-only, deliberately. These are residential nodes on consumer ISPs;
+# an unauthenticated SOCKS listener bound to a public interface is an open
+# proxy, and the role refuses a non-loopback listen for that reason rather than
+# trusting the caller's inventory to stay sensible.
+singbox_mesh_socks_enabled: false
+singbox_mesh_socks_listen: "127.0.0.1"
+# No default, matching singbox_wireguard_http_port above: the port is the
+# authority's decision (ports.yml), and an empty value should fail loudly
+# instead of quietly binding something already in use.
+singbox_mesh_socks_port: ""
