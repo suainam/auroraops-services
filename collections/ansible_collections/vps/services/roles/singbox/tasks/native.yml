@@ -32,10 +32,12 @@
     src: "{{ singbox_native_slim_source }}"
     dest: "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}.new"
     mode: "0755"
-    # Default is a controller-side transfer: the controller builds the binary and
-    # ships it to the guest. remote_src is opt-in for guests that already hold the
-    # artifact (an air-gapped build host).
-    remote_src: "{{ singbox_native_slim_remote_src | default(false) | bool }}"
+    # remote_src defaults to true: on a memory-constrained guest, copying through
+    # a Python module is itself OOM-killed (rc=137 transferring a ~32 MiB file
+    # under a 64 MiB cap). Streaming the artifact with plain ssh cat costs no guest
+    # memory, so the transport is delegated and the role keeps the parts that
+    # matter: digest verification and an atomic, idempotent install.
+    remote_src: "{{ singbox_native_slim_remote_src | default(true) | bool }}"
   # Staged, never installed straight over the running binary: a corrupt transfer
   # must not replace a working one.
   when:
