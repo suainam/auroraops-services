@@ -32,7 +32,10 @@
     src: "{{ singbox_native_slim_source }}"
     dest: "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}.new"
     mode: "0755"
-    remote_src: true
+    # Default is a controller-side transfer: the controller builds the binary and
+    # ships it to the guest. remote_src is opt-in for guests that already hold the
+    # artifact (an air-gapped build host).
+    remote_src: "{{ singbox_native_slim_remote_src | default(false) | bool }}"
   # Staged, never installed straight over the running binary: a corrupt transfer
   # must not replace a working one.
   when:
