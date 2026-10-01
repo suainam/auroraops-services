@@ -7,6 +7,106 @@
       - sing-box-openrc
       - openssl
     state: present
+  # Mutually exclusive with the slim-binary path below. A guest that supplies its
+  # own binary must never also attempt the package install, because unpacking the
+  # 46 MiB package is what OOM-kills a 64 MiB guest.
+  when: not (singbox_native_custom_binary | default(false) | bool)
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Validate slim binary inputs
+  become: true
+  ansible.builtin.assert:
+    that:
+      - singbox_native_slim_source | default('') | length > 0
+      - singbox_native_slim_sha256 | default('') | length > 0
+    fail_msg: >-
+      singbox_native_custom_binary requires both singbox_native_slim_source and
+      singbox_native_slim_sha256. Refusing to fall back to the distro package:
+      unpacking it is what exhausts a constrained guest's memory budget.
+  when: singbox_native_custom_binary | default(false) | bool
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Stage slim binary beside the destination
+  become: true
+  ansible.builtin.copy:
+    src: "{{ singbox_native_slim_source }}"
+    dest: "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}.new"
+    mode: "0755"
+    remote_src: true
+  # Staged, never installed straight over the running binary: a corrupt transfer
+  # must not replace a working one.
+  when:
+    - singbox_native_custom_binary | default(false) | bool
+    - not ansible_check_mode
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Checksum the staged slim binary
+  become: true
+  ansible.builtin.command:
+    argv:
+      - sha256sum
+      - "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}.new"
+  register: singbox_slim_digest
+  changed_when: false
+  when:
+    - singbox_native_custom_binary | default(false) | bool
+    - not ansible_check_mode
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Verify staged slim binary matches the expected digest
+  become: true
+  ansible.builtin.assert:
+    that:
+      - singbox_slim_digest.stdout.split()[0] == singbox_native_slim_sha256
+    fail_msg: >-
+      Staged slim binary digest {{ singbox_slim_digest.stdout.split()[0] }} does
+      not match singbox_native_slim_sha256. Refusing to install it.
+  when:
+    - singbox_native_custom_binary | default(false) | bool
+    - not ansible_check_mode
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Remove an unusable slim binary
+  become: true
+  ansible.builtin.file:
+    path: "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}.new"
+    state: absent
+  when:
+    - singbox_native_custom_binary | default(false) | bool
+    - not ansible_check_mode
+    - singbox_slim_digest.stdout.split()[0] != singbox_native_slim_sha256
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Read the installed slim binary digest
+  become: true
+  ansible.builtin.command:
+    argv:
+      - sha256sum
+      - "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}"
+  register: singbox_installed_digest_raw
+  changed_when: false
+  failed_when: false
+  when:
+    - singbox_native_custom_binary | default(false) | bool
+    - not ansible_check_mode
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Install slim binary if the running one is not the expected build
+  become: true
+  ansible.builtin.command:
+    argv:
+      - mv
+      - "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}.new"
+      - "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}"
+  register: singbox_slim_installed
+  # Idempotence: a guest already running the expected digest is left alone, so a
+  # repeat deploy reports changed=0 rather than reinstalling every time.
+  when:
+    - singbox_native_custom_binary | default(false) | bool
+    - not ansible_check_mode
+    - (singbox_installed_digest_raw.stdout | default('') | split | first | default('')) != singbox_native_slim_sha256
+  changed_when: true
+  notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box Native - Ensure system config directory exists
