@@ -181,5 +181,18 @@
       }
     }
     {%- endif -%}
+    {%- if singbox_mesh_socks_enabled | default(false) | bool -%}
+    {%- if not ns.first_inbound -%},{%- endif -%}
+    {%- set ns.first_inbound = false -%}
+    {# Loopback only, and only when the tunnel it feeds actually exists. A
+       mesh SOCKS on a host with no WireGuard endpoint would accept connections
+       and then drop them at the outbound, which reads as a hang. #}
+    {
+      "type": "socks",
+      "tag": "in-mesh",
+      "listen": "{{ singbox_mesh_socks_listen | default('127.0.0.1') }}",
+      "listen_port": {{ singbox_mesh_socks_port }}
+    }
+    {%- endif -%}
   ]
 }
