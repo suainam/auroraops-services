@@ -56,6 +56,26 @@ proxies: []
 {% endif %}
 {% endfor %}
 
+{# --- 全局通用特征标签 (SSOT) --- #}
+{% set tag_ai        = '(?:\x5c\x5c[AI\x5c\x5c]|(?:^|[^a-z])ai(?:[^a-z]|$)|chatgpt|gpt|claude|gemini|解锁)' %}
+{% set tag_iplc      = '(?:\x5c\x5c[专线\x5c\x5c]|专线|IEPL|IPLC)' %}
+{% set tag_bandwidth = '(?:\x5c\x5c[大带宽\x5c\x5c]|1000M|1\x5c\x5c.8G|大带宽|BGP|中转)' %}
+
+{# --- 全局通用测速与健康检查参数 --- #}
+{% set speed_test_url = 'https://www.gstatic.com/generate_204' %}
+{% set ai_test_url    = 'https://chatgpt.com/cdn-cgi/trace' %}
+{% set check_interval = 180 %}
+{% set check_timeout  = 4000 %}
+
+{# --- 五大核心地域元数据定义 --- #}
+{% set regions = [
+  {'code': 'HK', 'flag': '🇭🇰', 'name': '香港'},
+  {'code': 'TW', 'flag': '🇹🇼', 'name': '台湾'},
+  {'code': 'JP', 'flag': '🇯🇵', 'name': '日本'},
+  {'code': 'SG', 'flag': '🇸🇬', 'name': '新加坡'},
+  {'code': 'US', 'flag': '🇺🇸', 'name': '美国', 'extra_proxy': '🇺🇸 洛杉矶独享'}
+] %}
+
 proxy-groups:
   # ========================================================
   # 1. 顶层业务入口 (Top-Level Services, 客户端仅暴露这 5 个)
@@ -159,17 +179,14 @@ proxy-groups:
   - name: "💰 低倍率走廊"
     type: select
     use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
+{% for pid in airport_providers.items + bp_providers.items %}
       - source-{{ pid }}
 {% endfor %}
     filter: "(?i)0\\.1|0\\.01|低倍"
     hidden: true
 
   # --------------------------------------------------------
-  # 极速地域五大区 (自动优选 + 港台日新美，专线 > 大带宽 > 自建)
+  # 极速地域五大区 (自动优选 + 国际流媒体 + 港台日新美)
   # --------------------------------------------------------
   - name: "⚡ 自动优选"
     type: fallback
@@ -179,12 +196,12 @@ proxy-groups:
       - "🇯🇵 日本 · 极速"
       - "🇸🇬 新加坡 · 极速"
       - "🇺🇸 美国 · 极速"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
+    url: {{ speed_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
     lazy: true
     hidden: true
-  # ⚡ 国际流媒体 (专为 YouTube / Disney+ / Netflix 打造的高速通道，严格排除香港，防 403 与无会员)
+
   - name: "⚡ 国际流媒体"
     type: fallback
     proxies:
@@ -192,239 +209,69 @@ proxy-groups:
       - "🇯🇵 日本 · 极速"
       - "🇺🇸 美国 · 极速"
       - "🇹🇼 台湾 · 极速"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
+    url: {{ speed_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
     lazy: true
     hidden: true
 
-  - name: "🇭🇰 香港 · 极速"
+{% for r in regions %}
+  - name: "{{ r.flag }} {{ r.name }} · 极速"
     type: fallback
     proxies:
-      - "🇭🇰 专线 · 极速"
-      - "🇭🇰 大带宽 · 极速"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
+      - "{{ r.flag }} 专线 · 极速"
+      - "{{ r.flag }} 大带宽 · 极速"
+{% if r.extra_proxy is defined %}
+      - "{{ r.extra_proxy }}"
+{% endif %}
+    url: {{ speed_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
     lazy: true
     hidden: true
-
-  - name: "🇹🇼 台湾 · 极速"
-    type: fallback
-    proxies:
-      - "🇹🇼 专线 · 极速"
-      - "🇹🇼 大带宽 · 极速"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-
-  - name: "🇯🇵 日本 · 极速"
-    type: fallback
-    proxies:
-      - "🇯🇵 专线 · 极速"
-      - "🇯🇵 大带宽 · 极速"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-
-  - name: "🇸🇬 新加坡 · 极速"
-    type: fallback
-    proxies:
-      - "🇸🇬 专线 · 极速"
-      - "🇸🇬 大带宽 · 极速"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-  - name: "🇺🇸 美国 · 极速"
-    type: fallback
-    proxies:
-      - "🇺🇸 专线 · 极速"
-      - "🇺🇸 大带宽 · 极速"
-      - "🇺🇸 洛杉矶独享"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
+{% endfor %}
 
   # 极速内部细分专线与大带宽子池 (hidden: true)
-  - name: "🇭🇰 专线 · 极速"
+{% for r in regions %}
+  - name: "{{ r.flag }} 专线 · 极速"
     type: fallback
     use:
-{% for pid in airport_providers.items %}
+{% for pid in airport_providers.items + bp_providers.items %}
       - source-{{ pid }}
 {% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)(\\[HK\\]|香港).*(专线|IEPL|IPLC)"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
+    filter: "(?i)(\\[{{ r.code }}\\]|{{ r.name }}).*{{ tag_iplc }}"
+    url: {{ speed_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
     lazy: true
     hidden: true
 
-  - name: "🇭🇰 大带宽 · 极速"
+  - name: "{{ r.flag }} 大带宽 · 极速"
     type: fallback
     use:
-{% for pid in airport_providers.items %}
+{% for pid in airport_providers.items + bp_providers.items %}
       - source-{{ pid }}
 {% endfor %}
-{% for pid in bp_providers.items %}
+{% if r.code == 'JP' %}
+{% for pid in nat_providers.items if 'jp' in pid | lower %}
       - source-{{ pid }}
 {% endfor %}
-    filter: "(?i)(\\[HK\\]|香港).*(1000M|大带宽|BGP|中转)"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-
-  - name: "🇹🇼 专线 · 极速"
-    type: fallback
-    use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)(\\[TW\\]|台湾).*(专线|IEPL|IPLC)"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-
-  - name: "🇹🇼 大带宽 · 极速"
-    type: fallback
-    use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)(\\[TW\\]|台湾).*(1000M|大带宽|BGP|中转)"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-
-  - name: "🇯🇵 专线 · 极速"
-    type: fallback
-    use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)(\\[JP\\]|日本).*(专线|IEPL|IPLC)"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-
-  - name: "🇯🇵 大带宽 · 极速"
-    type: fallback
-    use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in nat_providers.items %}
-{% if 'jp' in pid | lower %}
-      - source-{{ pid }}
 {% endif %}
-{% endfor %}
-    filter: "(?i)(\\[JP\\]|日本).*(1000M|1\\.8G|大带宽|BGP|中转)"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
+    filter: "(?i)(\\[{{ r.code }}\\]|{{ r.name }}).*{{ tag_bandwidth }}"
+    url: {{ speed_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
     lazy: true
     hidden: true
+{% endfor %}
 
-  - name: "🇸🇬 专线 · 极速"
-    type: fallback
-    use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)(\\[SG\\]|新加坡).*(专线|IEPL|IPLC)"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-
-  - name: "🇸🇬 大带宽 · 极速"
-    type: fallback
-    use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)(\\[SG\\]|新加坡).*(1000M|大带宽|BGP|中转)"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-
-  - name: "🇺🇸 专线 · 极速"
-    type: fallback
-    use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)(\\[US\\]|美国).*(专线|IEPL|IPLC)"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-
-  - name: "🇺🇸 大带宽 · 极速"
-    type: fallback
-    use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)(\\[US\\]|美国).*(1000M|大带宽|BGP)"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
   - name: "⚡ YF·自动优选"
     type: url-test
     use:
 {% for pid in airport_providers.items %}
       - source-{{ pid }}
 {% endfor %}
-    url: https://www.gstatic.com/generate_204
+    url: {{ speed_test_url }}
     interval: 300
     tolerance: 50
     lazy: true
@@ -436,7 +283,7 @@ proxy-groups:
 {% for pid in bp_providers.items %}
       - source-{{ pid }}
 {% endfor %}
-    url: https://www.gstatic.com/generate_204
+    url: {{ speed_test_url }}
     interval: 300
     tolerance: 50
     lazy: true
@@ -449,9 +296,9 @@ proxy-groups:
       - source-{{ pid }}
 {% endfor %}
     filter: "(?i)1000M|神速|快"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
+    url: {{ speed_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
     lazy: true
     hidden: true
 
@@ -462,60 +309,34 @@ proxy-groups:
       - source-{{ pid }}
 {% endfor %}
     filter: "(?i)专线"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
+    url: {{ speed_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
     lazy: true
     hidden: true
 
   # --------------------------------------------------------
   # AI 地域闭环容灾 (家宽 > 原生自建 > 机场，严禁跨区)
   # --------------------------------------------------------
-  - name: "🇺🇸 美国 · AI"
+{% for ai_spec in [
+  {'name': '🇺🇸 美国 · AI', 'proxies': ['🖥️ CC15 · AI', '🖥️ QQG1299 · AI', '🇺🇸 机场 · AI']},
+  {'name': '🇯🇵 日本 · AI', 'proxies': ['🇯🇵 家宽 · AI', '🇯🇵 日本原生', '🇯🇵 机场 · AI']},
+  {'name': '🇸🇬 新加坡 · AI', 'proxies': ['🇸🇬 家宽 · AI', '🇸🇬 机场 · AI']},
+  {'name': '🇹🇼 台湾 · AI', 'proxies': ['🇹🇼 家宽 · AI', '🇹🇼 机场 · AI']}
+] %}
+  - name: "{{ ai_spec.name }}"
     type: fallback
     proxies:
-      - "🖥️ CC15 · AI"
-      - "🖥️ QQG1299 · AI"
-      - "🇺🇸 机场 · AI"
-    url: https://chatgpt.com/cdn-cgi/trace
-    interval: 180
-    timeout: 4000
+{% for p in ai_spec.proxies %}
+      - "{{ p }}"
+{% endfor %}
+    url: {{ ai_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
     lazy: true
     hidden: true
+{% endfor %}
 
-  - name: "🇯🇵 日本 · AI"
-    type: fallback
-    proxies:
-      - "🇯🇵 家宽 · AI"
-      - "🇯🇵 日本原生"
-      - "🇯🇵 机场 · AI"
-    url: https://chatgpt.com/cdn-cgi/trace
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-
-  - name: "🇸🇬 新加坡 · AI"
-    type: fallback
-    proxies:
-      - "🇸🇬 家宽 · AI"
-      - "🇸🇬 机场 · AI"
-    url: https://chatgpt.com/cdn-cgi/trace
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-
-  - name: "🇹🇼 台湾 · AI"
-    type: fallback
-    proxies:
-      - "🇹🇼 家宽 · AI"
-      - "🇹🇼 机场 · AI"
-    url: https://chatgpt.com/cdn-cgi/trace
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
   # --------------------------------------------------------
   # 金融地域闭环隔离 (仅限纯净家宽与独享 VPS，排除公共机场)
   # --------------------------------------------------------
@@ -535,38 +356,29 @@ proxy-groups:
     filter: "(?i)\\[HK\\]|nat-hk"
     hidden: true
 
-  - name: "🇺🇸 美国 · 金融"
+{% for fin_spec in [
+  {'name': '🇺🇸 美国 · 金融', 'proxies': ['🖥️ CC15 · AI', '🖥️ QQG1299 · AI']},
+  {'name': '🇯🇵 日本 · 金融', 'proxies': ['🇯🇵 家宽 · AI', '🇯🇵 日本原生']},
+  {'name': '🇸🇬 新加坡 · 金融', 'proxies': ['🇸🇬 家宽 · AI', '🇸🇬 独享 · 金融']}
+] %}
+  - name: "{{ fin_spec.name }}"
     type: fallback
     proxies:
-      - "🖥️ CC15 · AI"
-      - "🖥️ QQG1299 · AI"
+{% for p in fin_spec.proxies %}
+      - "{{ p }}"
+{% endfor %}
     hidden: true
-
-  - name: "🇯🇵 日本 · 金融"
-    type: fallback
-    proxies:
-      - "🇯🇵 家宽 · AI"
-      - "🇯🇵 日本原生"
-    hidden: true
-
-  - name: "🇸🇬 新加坡 · 金融"
-    type: fallback
-    proxies:
-      - "🇸🇬 家宽 · AI"
-      - "🇸🇬 独享 · 金融"
-    hidden: true
+{% endfor %}
 
   - name: "🇸🇬 独享 · 金融"
     type: fallback
     use:
-{% for pid in nat_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in vps_providers.items %}
+{% for pid in nat_providers.items + vps_providers.items %}
       - source-{{ pid }}
 {% endfor %}
     filter: "(?i)(\\[SG\\]|新加坡).*(原生|独享|固定)"
     hidden: true
+
   - name: "🌐 紧急专线逃生通道"
     type: fallback
     use:
@@ -574,105 +386,49 @@ proxy-groups:
       - source-{{ pid }}
 {% endfor %}
     filter: "(?i)专线|IEPL|IPLC"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
+    url: {{ speed_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
     lazy: true
     hidden: true
 
   # --------------------------------------------------------
   # 中间层特征能力组 (家宽 / 原生 / 机场分类提取)
   # --------------------------------------------------------
-  - name: "🇯🇵 家宽 · AI"
+{% for r in [
+  {'code': 'JP', 'flag': '🇯🇵', 'name': '日本', 'brand': 'Sony'},
+  {'code': 'TW', 'flag': '🇹🇼', 'name': '台湾', 'brand': 'HiNet'},
+  {'code': 'SG', 'flag': '🇸🇬', 'name': '新加坡', 'brand': 'SG'}
+] %}
+  - name: "{{ r.flag }} 家宽 · AI"
     type: fallback
     use:
 {% for pid in nat_providers.items %}
       - source-{{ pid }}
 {% endfor %}
-    filter: "(?i)(\\[JP\\]|日本|Sony).*(家宽|resi)"
+    filter: "(?i)(\\[{{ r.code }}\\]|{{ r.name }}|{{ r.brand }}).*(家宽|resi)"
     hidden: true
+{% endfor %}
 
-  - name: "🇹🇼 家宽 · AI"
+{% for r in [
+  {'code': 'US', 'flag': '🇺🇸', 'name': '美国'},
+  {'code': 'JP', 'flag': '🇯🇵', 'name': '日本'},
+  {'code': 'SG', 'flag': '🇸🇬', 'name': '新加坡'},
+  {'code': 'TW', 'flag': '🇹🇼', 'name': '台湾'}
+] %}
+  - name: "{{ r.flag }} 机场 · AI"
     type: fallback
     use:
-{% for pid in nat_providers.items %}
+{% for pid in airport_providers.items + bp_providers.items %}
       - source-{{ pid }}
 {% endfor %}
-    filter: "(?i)(\\[TW\\]|台湾|HiNet).*(家宽|resi)"
-    hidden: true
-
-  - name: "🇸🇬 家宽 · AI"
-    type: fallback
-    use:
-{% for pid in nat_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)(\\[SG\\]|新加坡).*(家宽|resi)"
-    hidden: true
-
-  - name: "🇺🇸 机场 · AI"
-    type: fallback
-    use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)(\\[US\\]|美国).*(?:(?:^|[^a-z])ai(?:[^a-z]|$)|chatgpt|gpt|claude|gemini|解锁)"
-    url: https://chatgpt.com/cdn-cgi/trace
-    interval: 180
-    timeout: 4000
+    filter: "(?i)(\\[{{ r.code }}\\]|{{ r.name }}).*{{ tag_ai }}"
+    url: {{ ai_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
     lazy: true
     hidden: true
-
-  - name: "🇯🇵 机场 · AI"
-    type: fallback
-    use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
 {% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)\\[JP\\]|日本"
-    url: https://chatgpt.com/cdn-cgi/trace
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-
-  - name: "🇸🇬 机场 · AI"
-    type: fallback
-    use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)\\[SG\\]|新加坡"
-    url: https://chatgpt.com/cdn-cgi/trace
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
-
-  - name: "🇹🇼 机场 · AI"
-    type: fallback
-    use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)\\[TW\\]|台湾"
-    url: https://chatgpt.com/cdn-cgi/trace
-    interval: 180
-    timeout: 4000
-    lazy: true
-    hidden: true
 
   - name: "🇯🇵 日本原生"
     type: fallback
@@ -681,9 +437,9 @@ proxy-groups:
       - source-{{ pid }}
 {% endfor %}
     filter: "(?i)jp3|原生|1\\.8G|🇯🇵"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
+    url: {{ speed_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
     lazy: true
     hidden: true
 
@@ -694,53 +450,38 @@ proxy-groups:
       - source-{{ pid }}
 {% endfor %}
     filter: "(?i)洛杉矶|US|美国|CC|QQG"
-    url: https://www.gstatic.com/generate_204
-    interval: 180
-    timeout: 4000
+    url: {{ speed_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
     lazy: true
     hidden: true
 
   # --------------------------------------------------------
   # 特种低价区与静默解锁
   # --------------------------------------------------------
-  - name: "🇹🇷 土耳其"
+{% for sp in [
+  {'code': 'TR', 'flag': '🇹🇷', 'name': '土耳其'},
+  {'code': 'NG', 'flag': '🇳🇬', 'name': '尼日利亚'},
+  {'code': 'AR', 'flag': '🇦🇷', 'name': '阿根廷'}
+] %}
+  - name: "{{ sp.flag }} {{ sp.name }}"
     type: select
     use:
 {% for pid in sk_providers.items %}
       - source-{{ pid }}
 {% endfor %}
-    filter: "(?i)土耳其|TR|🇹🇷"
+    filter: "(?i){{ sp.name }}|{{ sp.code }}|{{ sp.flag }}"
     hidden: true
-
-  - name: "🇳🇬 尼日利亚"
-    type: select
-    use:
-{% for pid in sk_providers.items %}
-      - source-{{ pid }}
 {% endfor %}
-    filter: "(?i)尼日利亚|NG|🇳🇬"
-    hidden: true
-
-  - name: "🇦🇷 阿根廷"
-    type: select
-    use:
-{% for pid in sk_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)阿根廷|AR|🇦🇷"
-    hidden: true
 
   - name: "🇭🇰 港澳"
     type: url-test
     use:
-{% for pid in nat_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
+{% for pid in nat_providers.items + bp_providers.items %}
       - source-{{ pid }}
 {% endfor %}
     filter: "(?i)🇭🇰|港|hk|hong\\s*kong|🇹🇼|台|tw|taiwan"
-    url: https://www.gstatic.com/generate_204
+    url: {{ speed_test_url }}
     interval: 300
     tolerance: 50
     lazy: true
@@ -763,7 +504,7 @@ proxy-groups:
 {% if 'qqg' in pid | lower %}
     filter: "(?i)smart-ai|hy2"
 {% endif %}
-    url: https://www.gstatic.com/generate_204
+    url: {{ speed_test_url }}
     interval: 300
     timeout: 5000
     lazy: true
