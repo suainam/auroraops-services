@@ -20,10 +20,11 @@ geox-url:
 proxies: []
 {% set capability_providers = docker_apps_sub_store_capability_providers %}
 {% include 'sub_store_capability_profile/proxy_providers.yaml.j2' %}
-{% set vps_providers = namespace(items=[]) %}
-{% set nat_providers = namespace(items=[]) %}
-{% set bp_providers  = namespace(items=[]) %}
-{% set sk_providers  = namespace(items=[]) %}
+{% set vps_providers     = namespace(items=[]) %}
+{% set nat_providers     = namespace(items=[]) %}
+{% set bp_providers      = namespace(items=[]) %}
+{% set sk_providers      = namespace(items=[]) %}
+{% set airport_providers = namespace(items=[]) %}
 {% for p in capability_providers %}
 {% if p.enabled | default(true) %}
 {% set pid = p['provider-id'] | default(p.name) %}
@@ -35,6 +36,8 @@ proxies: []
     {% set dg = 'BP' %}
   {% elif 'sk' in p.name | lower or 'sakura' in p.name | lower %}
     {% set dg = 'SK' %}
+  {% elif 'yf' in p.name | lower or 'airport' in p.name | lower %}
+    {% set dg = 'AIRPORT' %}
   {% else %}
     {% set dg = 'VPS' %}
   {% endif %}
@@ -47,6 +50,8 @@ proxies: []
 {% set bp_providers.items = bp_providers.items + [pid] %}
 {% elif dg == 'SK' %}
 {% set sk_providers.items = sk_providers.items + [pid] %}
+{% elif dg == 'AIRPORT' %}
+{% set airport_providers.items = airport_providers.items + [pid] %}
 {% endif %}
 {% endif %}
 {% endfor %}
@@ -55,62 +60,74 @@ proxy-groups:
   # ========================================================
   # 1. 顶层业务入口 (Top-Level Services, 常用排在最前面)
   # ========================================================
+  # 1. 默认代理 (三网自适应 Fallback 模式，含 DIRECT 与场景手选)
   - name: "🚀 默认代理"
-    type: select
+    type: fallback
     proxies:
-      - "⚡ 千兆优选"
-      - "🛡️ AI 容灾"
+      - "🇸🇬 新加坡三网"
+      - "🇯🇵 日本专线"
+      - "🇺🇸 洛杉矶独享"
+      - "🏠 联通场景"
+      - "🏢 电信场景"
       - "🖥️ VPS"
       - "🧭 NAT"
+      - "⚡ 机场"
       - "🌐 BP"
       - "🌸 SK"
       - DIRECT
-
-  - name: "🤖 AI 服务"
-    type: select
-    proxies:
-      - "🛡️ AI 容灾"
-{% for pid in vps_providers.items %}
-      - "🖥️ {{ pid | upper }} · AI"
-{% endfor %}
-      - "🧭 NAT · AI"
-      - "🌐 BP · AI"
-      - "🌸 SK"
-      - DIRECT
-
-  - name: "🛡️ AI 容灾"
-    type: fallback
-    proxies:
-{% for pid in vps_providers.items %}
-      - "🖥️ {{ pid | upper }} · AI"
-{% endfor %}
-      - "🧭 NAT · AI"
-      - "🌐 BP · AI"
-      - DIRECT
     url: https://www.gstatic.com/generate_204
-    interval: 300
-    timeout: 2500
+    interval: 180
+    timeout: 4000
+    max-failed-times: 3
     lazy: true
 
-  - name: "📹 视频开发"
+  # 2. AI 服务 (长连接防漂移，严禁包含 DIRECT)
+  - name: "🤖 AI 服务"
+    type: fallback
+    proxies:
+      - "🇺🇸 洛杉矶独享"
+      - "🇯🇵 日本原生"
+      - "🏡 真实家宽"
+      - "🤖 机场 AI"
+      - "🛡️ AI 容灾"
+    url: https://chatgpt.com/cdn-cgi/trace
+    interval: 180
+    timeout: 4000
+    lazy: true
+
+  # 3. 金融与交易所 (纯手动 select，物理隔离公共机场，自建双保险)
+  - name: "🏦 金融与交易所"
     type: select
     proxies:
-      - "⚡ 千兆优选"
+      - "🏡 真实家宽"
+      - "🇺🇸 洛杉矶独享"
       - "🖥️ VPS"
-      - "🧭 NAT"
-      - "🌐 BP"
-      - "🌸 SK"
+      - "🌐 机场专线逃生通道"
       - DIRECT
 
-  - name: "⚡ 千兆优选"
+  # 4. Apple 低价区 (纯手动 select，动态过滤土耳其/尼日利亚/阿根廷专线，免开全局)
+  - name: "🍎 Apple 低价区"
+    type: select
+    proxies:
+      - DIRECT
+      - "🇹🇷 土耳其"
+      - "🇳🇬 尼日利亚"
+      - "🇦🇷 阿根廷"
+      - "🇺🇸 洛杉矶独享"
+
+  # 5. 千兆极速 (合并视频开发与 Telegram：BP 1T -> YF 1T -> 自建大水管)
+  - name: "⚡ 千兆极速"
     type: fallback
-    use:
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)1000M|神速|快"
+    proxies:
+      - "🌐 BP 极速"
+      - "⚡ YF 专线"
+      - "🇯🇵 日本原生"
+      - "🇺🇸 洛杉矶独享"
+      - "⚡ 千兆优选"
+      - DIRECT
     url: https://www.gstatic.com/generate_204
-    interval: 300
+    interval: 180
+    timeout: 4000
     lazy: true
 
   - name: "📺 B站港澳"
@@ -122,6 +139,35 @@ proxy-groups:
       - "🌸 SK · 港澳"
       - DIRECT
 
+  # ========================================================
+  # 2. 场景与运营商快速手选组
+  # ========================================================
+  - name: "🏠 联通场景"
+    type: select
+    proxies:
+      - "🇯🇵 日本专线"
+      - "🇺🇸 洛杉矶独享"
+      - "⚡ 机场"
+      - DIRECT
+
+  - name: "🏢 电信场景"
+    type: select
+    proxies:
+      - "🇸🇬 新加坡三网"
+      - "🇺🇸 洛杉矶独享"
+      - "⚡ 机场"
+      - DIRECT
+
+  - name: "💰 低倍率走廊"
+    type: select
+    use:
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)0\\.1|0\\.01|低倍"
   # ========================================================
   # 2. 底层节点实体池 (Entity Pools, 纯手动查看与单选)
   # ========================================================
@@ -139,6 +185,13 @@ proxy-groups:
       - source-{{ pid }}
 {% endfor %}
 
+  - name: "⚡ 机场"
+    type: select
+    use:
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+
   - name: "🌐 BP"
     type: select
     use:
@@ -152,6 +205,167 @@ proxy-groups:
 {% for pid in sk_providers.items %}
       - source-{{ pid }}
 {% endfor %}
+
+  # ========================================================
+  # 3. 内部定向与能力子组 (hidden: true)
+  # ========================================================
+  - name: "🇸🇬 新加坡三网"
+    type: fallback
+    use:
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)🇸🇬|新加坡|SG"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🇯🇵 日本专线"
+    type: fallback
+    use:
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)🇯🇵|日本|JP|AWS日本"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🇺🇸 洛杉矶独享"
+    type: fallback
+    use:
+{% for pid in vps_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)洛杉矶|US|美国|CC|QQG"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🇯🇵 日本原生"
+    type: fallback
+    use:
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)jp3|原生|1\\.8G|🇯🇵"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🏡 真实家宽"
+    type: select
+    use:
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)家宽|resi|Residential"
+    hidden: true
+
+  - name: "🤖 机场 AI"
+    type: fallback
+    use:
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)(?:^|[^a-z])ai(?:[^a-z]|$)|chatgpt|gpt|claude|gemini|解锁"
+    url: https://chatgpt.com/cdn-cgi/trace
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🌐 机场专线逃生通道"
+    type: fallback
+    use:
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)专线|IEPL|IPLC"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🇹🇷 土耳其"
+    type: select
+    use:
+{% for pid in sk_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)土耳其|TR|🇹🇷"
+    hidden: true
+
+  - name: "🇳🇬 尼日利亚"
+    type: select
+    use:
+{% for pid in sk_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)尼日利亚|NG|🇳🇬"
+    hidden: true
+
+  - name: "🇦🇷 阿根廷"
+    type: select
+    use:
+{% for pid in sk_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)阿根廷|AR|🇦🇷"
+    hidden: true
+
+  - name: "🌐 BP 极速"
+    type: fallback
+    use:
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)1000M|神速|快"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "⚡ YF 专线"
+    type: fallback
+    use:
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)专线"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
 
   # ========================================================
   # 3. 内部策略与定向子组 (全部 hidden: true, 前端隐形)
