@@ -60,10 +60,10 @@
   - DOMAIN-SUFFIX,bilibili.com,DIRECT
 
   # 专项服务规则先于宽 Google、进程规则和通用代理集合。
-  - RULE-SET,youtube,⚡ 千兆极速
-  - RULE-SET,disney,⚡ 千兆极速
-  - RULE-SET,netflix,⚡ 千兆极速
-  - RULE-SET,spotify,⚡ 千兆极速
+  - RULE-SET,youtube,⚡ 国际流媒体
+  - RULE-SET,disney,⚡ 国际流媒体
+  - RULE-SET,netflix,⚡ 国际流媒体
+  - RULE-SET,spotify,⚡ 国际流媒体
   - RULE-SET,telegram,⚡ 千兆极速
   - IP-ASN,44907,⚡ 千兆极速,no-resolve
   - IP-ASN,62041,⚡ 千兆极速,no-resolve
