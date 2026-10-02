@@ -475,7 +475,12 @@
          ~ '/ClashMeta?prettyYaml=true' }}
     method: GET
     status_code: 200
+    timeout: 60
     return_content: false
+  register: docker_apps_sub_store_cap_validate
+  until: docker_apps_sub_store_cap_validate.status | default(0) == 200
+  retries: 5
+  delay: 3
   when: not ansible_check_mode
   no_log: true
   tags: [deploy, services, docker_apps, sub_store, phase5]
