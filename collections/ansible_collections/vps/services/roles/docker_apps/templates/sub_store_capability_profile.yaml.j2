@@ -95,15 +95,13 @@ proxy-groups:
     timeout: 4000
     lazy: true
 
-  # 3. 金融与交易所 (纯手动 select，物理隔离公共机场，自建双保险)
+  # 3. 金融与交易所 (纯手动 select，严格物理隔离公共机场与直连，自建双保险)
   - name: "🏦 金融与交易所"
     type: select
     proxies:
       - "🏡 真实家宽"
       - "🇺🇸 洛杉矶独享"
-      - "🖥️ VPS"
-      - "🌐 机场专线逃生通道"
-      - DIRECT
+      - "🌐 专线逃生通道"
 
   # 4. Apple 低价区 (纯手动 select，动态过滤土耳其/尼日利亚/阿根廷专线，免开全局)
   - name: "🍎 Apple 低价区"
@@ -292,7 +290,7 @@ proxy-groups:
     lazy: true
     hidden: true
 
-  - name: "🌐 机场专线逃生通道"
+  - name: "🌐 专线逃生通道"
     type: fallback
     use:
 {% for pid in airport_providers.items %}
@@ -305,6 +303,31 @@ proxy-groups:
     lazy: true
     hidden: true
 
+  - name: "⚡ 千兆优选"
+    type: fallback
+    proxies:
+      - "🌐 BP 极速"
+      - "⚡ YF 专线"
+      - "🇯🇵 日本原生"
+      - "🇺🇸 洛杉矶独享"
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    lazy: true
+    hidden: true
+
+  - name: "🛡️ AI 容灾"
+    type: fallback
+    proxies:
+{% for pid in vps_providers.items %}
+      - "🖥️ {{ pid | upper }} · AI"
+{% endfor %}
+      - "🧭 NAT · AI"
+      - "🌐 BP · AI"
+    url: https://chatgpt.com/cdn-cgi/trace
+    interval: 300
+    timeout: 2500
+    lazy: true
+    hidden: true
   - name: "🇹🇷 土耳其"
     type: select
     use:
