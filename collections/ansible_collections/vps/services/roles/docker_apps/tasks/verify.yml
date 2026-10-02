@@ -570,7 +570,7 @@
             '⚡ 快速节点',
             '🤖 AI 服务',
             '📺 B站港澳',
-            '📹 视频开发'
+            '⚡ 千兆极速'
           ]
           | difference(
               docker_apps_sub_store_public_mihomo_payload['proxy-groups']
@@ -657,19 +657,19 @@
         docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,aistudio.google.com,🤖 AI 服务')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,youtube,📹 视频开发')
+        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,youtube,⚡ 千兆极速')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,disney,📹 视频开发')
+        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,disney,⚡ 千兆极速')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,netflix,📹 视频开发')
+        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,netflix,⚡ 千兆极速')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,spotify,📹 视频开发')
+        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,spotify,⚡ 千兆极速')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,telegram,🚀 默认代理')
+        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,telegram,⚡ 千兆极速')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
         docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,microsoft,DIRECT')
@@ -820,11 +820,11 @@
     - RULE-SET,bilibili-hmt,📺 B站港澳
     - DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳
     - DOMAIN-SUFFIX,bilibili.com,DIRECT
-    - RULE-SET,youtube,📹 视频开发
-    - RULE-SET,disney,📹 视频开发
-    - RULE-SET,netflix,📹 视频开发
-    - RULE-SET,spotify,📹 视频开发
-    - RULE-SET,telegram,🚀 默认代理
+    - RULE-SET,youtube,⚡ 千兆极速
+    - RULE-SET,disney,⚡ 千兆极速
+    - RULE-SET,netflix,⚡ 千兆极速
+    - RULE-SET,spotify,⚡ 千兆极速
+    - RULE-SET,telegram,⚡ 千兆极速
     - RULE-SET,github,🚀 默认代理
     - RULE-SET,microsoft,DIRECT
     - RULE-SET,apple,DIRECT
