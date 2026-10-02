@@ -54,9 +54,9 @@
   - DOMAIN-SUFFIX,aistudio.google.com,🤖 AI 服务
 
   # Bilibili API 与港澳台在通用 bilibili.com 直连规则之前。
-  - DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳
-  - RULE-SET,bilibili-hmt,📺 B站港澳
-  - DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳
+  - DOMAIN-SUFFIX,api.bilibili.com,🇭🇰 港澳
+  - RULE-SET,bilibili-hmt,🇭🇰 港澳
+  - DOMAIN-SUFFIX,bilibili.tv,🇭🇰 港澳
   - DOMAIN-SUFFIX,bilibili.com,DIRECT
 
   # 专项服务规则先于宽 Google、进程规则和通用代理集合。
