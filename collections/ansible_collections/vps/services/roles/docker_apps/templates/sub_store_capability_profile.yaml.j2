@@ -187,17 +187,10 @@ proxy-groups:
 
   - name: "🇭🇰 香港 · 极速"
     type: fallback
-    use:
-{% for pid in airport_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in bp_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-{% for pid in nat_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)(\\[HK\\]|香港).*(专线|IEPL|IPLC|1000M|大带宽|BGP|中转)"
+    proxies:
+      - "🇭🇰 专线 · 极速"
+      - "🇭🇰 大带宽 · 极速"
+      - "🧭 NAT"
     url: https://www.gstatic.com/generate_204
     interval: 180
     timeout: 4000
@@ -205,6 +198,87 @@ proxy-groups:
     hidden: true
 
   - name: "🇹🇼 台湾 · 极速"
+    type: fallback
+    proxies:
+      - "🇹🇼 专线 · 极速"
+      - "🇹🇼 大带宽 · 极速"
+      - "🌸 SK"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🇯🇵 日本 · 极速"
+    type: fallback
+    proxies:
+      - "🇯🇵 专线 · 极速"
+      - "🇯🇵 日本原生"
+      - "🇯🇵 大带宽 · 极速"
+      - "🧭 NAT"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🇸🇬 新加坡 · 极速"
+    type: fallback
+    proxies:
+      - "🇸🇬 专线 · 极速"
+      - "🇸🇬 大带宽 · 极速"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🇺🇸 美国 · 极速"
+    type: fallback
+    proxies:
+      - "🇺🇸 专线 · 极速"
+      - "🇺🇸 大带宽 · 极速"
+      - "🇺🇸 洛杉矶独享"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  # 极速内部细分专线与大带宽子池 (hidden: true)
+  - name: "🇭🇰 专线 · 极速"
+    type: fallback
+    use:
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)(\\[HK\\]|香港).*(专线|IEPL|IPLC)"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🇭🇰 大带宽 · 极速"
+    type: fallback
+    use:
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)(\\[HK\\]|香港).*(1000M|大带宽|BGP|中转)"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🇹🇼 专线 · 极速"
     type: fallback
     use:
 {% for pid in airport_providers.items %}
@@ -216,14 +290,14 @@ proxy-groups:
 {% for pid in sk_providers.items %}
       - source-{{ pid }}
 {% endfor %}
-    filter: "(?i)(\\[TW\\]|台湾).*(专线|IEPL|IPLC|1000M|大带宽|BGP|中转)"
+    filter: "(?i)(\\[TW\\]|台湾).*(专线|IEPL|IPLC)"
     url: https://www.gstatic.com/generate_204
     interval: 180
     timeout: 4000
     lazy: true
     hidden: true
 
-  - name: "🇯🇵 日本 · 极速"
+  - name: "🇹🇼 大带宽 · 极速"
     type: fallback
     use:
 {% for pid in airport_providers.items %}
@@ -232,17 +306,14 @@ proxy-groups:
 {% for pid in bp_providers.items %}
       - source-{{ pid }}
 {% endfor %}
-{% for pid in nat_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)(\\[JP\\]|日本).*(专线|IEPL|IPLC|1000M|1\\.8G|大带宽|原生|中转)"
+    filter: "(?i)(\\[TW\\]|台湾).*(1000M|大带宽|BGP|中转)"
     url: https://www.gstatic.com/generate_204
     interval: 180
     timeout: 4000
     lazy: true
     hidden: true
 
-  - name: "🇸🇬 新加坡 · 极速"
+  - name: "🇯🇵 专线 · 极速"
     type: fallback
     use:
 {% for pid in airport_providers.items %}
@@ -251,17 +322,15 @@ proxy-groups:
 {% for pid in bp_providers.items %}
       - source-{{ pid }}
 {% endfor %}
-    filter: "(?i)(\\[SG\\]|新加坡).*(专线|IEPL|IPLC|1000M|大带宽|BGP|中转)"
+    filter: "(?i)(\\[JP\\]|日本).*(专线|IEPL|IPLC)"
     url: https://www.gstatic.com/generate_204
     interval: 180
     timeout: 4000
     lazy: true
     hidden: true
 
-  - name: "🇺🇸 美国 · 极速"
+  - name: "🇯🇵 大带宽 · 极速"
     type: fallback
-    proxies:
-      - "🇺🇸 洛杉矶独享"
     use:
 {% for pid in airport_providers.items %}
       - source-{{ pid }}
@@ -269,16 +338,76 @@ proxy-groups:
 {% for pid in bp_providers.items %}
       - source-{{ pid }}
 {% endfor %}
-{% for pid in vps_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)(\\[US\\]|美国).*(专线|IEPL|IPLC|1000M|大带宽|BGP|无限|独享)"
+    filter: "(?i)(\\[JP\\]|日本).*(1000M|1\\.8G|大带宽|BGP|中转)"
     url: https://www.gstatic.com/generate_204
     interval: 180
     timeout: 4000
     lazy: true
     hidden: true
 
+  - name: "🇸🇬 专线 · 极速"
+    type: fallback
+    use:
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)(\\[SG\\]|新加坡).*(专线|IEPL|IPLC)"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🇸🇬 大带宽 · 极速"
+    type: fallback
+    use:
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)(\\[SG\\]|新加坡).*(1000M|大带宽|BGP|中转)"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🇺🇸 专线 · 极速"
+    type: fallback
+    use:
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)(\\[US\\]|美国).*(专线|IEPL|IPLC)"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
+
+  - name: "🇺🇸 大带宽 · 极速"
+    type: fallback
+    use:
+{% for pid in airport_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)(\\[US\\]|美国).*(1000M|大带宽|BGP)"
+    url: https://www.gstatic.com/generate_204
+    interval: 180
+    timeout: 4000
+    lazy: true
+    hidden: true
   - name: "⚡ YF·自动优选"
     type: url-test
     use:
@@ -377,7 +506,6 @@ proxy-groups:
     timeout: 4000
     lazy: true
     hidden: true
-
   # --------------------------------------------------------
   # 金融地域闭环隔离 (仅限纯净家宽与独享 VPS，排除公共机场)
   # --------------------------------------------------------
@@ -385,6 +513,7 @@ proxy-groups:
     type: fallback
     proxies:
       - "🇹🇼 家宽 · AI"
+      - "🌸 SK"
     hidden: true
 
   - name: "🇭🇰 香港 · 金融"
@@ -414,8 +543,20 @@ proxy-groups:
     type: fallback
     proxies:
       - "🇸🇬 家宽 · AI"
+      - "🇸🇬 独享 · 金融"
     hidden: true
 
+  - name: "🇸🇬 独享 · 金融"
+    type: fallback
+    use:
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in vps_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)(\\[SG\\]|新加坡).*(原生|独享|固定)"
+    hidden: true
   - name: "🌐 紧急专线逃生通道"
     type: fallback
     use:
