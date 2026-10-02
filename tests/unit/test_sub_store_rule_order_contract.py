@@ -35,63 +35,12 @@ def test_rendered_rules_keep_private_and_specific_routes_ahead_of_fallbacks():
     )
     profile = yaml.safe_load(rendered)
     rules = profile["rules"]
+    raw_shared_rules = yaml.safe_load(
+        (TEMPLATES / "sub_store_capability_profile/rules.yaml").read_text(encoding="utf-8")
+    )
     expected_rules = [
         "DOMAIN-SUFFIX,private-example.test,DIRECT",
-        "GEOSITE,category-ads-all,REJECT",
-        "DOMAIN,ad.com,REJECT",
-        "DOMAIN-SUFFIX,doubleclick.net,REJECT",
-        "DOMAIN-KEYWORD,tracker,REJECT",
-        "DOMAIN-SUFFIX,argotunnel.com,DIRECT",
-        "DOMAIN-SUFFIX,cftunnel.com,DIRECT",
-        "IP-CIDR,127.0.0.0/8,DIRECT,no-resolve",
-        "IP-CIDR,192.168.0.0/16,DIRECT,no-resolve",
-        "IP-CIDR,10.0.0.0/8,DIRECT,no-resolve",
-        "IP-CIDR,172.16.0.0/12,DIRECT,no-resolve",
-        "IP-CIDR,224.0.0.0/4,DIRECT,no-resolve",
-        "IP-CIDR,::1/128,DIRECT,no-resolve",
-        "IP-CIDR6,fe80::/10,DIRECT,no-resolve",
-        "DOMAIN,localhost,DIRECT",
-        "DST-PORT,22,DIRECT",
-        "DST-PORT,6868,DIRECT",
-        "DOMAIN-SUFFIX,aliyuncs.com,DIRECT",
-        "DOMAIN-SUFFIX,163.com,DIRECT",
-        "DOMAIN-SUFFIX,netease.com,DIRECT",
-        "DOMAIN-SUFFIX,uuremote.com,DIRECT",
-        "RULE-SET,ai-services,🤖 AI 服务",
-        "DOMAIN-SUFFIX,googleapis.com,🤖 AI 服务",
-        "DOMAIN-KEYWORD,cloudaicompanion,🤖 AI 服务",
-        "DOMAIN-KEYWORD,cloudcode,🤖 AI 服务",
-        "DOMAIN-SUFFIX,chat.openai.com,🤖 AI 服务",
-        "DOMAIN-SUFFIX,gemini.ai,🤖 AI 服务",
-        "DOMAIN-SUFFIX,gemini.google.com,🤖 AI 服务",
-        "DOMAIN-SUFFIX,aistudio.google.com,🤖 AI 服务",
-        "DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳",
-        "RULE-SET,bilibili-hmt,📺 B站港澳",
-        "DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳",
-        "DOMAIN-SUFFIX,bilibili.com,DIRECT",
-        "RULE-SET,youtube,📹 视频开发",
-        "RULE-SET,disney,📹 视频开发",
-        "RULE-SET,netflix,📹 视频开发",
-        "RULE-SET,spotify,📹 视频开发",
-        "RULE-SET,telegram,🚀 默认代理",
-        "RULE-SET,github,🚀 默认代理",
-        "RULE-SET,microsoft,DIRECT",
-        "RULE-SET,apple,DIRECT",
-        "GEOSITE,google,🤖 AI 服务",
-        "PROCESS-NAME-REGEX,(?i)^(claude|chatgpt|gpt|gemini|agy|antigravity|opencode|pi|omp|oh-my-pi|cursor|windsurf)(\\.exe)?$,🤖 AI 服务",
-        "PROCESS-NAME-REGEX,(?i)^(Claude|ChatGPT|Cursor|Windsurf|Antigravity)\\s+Helper.*$,🤖 AI 服务",
-        "PROCESS-PATH,/usr/bin/wget,🚀 默认代理",
-        "PROCESS-PATH-WILDCARD,/usr/*/wget,🚀 默认代理",
-        "PROCESS-PATH-REGEX,.*bin/wget,🚀 默认代理",
-        "PROCESS-PATH,C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe,🚀 默认代理",
-        "PROCESS-PATH-REGEX,(?i).*Application\\\\chrome.*,🚀 默认代理",
-        "RULE-SET,proxy-domains,🚀 默认代理",
-        "AND,((NETWORK,UDP),(DST-PORT,443)),REJECT",
-        "RULE-SET,cn-domains,DIRECT",
-        "GEOIP,CN,DIRECT",
-        "NETWORK,udp,DIRECT",
-        "MATCH,🚀 默认代理",
-    ]
+    ] + raw_shared_rules
     assert rules == expected_rules
     assert "+.private-example.test" in profile["dns"]["fake-ip-filter"]
 
@@ -129,7 +78,7 @@ def test_served_mihomo_profile_uses_the_ordered_policy_and_defines_its_targets()
     assert "+.private-example.test" in profile["dns"]["fake-ip-filter"]
 
     group_names = {group["name"] for group in profile["proxy-groups"]}
-    assert {"🚀 默认代理", "⚡ 快速节点", "🤖 AI 服务", "📺 B站港澳", "📹 视频开发"} <= group_names
+    assert {"🚀 默认代理", "⚡ 快速节点", "🤖 AI 服务", "🇭🇰 港澳", "⚡ 国际流媒体", "⚡ 千兆极速"} <= group_names
     assert {
         "ai-services",
         "bilibili-hmt",
@@ -164,8 +113,8 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
         "🚀 默认代理",
         "⚡ 快速节点",
         "🤖 AI 服务",
-        "📺 B站港澳",
-        "📹 视频开发",
+        "🇭🇰 港澳",
+        "⚡ 千兆极速",
         "bilibili-hmt",
         "github",
         "proxy-domains",
@@ -200,15 +149,15 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
         "DOMAIN-SUFFIX,gemini.ai,🤖 AI 服务",
         "DOMAIN-SUFFIX,gemini.google.com,🤖 AI 服务",
         "DOMAIN-SUFFIX,aistudio.google.com,🤖 AI 服务",
-        "DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳",
-        "RULE-SET,bilibili-hmt,📺 B站港澳",
-        "DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳",
+        "DOMAIN-SUFFIX,api.bilibili.com,🇭🇰 港澳",
+        "RULE-SET,bilibili-hmt,🇭🇰 港澳",
+        "DOMAIN-SUFFIX,bilibili.tv,🇭🇰 港澳",
         "DOMAIN-SUFFIX,bilibili.com,DIRECT",
-        "RULE-SET,youtube,📹 视频开发",
-        "RULE-SET,disney,📹 视频开发",
-        "RULE-SET,netflix,📹 视频开发",
-        "RULE-SET,spotify,📹 视频开发",
-        "RULE-SET,telegram,🚀 默认代理",
+        "RULE-SET,youtube,⚡ 国际流媒体",
+        "RULE-SET,disney,⚡ 国际流媒体",
+        "RULE-SET,netflix,⚡ 国际流媒体",
+        "RULE-SET,spotify,⚡ 国际流媒体",
+        "RULE-SET,telegram,⚡ 千兆极速",
         "RULE-SET,github,🚀 默认代理",
         "RULE-SET,microsoft,DIRECT",
         "RULE-SET,apple,DIRECT",
@@ -248,11 +197,11 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
         "DOMAIN-SUFFIX,gemini.ai,🤖 AI 服务",
         "DOMAIN-SUFFIX,gemini.google.com,🤖 AI 服务",
         "DOMAIN-SUFFIX,aistudio.google.com,🤖 AI 服务",
-        "RULE-SET,youtube,📹 视频开发",
-        "RULE-SET,disney,📹 视频开发",
-        "RULE-SET,netflix,📹 视频开发",
-        "RULE-SET,spotify,📹 视频开发",
-        "RULE-SET,telegram,🚀 默认代理",
+        "RULE-SET,youtube,⚡ 国际流媒体",
+        "RULE-SET,disney,⚡ 国际流媒体",
+        "RULE-SET,netflix,⚡ 国际流媒体",
+        "RULE-SET,spotify,⚡ 国际流媒体",
+        "RULE-SET,telegram,⚡ 千兆极速",
         "RULE-SET,microsoft,DIRECT",
         "RULE-SET,apple,DIRECT",
     ]
@@ -260,9 +209,9 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
         assert asserts_before(rule, broad_google)
 
     for rule in (
-        "DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳",
-        "RULE-SET,bilibili-hmt,📺 B站港澳",
-        "DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳",
+        "DOMAIN-SUFFIX,api.bilibili.com,🇭🇰 港澳",
+        "RULE-SET,bilibili-hmt,🇭🇰 港澳",
+        "DOMAIN-SUFFIX,bilibili.tv,🇭🇰 港澳",
     ):
         assert asserts_before(rule, broad_bilibili)
 
@@ -278,9 +227,9 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
         )
 
     for rule in (
-        "DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳",
-        "RULE-SET,bilibili-hmt,📺 B站港澳",
-        "DOMAIN-SUFFIX,bilibili.tv,📺 B站港澳",
+        "DOMAIN-SUFFIX,api.bilibili.com,🇭🇰 港澳",
+        "RULE-SET,bilibili-hmt,🇭🇰 港澳",
+        "DOMAIN-SUFFIX,bilibili.tv,🇭🇰 港澳",
         broad_bilibili,
     ):
         normalized_rule = re.sub(r"\s+", "", rule)
