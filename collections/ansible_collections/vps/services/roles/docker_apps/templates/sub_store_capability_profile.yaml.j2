@@ -213,7 +213,6 @@ proxy-groups:
     type: fallback
     proxies:
       - "🇯🇵 专线 · 极速"
-      - "🇯🇵 日本原生"
       - "🇯🇵 大带宽 · 极速"
       - "🧭 NAT"
     url: https://www.gstatic.com/generate_204
@@ -221,7 +220,6 @@ proxy-groups:
     timeout: 4000
     lazy: true
     hidden: true
-
   - name: "🇸🇬 新加坡 · 极速"
     type: fallback
     proxies:
@@ -336,6 +334,9 @@ proxy-groups:
       - source-{{ pid }}
 {% endfor %}
 {% for pid in bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% for pid in nat_providers.items %}
       - source-{{ pid }}
 {% endfor %}
     filter: "(?i)(\\[JP\\]|日本).*(1000M|1\\.8G|大带宽|BGP|中转)"
