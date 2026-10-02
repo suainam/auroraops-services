@@ -36,7 +36,8 @@ REGION_RULES: list[tuple[str, re.Pattern[str]]] = [
 
 TIER_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("专线", re.compile(r"(?i)IEPL|IPLC|专线")),
-    ("家宽", re.compile(r"(?i)家宽|家庭|Residential|Home")),
+    ("家宽", re.compile(r"(?i)家宽|家庭|Residential|Home|resi")),
+    ("大带宽", re.compile(r"(?i)1000M|1\.8G|大带宽|无限|神速")),
     ("中转", re.compile(r"(?i)中转|BGP|HY|直连")),
 ]
 
