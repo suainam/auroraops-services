@@ -36,10 +36,10 @@ proxies: []
     {% set dg = 'BP' %}
   {% elif 'sk' in p.name | lower or 'sakura' in p.name | lower %}
     {% set dg = 'SK' %}
-  {% elif 'yf' in p.name | lower or 'airport' in p.name | lower %}
-    {% set dg = 'AIRPORT' %}
-  {% else %}
+  {% elif 'cc15' in p.name | lower or 'qqg1299' in p.name | lower or 'vps' in p.name | lower or p.owned | default(false) %}
     {% set dg = 'VPS' %}
+  {% else %}
+    {% set dg = 'AIRPORT' %}
   {% endif %}
 {% endif %}
 {% if dg == 'VPS' %}
