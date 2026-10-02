@@ -27,6 +27,21 @@
   - DOMAIN-SUFFIX,163.com,DIRECT
   - DOMAIN-SUFFIX,netease.com,DIRECT
   - DOMAIN-SUFFIX,uuremote.com,DIRECT
+  # 银行、金融与交易所高风控隔离
+  - DOMAIN-SUFFIX,binance.com,🏦 金融与交易所
+  - DOMAIN-SUFFIX,okx.com,🏦 金融与交易所
+  - DOMAIN-SUFFIX,bybit.com,🏦 金融与交易所
+  - DOMAIN-SUFFIX,coinbase.com,🏦 金融与交易所
+  - DOMAIN-SUFFIX,wise.com,🏦 金融与交易所
+  - DOMAIN-SUFFIX,paypal.com,🏦 金融与交易所
+  - DOMAIN-SUFFIX,stripe.com,🏦 金融与交易所
+
+  # Apple ID 低价区账号注册与支付精确拦截（免开全局）
+  - DOMAIN,appleid.apple.com,🍎 Apple 低价区
+  - DOMAIN,gsa.apple.com,🍎 Apple 低价区
+  - DOMAIN,idmsa.apple.com,🍎 Apple 低价区
+  - DOMAIN-SUFFIX,buy.itunes.apple.com,🍎 Apple 低价区
+  - DOMAIN-SUFFIX,itunes.apple.com,🍎 Apple 低价区
 
   # 明确 AI 服务
   - RULE-SET,ai-services,🤖 AI 服务
@@ -45,11 +60,13 @@
   - DOMAIN-SUFFIX,bilibili.com,DIRECT
 
   # 专项服务规则先于宽 Google、进程规则和通用代理集合。
-  - RULE-SET,youtube,📹 视频开发
-  - RULE-SET,disney,📹 视频开发
-  - RULE-SET,netflix,📹 视频开发
-  - RULE-SET,spotify,📹 视频开发
-  - RULE-SET,telegram,🚀 默认代理
+  - RULE-SET,youtube,⚡ 千兆极速
+  - RULE-SET,disney,⚡ 千兆极速
+  - RULE-SET,netflix,⚡ 千兆极速
+  - RULE-SET,spotify,⚡ 千兆极速
+  - RULE-SET,telegram,⚡ 千兆极速
+  - IP-ASN,44907,⚡ 千兆极速,no-resolve
+  - IP-ASN,62041,⚡ 千兆极速,no-resolve
   - RULE-SET,github,🚀 默认代理
   - RULE-SET,microsoft,DIRECT
   - RULE-SET,apple,DIRECT

@@ -51,6 +51,17 @@
     mode: "0644"
   when: sub_store_capability_registry_enabled | bool
   tags: [deploy, services, docker_apps, sub_store, phase5]
+- name: Install Sub-Store semantic classifier module
+  become: true
+  ansible.builtin.copy:
+    src: sub_store_profiler/classifier.py
+    dest: "{{ sub_store_capability_registry_dir }}/classifier.py"
+    owner: root
+    group: root
+    mode: "0644"
+  when: sub_store_capability_registry_enabled | bool
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
 
 - name: Install Sub-Store isolated probe runner
   become: true

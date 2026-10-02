@@ -15,6 +15,14 @@ from typing import Any
 from probe_runner import run_isolated_probe
 from registry import CapabilityRegistry, normalize_node
 
+try:
+    from classifier import classify_and_clean_node
+except ImportError:
+    try:
+        from .classifier import classify_and_clean_node
+    except ImportError:
+        classify_and_clean_node = lambda name: name
+
 
 class ProbeSystemError(RuntimeError):
     """No scheduled node produced a valid probe observation in this profiler run."""
@@ -155,7 +163,12 @@ def load_provider_catalog_nodes(
             print(f"[warning] failed to fetch provider {name}: {exc}", file=sys.stderr)
             continue
         for node in singbox_nodes(payload):
+            raw_tag = node.get("tag", "")
+            cleaned_tag = classify_and_clean_node(raw_tag)
+            if cleaned_tag is None:
+                continue  # Reject noise/ad nodes
             enriched = dict(node)
+            enriched["tag"] = cleaned_tag
             enriched["provider"] = name
             enriched["provider_prefix"] = prefix
             enriched["owned"] = item.get("owned") is True
