@@ -95,13 +95,27 @@ proxy-groups:
     tolerance: 50
     lazy: true
 
-  - name: "📹 视频开发"
+  - name: "⚡ 千兆极速"
     type: select
     proxies:
       - "⚡️ 自动延迟"
       - "🛡️ 自动稳定"
       - "🚀 节点选择"
       - DIRECT
+
+  - name: "🏦 金融与交易所"
+    type: select
+    proxies:
+      - "🛡️ 自动稳定"
+      - "🚀 节点选择"
+      - DIRECT
+
+  - name: "🍎 Apple 低价区"
+    type: select
+    proxies:
+      - DIRECT
+      - "🚀 节点选择"
+      - "🛡️ 自动稳定"
 
 rules:
 {% include 'sub_store_capability_profile/private_rules.yaml.j2' %}
