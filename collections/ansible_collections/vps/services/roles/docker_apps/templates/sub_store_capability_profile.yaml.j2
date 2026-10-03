@@ -116,6 +116,7 @@ proxy-groups:
     proxies:
       - "🇹🇼 台湾 · 金融"
       - "🇭🇰 香港 · 金融"
+      - "🇺🇸 美国 · 金融"
       - "🇯🇵 日本 · 金融"
       - "🇸🇬 新加坡 · 金融"
       - "🌐 紧急专线逃生通道"
@@ -401,9 +402,14 @@ proxy-groups:
 {% endfor %}
     filter: "(?i)\\[HK\\]|nat-hk"
     hidden: true
-
-
-
+  - name: "🇺🇸 美国 · 金融"
+    type: fallback
+    use:
+{% for pid in vps_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)(\\[US\\]|美国).*(原生|家宽)"
+    hidden: true
   - name: "🇯🇵 日本 · 金融"
     type: fallback
     use:
