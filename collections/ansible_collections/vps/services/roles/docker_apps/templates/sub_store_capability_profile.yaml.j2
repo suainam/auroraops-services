@@ -366,9 +366,9 @@ proxy-groups:
   # --------------------------------------------------------
 {% for ai_spec in [
   {'name': '🇺🇸 美国 · AI', 'proxies': ['🖥️ CC15 · AI', '🖥️ QQG1299 · AI', '🇺🇸 机场 · AI']},
-  {'name': '🇯🇵 日本 · AI', 'proxies': ['🇯🇵 [NAT] HK96-优化-Vless-家宽', '🇯🇵 [NAT] JP3-千兆-Vless-原生', '🇯🇵 [VPS] QQG1299-千兆-Vless-原生', '🇯🇵 家宽 · AI', '🇯🇵 日本原生', '🇯🇵 机场 · AI']},
-  {'name': '🇸🇬 新加坡 · AI', 'proxies': ['🇸🇬 [NAT] HK96-优化-Vless-家宽', '🇸🇬 家宽 · AI', '🇸🇬 机场 · AI']},
-  {'name': '🇹🇼 台湾 · AI', 'proxies': ['🇹🇼 [NAT] HK96-优化-Vless-家宽', '🇹🇼 家宽 · AI', '🇹🇼 机场 · AI']}
+  {'name': '🇯🇵 日本 · AI', 'proxies': ['🇯🇵 [NAT] HK96-优化-Vless-家宽-JP', '🇯🇵 [NAT] JP3-千兆-Vless-原生-JP', '🇯🇵 [VPS] QQG1299-千兆-Vless-原生-JP', '🇯🇵 家宽 · AI', '🇯🇵 日本原生', '🇯🇵 机场 · AI']},
+  {'name': '🇸🇬 新加坡 · AI', 'proxies': ['🇸🇬 [NAT] HK96-优化-Vless-家宽-SG', '🇸🇬 家宽 · AI', '🇸🇬 机场 · AI']},
+  {'name': '🇹🇼 台湾 · AI', 'proxies': ['🇹🇼 [NAT] HK96-优化-Vless-家宽-TW', '🇹🇼 家宽 · AI', '🇹🇼 机场 · AI']}
 ] %}
   - name: "{{ ai_spec.name }}"
     type: fallback
@@ -389,20 +389,20 @@ proxy-groups:
   - name: "🇹🇼 台湾 · 金融"
     type: fallback
     proxies:
-      - "🇹🇼 [NAT] HK96-优化-Vless-家宽"
+      - "🇹🇼 [NAT] HK96-优化-Vless-家宽-TW"
       - "🌸 SK"
     hidden: true
 
   - name: "🇭🇰 香港 · 金融"
     type: fallback
     proxies:
-      - "🇭🇰 [NAT] HK96-优化-Vless-静态"
+      - "🇭🇰 [NAT] HK96-优化-Vless-静态-HK"
     hidden: true
 
 {% for fin_spec in [
-  {'name': '🇺🇸 美国 · 金融', 'proxies': ['🇺🇸 [VPS] CC15-千兆-Vless-静态', '🇺🇸 [VPS] QQG1299-千兆-Hy2-原生', '🇺🇸 [VPS] QQG1299-千兆-Vless-原生']},
-  {'name': '🇯🇵 日本 · 金融', 'proxies': ['🇯🇵 [NAT] HK96-优化-Vless-家宽', '🇯🇵 [NAT] JP3-千兆-Vless-原生']},
-  {'name': '🇸🇬 新加坡 · 金融', 'proxies': ['🇸🇬 [NAT] HK96-优化-Vless-家宽']}
+  {'name': '🇺🇸 美国 · 金融', 'proxies': ['🇺🇸 [VPS] CC15-千兆-Vless-静态', '🇺🇸 [VPS] QQG1299-千兆-Hy2-原生', '🇺🇸 [VPS] QQG1299-千兆-Vless-原生-US']},
+  {'name': '🇯🇵 日本 · 金融', 'proxies': ['🇯🇵 [NAT] HK96-优化-Vless-家宽-JP', '🇯🇵 [NAT] JP3-千兆-Vless-原生-JP']},
+  {'name': '🇸🇬 新加坡 · 金融', 'proxies': ['🇸🇬 [NAT] HK96-优化-Vless-家宽-SG']}
 ] %}
   - name: "{{ fin_spec.name }}"
     type: fallback
