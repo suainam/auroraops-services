@@ -31,13 +31,15 @@ REGION_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("NG", re.compile(r"(?i)尼日利亚|Nigeria|NG|拉各斯|🇳🇬")),
     ("AR", re.compile(r"(?i)阿根廷|Argentina|AR|🇦🇷")),
     ("RU", re.compile(r"(?i)俄罗斯|Russia|RU|莫斯科|🇷🇺")),
-    ("MY", re.compile(r"(?i)马来西亚|Malaysia|MY|吉隆坡|🇲🇾")),
+    ("IN", re.compile(r"(?i)印度|India|\bIN\b|🇮🇳")),
+    ("PK", re.compile(r"(?i)巴基斯坦|Pakistan|\bPK\b|🇵🇰")),
+    ("MY", re.compile(r"(?i)马来西亚|Malaysia|\bMY\b|吉隆坡|🇲🇾")),
 ]
-
 TIER_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("专线", re.compile(r"(?i)IEPL|IPLC|专线")),
     ("家宽", re.compile(r"(?i)家宽|家庭|Residential|Home|resi")),
-    ("大带宽", re.compile(r"(?i)1000M|1\.8G|大带宽|无限|神速")),
+    ("千兆", re.compile(r"(?i)千兆|1000M|1\.8G|大带宽|无限|神速")),
+    ("大带宽", re.compile(r"(?i)千兆|1000M|1\.8G|大带宽|无限|神速")),
     ("中转", re.compile(r"(?i)中转|BGP|HY|直连")),
 ]
 
@@ -70,10 +72,13 @@ def classify_and_clean_node(name: str) -> Optional[str]:
             break
 
     # 2. Tier
+    tier_matched = False
     for t_code, t_pat in TIER_RULES:
         if t_pat.search(cleaned_name):
             tags.append(f"[{t_code}]")
-
+            tier_matched = True
+    if not tier_matched:
+        tags.append("[普通]")
     # 3. Capability
     for c_code, c_pat in CAPABILITY_RULES:
         if c_pat.search(cleaned_name):

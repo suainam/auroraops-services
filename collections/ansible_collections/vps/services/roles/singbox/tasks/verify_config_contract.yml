@@ -34,12 +34,18 @@
 - name: "[Sing-box] Collect outbound tags"
   ansible.builtin.set_fact:
     singbox_config_outbound_tags: >-
-      {{ singbox_config_documents
-         | map(attribute='outbounds', default=[])
-         | flatten
-         | map(attribute='tag', default='')
-         | select('!=', '')
-         | list }}
+      {{ (singbox_config_documents
+          | map(attribute='outbounds', default=[])
+          | flatten
+          | map(attribute='tag', default='')
+          | select('!=', '')
+          | list)
+         + (singbox_config_documents
+            | map(attribute='endpoints', default=[])
+            | flatten
+            | map(attribute='tag', default='')
+            | select('!=', '')
+            | list) }}
   no_log: true
   tags: [verify, services, singbox, phase5]
 

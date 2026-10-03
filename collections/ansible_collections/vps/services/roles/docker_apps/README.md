@@ -279,16 +279,16 @@ CLIProxyAPI 的 Antigravity 请求同时存在两个相互独立的概念：
         - Relay 模式支持通过 `singbox_relay_upstreams` 与 `singbox_extra_nodes` 扩展跨地域中转能力。对于 HK NAT 节点（`nat-hk084`、`nat-hk2d16`），在 `inventories/prod.ini` 中聚合至 `[nat_hk]` 子组，统一由共享配置 owner 路径 `inventories/group_vars/nat_hk.yml` 管理；通过共享开关 `nat_hk_jp_relay_enabled`（`true`/`false`）控制额外节点与上游列表，无需在各单机 `host_vars` 重复声明。端口合同明确遵循：直连出站保留原端口不变（VLESS-Reality TCP `30052`、Hysteria2 UDP `30051`），新增中转端口为 VLESS-Reality TCP `30054` 与 Hysteria2 UDP `30053`，经公网落地到 `nat-jp3` 的 Hysteria2（UDP `30051`）。Make 部署顺序必须遵循“落地优先再到入口”，在 `nat-jp3` 就绪后，再切至 HK 节点执行定向生命周期：`make switch_remote.<host>` → `make check-services.docker_apps.singbox` → `make deploy-services.docker_apps.singbox` → `make verify-services.docker_apps.singbox`（或通过 NAT 统一入口 `make nat-deploy` / `make nat-verify`）。注意：macOS 环境下 `curl --noproxy '*'` 仍会受系统 TUN 虚拟网卡劫持，此前依赖它的测试证据作废；物理直连对照必须显式绑定物理网卡（如 `en0`，`IP_BOUND_IF=25`）或使用隔离 listener，UDP `nc -u` 成功仅代表本地 send 成功，不能作为远端握手依据。
         - NAT provider 的 compact YAML 与完整订阅使用同一节点集合，均包含本机 `singbox_nodes` 及启用的 `singbox_extra_nodes`；因此 HK→JP relay 节点会随 NAT provider 进入 Sub-Store 聚合。
     *   **Sub-Store**: 仅监听 `127.0.0.1:30015`，以现有 Singbox YAML 订阅为单一节点源，幂等创建 `aurora-singbox` 订阅。Mihomo 主链接由完整配置模板提供代理组、DNS 和规则，并通过私有 HTTP `proxy-provider` 动态加载 Sub-Store 转换后的节点；sing-box JSON 继续直接由 Sub-Store 输出。Nginx 只暴露精确订阅后缀，管理 API 和前端不对公网开放。
-    *   **Sub-Store 形式化地域对称与极简暴露架构 (#157, #158-#162)**:
-        - **极简 10 组前端视窗**：客户端严格仅展示 5 个业务组（`🚀 默认代理`、`⚡ 千兆极速`、`🤖 AI 服务`、`🏦 金融与交易所`、`🍎 Apple 低价区`）与 5 个实体节点池（`🖥️ VPS`、`🧭 NAT`、`⚡ YF`、`🌐 BP`、`🌸 SK`）。
-        - **五大区形式化对称**：核心能力组在各大区（港、台、日、新、美）内部实现严格数据驱动与分级 Fallback（`专线 ➔ 大带宽/1.8G ➔ 自建独享`），彻底杜绝跨区跳变与硬编码机器名。
+    *   **Sub-Store 纯标签驱动与极致解耦架构 (#166)**:
+        - **极简 10 组前端视窗**：客户端仅展示 5 个业务组（`🚀 默认代理`、`⚡ 千兆极速`、`🤖 AI 服务`、`🏦 金融与交易所`、`🍎 Apple 低价区`）与 5 个实体节点池（`🖥️ VPS`、`🧭 NAT`、`⚡ YF`、`🌐 BP`、`🌸 SK`）。
+        - **全量标签驱动（零硬编码）**：模板中杜绝任何具体的机器名（CC15、QQG1299、Sony、HiNet 等）与静态 `proxies: [...]` 节点字面量。统一使用节点标准属性标签：`[REGION]`、`[VPS]`、`[NAT]`、`[专线]`、`[千兆]`、`[普通]`、`[家宽]`、`[原生]`、`[静态]`。
+        - **ISO 双字母形式化对称**：以 `HK`、`TW`、`JP`、`SG`、`US` 双字母代码驱动循环，各大区在极速、AI、金融组中严格对称生成，彻底消除冗余特例代码，模板极致压缩至 190 行以内。
         - **资产风控与小额流量保护红线**：
-          * `⚡ 千兆极速` 与流媒体组**绝对禁止包含小流量节点（如 `nat-hk96` 仅 50G/月）与特种充值节点（如 `🌸 SK` 仅剩 19G）**，杜绝 4K 视频刷爆敏感额度。
-          * `⚡ 国际流媒体`（YouTube、Disney+、Netflix、Spotify）内部专属排港（`新 ➔ 日 ➔ 美 ➔ 台`），彻底消除香港 403 阻断与 YouTube Premium 会员权益失效。
-          * `🤖 AI 服务` 与 `🏦 金融与交易所` 严格闭环，绝对排除 `DIRECT`；美区 AI 严格锁定 `CC15 居首 ➔ QQG1299 居次 ➔ 机场 AI 兜底`；金融业务物理隔离公共机场，仅保留家宽与自建独享静态机。
-        - **Bilibili 大陆与港澳台闭环**：大陆主站直连（零代理消耗、秒开 4K），限定番剧静默命中后台隐藏的 `🇭🇰 港澳` 组，前端彻底拔除 `📺 B站港澳` 冗余卡片。
-        - **防规则倒挂保证**：`RULE-SET,github` 必须严格排在 `RULE-SET,microsoft,DIRECT` 之前，彻底杜绝 GitHub 资源被微软直连规则误拦截。
-    *   **Sub-Store Mihomo rule policy**: `templates/sub_store_capability_profile/rules.yaml` 维护核心可复用规则；客户端分发的 `sub_store_mihomo_profile.yaml.j2` 与内部 capability profile 均直接消费。父仓编辑的私有覆盖规则由 `private_rules.yaml.j2` 优先注入。严格遵循首匹配合同（First-Match Contract）。
+          * **源分类解耦**：自建源（`VPS` + `NAT`）独占承载金融组，并作为 AI 组的首选；大流量机场（`YF` + `BP`）作为默认代理、极速、流媒体与 B 站的主力与兜底；敏感受限池（`SK` 仅剩 19G）**绝对排除在默认高耗流量组之外**，仅供 Apple 低价区等特种非默认组。
+          * **极速三级闭环**：`专线 ➔ 千兆 ➔ 普通`，机场未打标常规节点自动落入 `普通` 兜底，专线全灭时普通节点自动接管，绝不熔断。
+          * **AI 与金融严格隔离**：严禁 `DIRECT`；AI 优先调度纯净自建家宽/原生，机场 AI 兜底；金融绝对物理隔离商业机场，仅限自建纯净节点。
+          * **国际流媒体**：专属排除香港落地（`新 ➔ 日 ➔ 美 ➔ 台`）。
+        - **单真源分发**：Mihomo profile 统一由 `sub_store_capability_profile.yaml.j2` 驱动，杜绝多份模板漂移。
     *   **New API Suite**:
         -   整合了 New API 和 Neko API Key Tool (查询工具)。
         -   使用 Docker Compose 进行原子化管理。
