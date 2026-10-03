@@ -388,40 +388,48 @@ proxy-groups:
   # --------------------------------------------------------
   - name: "🇹🇼 台湾 · 金融"
     type: fallback
-    proxies:
-      - "🇹🇼 [NAT] HK96-优化-Vless-家宽-TW"
-      - "🌸 SK"
+    use:
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)(\\[TW\\]|台湾).*(家宽|resi|HiNet)"
     hidden: true
 
   - name: "🇭🇰 香港 · 金融"
     type: fallback
-    proxies:
-      - "🇭🇰 [NAT] HK96-优化-Vless-静态-HK"
+    use:
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)\\[HK\\]|nat-hk"
     hidden: true
 
-{% for fin_spec in [
-  {'name': '🇺🇸 美国 · 金融', 'proxies': ['🇺🇸 [VPS] CC15-千兆-Vless-静态', '🇺🇸 [VPS] QQG1299-千兆-Hy2-原生', '🇺🇸 [VPS] QQG1299-千兆-Vless-原生-US']},
-  {'name': '🇯🇵 日本 · 金融', 'proxies': ['🇯🇵 [NAT] HK96-优化-Vless-家宽-JP', '🇯🇵 [NAT] JP3-千兆-Vless-原生-JP']},
-  {'name': '🇸🇬 新加坡 · 金融', 'proxies': ['🇸🇬 [NAT] HK96-优化-Vless-家宽-SG']}
-] %}
-  - name: "{{ fin_spec.name }}"
+  - name: "🇺🇸 美国 · 金融"
     type: fallback
-    proxies:
-{% for p in fin_spec.proxies %}
-      - "{{ p }}"
+    use:
+{% for pid in vps_providers.items %}
+      - source-{{ pid }}
 {% endfor %}
+    filter: "(?i)\\[US\\]|CC15|QQG1299"
     hidden: true
-{% endfor %}
 
-  - name: "🇸🇬 独享 · 金融"
+  - name: "🇯🇵 日本 · 金融"
+    type: fallback
+    use:
+{% for pid in nat_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)(\\[JP\\]|日本).*(家宽|resi|Sony|原生)"
+    hidden: true
+
+  - name: "🇸🇬 新加坡 · 金融"
     type: fallback
     use:
 {% for pid in nat_providers.items + vps_providers.items %}
       - source-{{ pid }}
 {% endfor %}
-    filter: "(?i)(\\[SG\\]|新加坡).*(原生|独享|固定)"
+    filter: "(?i)(\\[SG\\]|新加坡).*(家宽|resi|原生|独享|固定)"
     hidden: true
-
   - name: "🌐 紧急专线逃生通道"
     type: fallback
     use:
