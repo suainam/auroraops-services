@@ -47,10 +47,12 @@ def test_rendered_rules_keep_private_and_specific_routes_ahead_of_fallbacks():
 
 def test_served_mihomo_profile_uses_the_ordered_policy_and_defines_its_targets():
     jinja2 = pytest.importorskip("jinja2")
+    import json
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(str(TEMPLATES)),
         undefined=jinja2.StrictUndefined,
     )
+    env.filters["to_json"] = json.dumps
     template = env.get_template("sub_store_mihomo_profile.yaml.j2")
     synthetic_policy = {
         "singbox_domain": "proxy.example.test",
