@@ -31,9 +31,10 @@ REGION_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("NG", re.compile(r"(?i)尼日利亚|Nigeria|NG|拉各斯|🇳🇬")),
     ("AR", re.compile(r"(?i)阿根廷|Argentina|AR|🇦🇷")),
     ("RU", re.compile(r"(?i)俄罗斯|Russia|RU|莫斯科|🇷🇺")),
-    ("MY", re.compile(r"(?i)马来西亚|Malaysia|MY|吉隆坡|🇲🇾")),
+    ("IN", re.compile(r"(?i)印度|India|\bIN\b|🇮🇳")),
+    ("PK", re.compile(r"(?i)巴基斯坦|Pakistan|\bPK\b|🇵🇰")),
+    ("MY", re.compile(r"(?i)马来西亚|Malaysia|\bMY\b|吉隆坡|🇲🇾")),
 ]
-
 TIER_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("专线", re.compile(r"(?i)IEPL|IPLC|专线")),
     ("家宽", re.compile(r"(?i)家宽|家庭|Residential|Home|resi")),
