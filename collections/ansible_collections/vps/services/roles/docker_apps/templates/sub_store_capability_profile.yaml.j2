@@ -103,7 +103,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 专线"
     type: fallback
     use: {{ general_airport_src.items | to_json }}
-    filter: "(?i)\\[{{ r.c }}\\].*专线"
+    filter: "(?i)(\\[{{ r.c }}\\]|{{ r.c }}|{{ r.f }}).*专线"
     url: {{ test_url }}
     interval: 180
     lazy: true
@@ -111,7 +111,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 千兆"
     type: fallback
     use: {{ (vps_src.items + nat_src.items + general_airport_src.items) | to_json }}
-    filter: "(?i)\\[{{ r.c }}\\].*千兆"
+    filter: "(?i)(\\[{{ r.c }}\\]|{{ r.c }}|{{ r.f }}).*千兆"
     url: {{ test_url }}
     interval: 180
     lazy: true
@@ -119,7 +119,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 普通"
     type: fallback
     use: {{ general_airport_src.items | to_json }}
-    filter: "(?i)\\[{{ r.c }}\\]"
+    filter: "(?i)(\\[{{ r.c }}\\]|{{ r.c }}|{{ r.f }})"
     url: {{ test_url }}
     interval: 180
     lazy: true
@@ -136,7 +136,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 自建AI"
     type: fallback
     use: {{ (vps_src.items + nat_src.items) | to_json }}
-    filter: "(?i)\\[{{ r.c }}\\].*(家宽|原生|静态)"
+    filter: "(?i)(\\[{{ r.c }}\\]|{{ r.c }}|{{ r.f }}).*(家宽|原生|静态)"
     url: {{ ai_url }}
     interval: 180
     lazy: true
@@ -144,7 +144,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 机场AI"
     type: fallback
     use: {{ general_airport_src.items | to_json }}
-    filter: "(?i)\\[{{ r.c }}\\].*AI"
+    filter: "(?i)(\\[{{ r.c }}\\]|{{ r.c }}|{{ r.f }}).*AI"
     url: {{ ai_url }}
     interval: 180
     lazy: true
@@ -154,7 +154,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 金融"
     type: fallback
     use: {{ (vps_src.items + nat_src.items) | to_json }}
-    filter: "(?i)\\[{{ r.c }}\\].*(家宽|原生|静态)"
+    filter: "(?i)(\\[{{ r.c }}\\]|{{ r.c }}|{{ r.f }}).*(家宽|原生|静态)"
     hidden: true
 {% endfor %}
   - name: "🌐 紧急专线逃生通道"
@@ -169,13 +169,13 @@ proxy-groups:
   - name: "{{ f }} {{ c }}"
     type: select
     use: {{ all_airport_src.items | to_json }}
-    filter: "(?i)\\[{{ c }}\\]"
+    filter: "(?i)(\\[{{ c }}\\]|{{ c }}|{{ f }})"
     hidden: true
 {% endfor %}
   - name: "🇭🇰 港澳"
     type: url-test
     use: {{ general_airport_src.items | to_json }}
-    filter: "(?i)\\[(HK|TW)\\]"
+    filter: "(?i)(\\[(HK|TW)\\]|HK|TW|🇭🇰|🇹🇼)"
     url: {{ test_url }}
     interval: 300
     lazy: true
