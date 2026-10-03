@@ -52,7 +52,9 @@ proxy-groups:
     proxies: ["🇹🇼 TW · 金融", "🇭🇰 HK · 金融", "🇺🇸 US · 金融", "🇯🇵 JP · 金融", "🇸🇬 SG · 金融", "🌐 紧急专线逃生通道"]
   - name: "🍎 Apple 低价区"
     type: select
-    proxies: ["DIRECT", "🇹🇷 TR", "🇳🇬 NG", "🇦🇷 AR", "🇮🇳 IN", "🇵🇰 PK", "🇷🇺 RU", "🇯🇵 JP · 极速", "🌸 SK"]
+    proxies: ["DIRECT", "🇹🇷 TR", "🇳🇬 NG", "🇦🇷 AR", "🇮🇳 IN", "🇷🇺 RU", "🇯🇵 JP · 极速", "🌸 SK"]
+
+  # 5 大实体池
   - name: "🖥️ VPS"
     type: select
     use: {{ vps_src.items | to_json }}
@@ -73,6 +75,7 @@ proxy-groups:
     type: select
     use: {{ all_airport_src.items | to_json }}
     filter: "(?i)\\[SK\\]"
+
   - name: "💰 低倍率走廊"
     type: select
     use: {{ general_airport_src.items | to_json }}
@@ -165,11 +168,19 @@ proxy-groups:
     interval: 180
     lazy: true
     hidden: true
-{% for c, f in [('TR','🇹🇷'),('NG','🇳🇬'),('AR','🇦🇷'),('IN','🇮🇳'),('PK','🇵🇰'),('RU','🇷🇺')] %}
+
+  # Apple 特种低价区 (纯中文地名+专属Emoji匹配，负向断言防 Gemini/Trojan 误伤)
+{% for c, f, kw in [
+  ('TR','🇹🇷','土耳其|🇹🇷'),
+  ('NG','🇳🇬','尼日利亚|🇳🇬'),
+  ('AR','🇦🇷','阿根廷|🇦🇷'),
+  ('IN','🇮🇳','(?<![a-zA-Z])印度|🇮🇳'),
+  ('RU','🇷🇺','俄罗斯|莫斯科|🇷🇺')
+] %}
   - name: "{{ f }} {{ c }}"
     type: select
     use: {{ all_airport_src.items | to_json }}
-    filter: "(?i)(\\[{{ c }}\\]|\\b{{ c }}\\b|{{ f }})"
+    filter: "(?i){{ kw }}"
     hidden: true
 {% endfor %}
   - name: "🇭🇰 港澳"
