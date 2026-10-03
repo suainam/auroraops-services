@@ -47,12 +47,12 @@
     - docker_verify_service
     - phase3
 
-- name: 验证 Docker logrotate 配置文件是否存在
+- name: 验证外部容器 logrotate 配置文件已不存在（防止 dockerd 轮转死循环）
   become: true
   ansible.builtin.stat:
     path: /etc/logrotate.d/docker
   register: docker_logrotate_check
-  failed_when: not docker_logrotate_check.stat.exists
+  failed_when: docker_logrotate_check.stat.exists
   when: docker_state | default('present') == 'present'
   tags:
     - verify
@@ -61,12 +61,12 @@
     - docker_verify_logrotate_config
     - phase3
 
-- name: 验证 Docker logrotate 配置内容 (例如，检查 rotate count)
+- name: 验证 Docker 备份日志轮转配置是否存在
   become: true
-  ansible.builtin.command: grep 'rotate 7' /etc/logrotate.d/docker
-  register: docker_logrotate_content_check
-  changed_when: false
-  failed_when: docker_logrotate_content_check.rc != 0
+  ansible.builtin.stat:
+    path: /etc/logrotate.d/docker_backup_logs
+  register: docker_backup_logrotate_check
+  failed_when: not docker_backup_logrotate_check.stat.exists
   when: docker_state | default('present') == 'present'
   tags:
     - verify

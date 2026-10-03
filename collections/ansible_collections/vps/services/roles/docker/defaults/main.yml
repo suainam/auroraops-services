@@ -18,15 +18,6 @@ docker__default_pip_dependencies: []
 docker__default_pip_virtualenv_packages: []
 
 docker_logrotate_configs:
-  - name: docker
-    log_path: /var/lib/docker/containers/*/*.log
-    rotate_count: 7
-    compress: true
-    delaycompress: true
-    missingok: true
-    notifempty: true
-    create_owner: root
-    create_group: adm
   - name: docker_backups_fast
     log_path:
       - /opt/backups/docker/seeds/docker_config_seed.tar.gz

@@ -5,3 +5,10 @@
   vars:
     logrotate_configs_to_deploy: "{{ docker_logrotate_configs }}"
   tags: [deploy, services, docker, logrotate, phase3]
+
+- name: Remove conflicting external container logrotate configuration
+  become: true
+  ansible.builtin.file:
+    path: /etc/logrotate.d/docker
+    state: absent
+  tags: [deploy, services, docker, logrotate, phase3]
