@@ -18,7 +18,7 @@ geox-url:
   asn: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb"
 
 proxies: []
-{% set capability_providers = docker_apps_sub_store_capability_providers %}
+{% set capability_providers = docker_apps_sub_store_capability_providers | default([]) %}
 {% include 'sub_store_capability_profile/proxy_providers.yaml.j2' %}
 {% set vps_providers     = namespace(items=[]) %}
 {% set nat_providers     = namespace(items=[]) %}
@@ -59,7 +59,8 @@ proxies: []
 {# --- 全局通用特征标签 (SSOT) --- #}
 {% set tag_ai        = '(?:\x5c\x5c[AI\x5c\x5c]|(?:^|[^a-z])ai(?:[^a-z]|$)|chatgpt|gpt|claude|gemini|解锁)' %}
 {% set tag_iplc      = '(?:\x5c\x5c[专线\x5c\x5c]|专线|IEPL|IPLC)' %}
-{% set tag_bandwidth = '(?:\x5c\x5c[大带宽\x5c\x5c]|1000M|1\x5c\x5c.8G|大带宽|BGP|中转)' %}
+{% set tag_bandwidth = '(?:\x5c\x5c[千兆\x5c\x5c]|\x5c\x5c[大带宽\x5c\x5c]|千兆|1000M|1\x5c\x5c.8G|大带宽|BGP|中转)' %}
+{% set tag_normal    = '(?:\x5c\x5c[普通\x5c\x5c]|普通)' %}
 
 {# --- 全局通用测速与健康检查参数 --- #}
 {% set speed_test_url = 'https://www.gstatic.com/generate_204' %}
@@ -73,7 +74,7 @@ proxies: []
   {'code': 'TW', 'flag': '🇹🇼', 'name': '台湾'},
   {'code': 'JP', 'flag': '🇯🇵', 'name': '日本'},
   {'code': 'SG', 'flag': '🇸🇬', 'name': '新加坡'},
-  {'code': 'US', 'flag': '🇺🇸', 'name': '美国', 'extra_proxy': '🇺🇸 洛杉矶独享'}
+  {'code': 'US', 'flag': '🇺🇸', 'name': '美国', 'extra_proxy': '🇺🇸 [VPS] CC15-千兆-Vless-静态'}
 ] %}
 
 proxy-groups:
@@ -128,8 +129,11 @@ proxy-groups:
       - "🇹🇷 土耳其"
       - "🇳🇬 尼日利亚"
       - "🇦🇷 阿根廷"
+      - "🇮🇳 印度"
+      - "🇵🇰 巴基斯坦"
+      - "🇷🇺 俄罗斯"
+      - "🇯🇵 日本 · 极速"
       - "🌸 SK"
-
   # ========================================================
   # 2. 底层节点实体池 (Entity Pools, 纯手动查看与单选)
   # ========================================================
@@ -220,7 +224,9 @@ proxy-groups:
     type: fallback
     proxies:
       - "{{ r.flag }} 专线 · 极速"
+      - "{{ r.flag }} 千兆 · 极速"
       - "{{ r.flag }} 大带宽 · 极速"
+      - "{{ r.flag }} 普通 · 极速"
 {% if r.extra_proxy is defined %}
       - "{{ r.extra_proxy }}"
 {% endif %}
@@ -231,7 +237,7 @@ proxy-groups:
     hidden: true
 {% endfor %}
 
-  # 极速内部细分专线与大带宽子池 (hidden: true)
+  # 极速内部细分专线、千兆大带宽与普通子池 (hidden: true)
 {% for r in regions %}
   - name: "{{ r.flag }} 专线 · 极速"
     type: fallback
@@ -240,6 +246,29 @@ proxy-groups:
       - source-{{ pid }}
 {% endfor %}
     filter: "(?i)(\\[{{ r.code }}\\]|{{ r.name }}).*{{ tag_iplc }}"
+    url: {{ speed_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
+    lazy: true
+    hidden: true
+
+  - name: "{{ r.flag }} 千兆 · 极速"
+    type: fallback
+    use:
+{% for pid in airport_providers.items + bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% if r.code == 'JP' %}
+{% for pid in nat_providers.items if 'jp' in pid | lower %}
+      - source-{{ pid }}
+{% endfor %}
+{% endif %}
+{% if r.code == 'US' %}
+{% for pid in vps_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% endif %}
+    filter: "(?i)(\\[{{ r.code }}\\]|{{ r.name }}).*{{ tag_bandwidth }}"
     url: {{ speed_test_url }}
     interval: {{ check_interval }}
     timeout: {{ check_timeout }}
@@ -257,7 +286,24 @@ proxy-groups:
       - source-{{ pid }}
 {% endfor %}
 {% endif %}
+{% if r.code == 'US' %}
+{% for pid in vps_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+{% endif %}
     filter: "(?i)(\\[{{ r.code }}\\]|{{ r.name }}).*{{ tag_bandwidth }}"
+    url: {{ speed_test_url }}
+    interval: {{ check_interval }}
+    timeout: {{ check_timeout }}
+    lazy: true
+    hidden: true
+  - name: "{{ r.flag }} 普通 · 极速"
+    type: fallback
+    use:
+{% for pid in airport_providers.items + bp_providers.items %}
+      - source-{{ pid }}
+{% endfor %}
+    filter: "(?i)(\\[{{ r.code }}\\]|{{ r.name }})"
     url: {{ speed_test_url }}
     interval: {{ check_interval }}
     timeout: {{ check_timeout }}
@@ -320,9 +366,9 @@ proxy-groups:
   # --------------------------------------------------------
 {% for ai_spec in [
   {'name': '🇺🇸 美国 · AI', 'proxies': ['🖥️ CC15 · AI', '🖥️ QQG1299 · AI', '🇺🇸 机场 · AI']},
-  {'name': '🇯🇵 日本 · AI', 'proxies': ['🇯🇵 家宽 · AI', '🇯🇵 日本原生', '🇯🇵 机场 · AI']},
-  {'name': '🇸🇬 新加坡 · AI', 'proxies': ['🇸🇬 家宽 · AI', '🇸🇬 机场 · AI']},
-  {'name': '🇹🇼 台湾 · AI', 'proxies': ['🇹🇼 家宽 · AI', '🇹🇼 机场 · AI']}
+  {'name': '🇯🇵 日本 · AI', 'proxies': ['🇯🇵 [NAT] HK96-优化-Vless-家宽', '🇯🇵 [NAT] JP3-千兆-Vless-原生', '🇯🇵 [VPS] QQG1299-千兆-Vless-原生', '🇯🇵 家宽 · AI', '🇯🇵 日本原生', '🇯🇵 机场 · AI']},
+  {'name': '🇸🇬 新加坡 · AI', 'proxies': ['🇸🇬 [NAT] HK96-优化-Vless-家宽', '🇸🇬 家宽 · AI', '🇸🇬 机场 · AI']},
+  {'name': '🇹🇼 台湾 · AI', 'proxies': ['🇹🇼 [NAT] HK96-优化-Vless-家宽', '🇹🇼 家宽 · AI', '🇹🇼 机场 · AI']}
 ] %}
   - name: "{{ ai_spec.name }}"
     type: fallback
@@ -343,23 +389,20 @@ proxy-groups:
   - name: "🇹🇼 台湾 · 金融"
     type: fallback
     proxies:
-      - "🇹🇼 家宽 · AI"
+      - "🇹🇼 [NAT] HK96-优化-Vless-家宽"
       - "🌸 SK"
     hidden: true
 
   - name: "🇭🇰 香港 · 金融"
     type: fallback
-    use:
-{% for pid in nat_providers.items %}
-      - source-{{ pid }}
-{% endfor %}
-    filter: "(?i)\\[HK\\]|nat-hk"
+    proxies:
+      - "🇭🇰 [NAT] HK96-优化-Vless-静态"
     hidden: true
 
 {% for fin_spec in [
-  {'name': '🇺🇸 美国 · 金融', 'proxies': ['🖥️ CC15 · AI', '🖥️ QQG1299 · AI']},
-  {'name': '🇯🇵 日本 · 金融', 'proxies': ['🇯🇵 家宽 · AI', '🇯🇵 日本原生']},
-  {'name': '🇸🇬 新加坡 · 金融', 'proxies': ['🇸🇬 家宽 · AI', '🇸🇬 独享 · 金融']}
+  {'name': '🇺🇸 美国 · 金融', 'proxies': ['🇺🇸 [VPS] CC15-千兆-Vless-静态', '🇺🇸 [VPS] QQG1299-千兆-Hy2-原生', '🇺🇸 [VPS] QQG1299-千兆-Vless-原生']},
+  {'name': '🇯🇵 日本 · 金融', 'proxies': ['🇯🇵 [NAT] HK96-优化-Vless-家宽', '🇯🇵 [NAT] JP3-千兆-Vless-原生']},
+  {'name': '🇸🇬 新加坡 · 金融', 'proxies': ['🇸🇬 [NAT] HK96-优化-Vless-家宽']}
 ] %}
   - name: "{{ fin_spec.name }}"
     type: fallback
@@ -462,12 +505,15 @@ proxy-groups:
 {% for sp in [
   {'code': 'TR', 'flag': '🇹🇷', 'name': '土耳其'},
   {'code': 'NG', 'flag': '🇳🇬', 'name': '尼日利亚'},
-  {'code': 'AR', 'flag': '🇦🇷', 'name': '阿根廷'}
+  {'code': 'AR', 'flag': '🇦🇷', 'name': '阿根廷'},
+  {'code': 'IN', 'flag': '🇮🇳', 'name': '印度'},
+  {'code': 'PK', 'flag': '🇵🇰', 'name': '巴基斯坦'},
+  {'code': 'RU', 'flag': '🇷🇺', 'name': '俄罗斯'}
 ] %}
   - name: "{{ sp.flag }} {{ sp.name }}"
     type: select
     use:
-{% for pid in sk_providers.items %}
+{% for pid in airport_providers.items + bp_providers.items + sk_providers.items %}
       - source-{{ pid }}
 {% endfor %}
     filter: "(?i){{ sp.name }}|{{ sp.code }}|{{ sp.flag }}"
@@ -477,7 +523,7 @@ proxy-groups:
   - name: "🇭🇰 港澳"
     type: url-test
     use:
-{% for pid in nat_providers.items + bp_providers.items %}
+{% for pid in bp_providers.items + airport_providers.items %}
       - source-{{ pid }}
 {% endfor %}
     filter: "(?i)🇭🇰|港|hk|hong\\s*kong|🇹🇼|台|tw|taiwan"
@@ -486,7 +532,6 @@ proxy-groups:
     tolerance: 50
     lazy: true
     hidden: true
-
   # 兼容私有规则中的 ⚡ 快速节点 引用
   - name: "⚡ 快速节点"
     type: select

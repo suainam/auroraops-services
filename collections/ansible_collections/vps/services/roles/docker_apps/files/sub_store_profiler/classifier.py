@@ -37,7 +37,8 @@ REGION_RULES: list[tuple[str, re.Pattern[str]]] = [
 TIER_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("专线", re.compile(r"(?i)IEPL|IPLC|专线")),
     ("家宽", re.compile(r"(?i)家宽|家庭|Residential|Home|resi")),
-    ("大带宽", re.compile(r"(?i)1000M|1\.8G|大带宽|无限|神速")),
+    ("千兆", re.compile(r"(?i)千兆|1000M|1\.8G|大带宽|无限|神速")),
+    ("大带宽", re.compile(r"(?i)千兆|1000M|1\.8G|大带宽|无限|神速")),
     ("中转", re.compile(r"(?i)中转|BGP|HY|直连")),
 ]
 
@@ -70,10 +71,13 @@ def classify_and_clean_node(name: str) -> Optional[str]:
             break
 
     # 2. Tier
+    tier_matched = False
     for t_code, t_pat in TIER_RULES:
         if t_pat.search(cleaned_name):
             tags.append(f"[{t_code}]")
-
+            tier_matched = True
+    if not tier_matched:
+        tags.append("[普通]")
     # 3. Capability
     for c_code, c_pat in CAPABILITY_RULES:
         if c_pat.search(cleaned_name):

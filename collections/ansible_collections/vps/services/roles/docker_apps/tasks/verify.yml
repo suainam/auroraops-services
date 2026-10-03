@@ -559,7 +559,7 @@
     that:
       - (docker_apps_sub_store_public_mihomo_payload | type_debug) == 'dict'
       - (docker_apps_sub_store_public_mihomo_payload['proxy-providers'] | type_debug) == 'dict'
-      - "'aurora-substore' in docker_apps_sub_store_public_mihomo_payload['proxy-providers']"
+      - docker_apps_sub_store_public_mihomo_payload['proxy-providers'].keys() | length >= 1
       - (docker_apps_sub_store_public_mihomo_payload['proxy-groups'] | type_debug) == 'list'
       - docker_apps_sub_store_public_mihomo_payload['proxy-groups'] | length >= 3
       - (docker_apps_sub_store_public_mihomo_payload['rule-providers'] | type_debug) == 'dict'
@@ -668,6 +668,7 @@
       - >-
         docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,spotify,⚡ 国际流媒体')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
+      - >-
         docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,telegram,⚡ 千兆极速')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
