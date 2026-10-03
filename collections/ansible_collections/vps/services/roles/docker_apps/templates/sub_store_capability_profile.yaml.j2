@@ -74,7 +74,7 @@ proxy-groups:
   - name: "🌸 SK"
     type: select
     use: {{ all_airport_src.items | to_json }}
-    filter: "(?i)\\[SK\\]"
+    filter: "(?i)\\[SK\\](?!.*(?:剩余流量|套餐到期))"
 
   - name: "💰 低倍率走廊"
     type: select

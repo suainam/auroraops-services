@@ -8,6 +8,7 @@ proxy-providers:
     url: "https://{{ singbox_domain }}/{{ sub_store_capability_source_provider_suffix }}-{{ provider_id | urlencode }}.yaml"
     path: ./proxy_providers/{{ provider_id }}.yaml
     interval: 3600
+    filter: "(?i)^(?!.*(?:剩余流量|流量剩余|套餐到期|距离下次重置|重置剩余|更换客户端|请每月更)).*$"
     override:
       additional-prefix: {{ (prefix ~ ' ') | to_json }}
 {% if provider.role | default('') == 'metered' or provider.metered | default(false) or 'sakura' in provider.name or 'sk' in provider.name %}
