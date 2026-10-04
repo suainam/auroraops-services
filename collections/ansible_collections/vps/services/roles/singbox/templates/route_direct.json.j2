@@ -1,13 +1,15 @@
 {
   "route": {
     "rule_set": [
+      {%- if not (docker_apps_singbox_zero_rules | default(false) | bool) %}
       { "tag": "geoip-cn", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geoip/cn.srs" },
       { "tag": "geosite-cn", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/cn.srs" },
-      { "tag": "geosite-category-ads-all", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-ads-all.srs" }
-      {%- if docker_apps_singbox_warp_enabled | default(false) | bool -%},
+      { "tag": "geosite-category-ads-all", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-ads-all.srs" }{%- if docker_apps_singbox_warp_enabled | default(false) | bool %},{% endif %}
+      {%- if docker_apps_singbox_warp_enabled | default(false) | bool %}
       { "tag": "geosite-openai", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/openai.srs" },
       { "tag": "geosite-anthropic", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/anthropic.srs" },
       { "tag": "geosite-google", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/google.srs" }
+      {%- endif %}
       {%- endif %}
     ],
     "rules": [
@@ -42,7 +44,9 @@
       {% if auroraops_roles['services']['ip2free_gateway'] | default(false) %}
       { "inbound": ["hy2-resi"], "outbound": "🏠 住宅代理" },
       {% endif %}
+      {% if not (docker_apps_singbox_zero_rules | default(false) | bool) %}
       { "rule_set": ["geosite-category-ads-all", "geoip-cn", "geosite-cn"], "action": "reject" },
+      {% endif %}
       {# Each smart entry has one fixed exit; unmatched domains retain direct-out. #}
       {% if inventory_hostname == 'qqg1299' %}
       {% for node, outbound in [('smart-ai-jp3', 'out-nat-jp3'), ('smart-ai-cc15', 'out-cc15')] %}
@@ -50,10 +54,12 @@
       { "inbound": ["in-{{ node }}"], "outbound": "direct-out" },
       {% endfor %}
       {% endif %}
-      {%- if docker_apps_singbox_warp_enabled | default(false) | bool %}
+      {% if docker_apps_singbox_warp_enabled | default(false) | bool %}
       { "domain_suffix": ["daily-cloudcode-pa.googleapis.com"], "outbound": "direct-out" },
+      {% if not (docker_apps_singbox_zero_rules | default(false) | bool) %}
       { "rule_set": ["geosite-openai", "geosite-anthropic", "geosite-google"], "outbound": "warp-out" },
-      {%- endif %}
+      {% endif %}
+      {% endif %}
 {% for node in singbox_extra_nodes | default([]) if node.relay_outbound is defined %}
       {% if node.shared_inbound is defined %}
       { "auth_user": [{{ node.name | to_json }}], "outbound": {{ node.relay_outbound | to_json }} },

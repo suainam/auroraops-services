@@ -2,9 +2,55 @@
 singbox_enabled: true
 singbox_deploy_mode: auto
 
+# Zero-rule mode: no remote rule_set downloads/parsing, no FakeIP DNS, no
+# ruleset DNS rules. The default outbound stays direct-out and Mesh/private/
+# Relay routing is untouched. Off by default so every non-NAT node keeps its
+# full rules.
+docker_apps_singbox_zero_rules: false
+
 # Image and Binary
 singbox_image: "ghcr.io/sagernet/sing-box:v1.13.21"
 singbox_version: "1.13.11"
+
+# Verification seam (#179). All zero/off by default so every existing host runs
+# exactly the checks it ran before; a host opts into each one it can satisfy.
+#
+# RSS ceiling in kB. Zero disables the check. A host declares its own budget
+# rather than inheriting one, because a ceiling that is wrong for the host is
+# worse than no ceiling: it either fails a healthy node or passes an unhealthy
+# one.
+singbox_verify_rss_max_kb: 0
+# The TCP ports this profile is allowed to expose. Defining this key is what
+# enables the listener contract check.
+singbox_verify_expected_tcp_ports: []
+# Ports belonging to a protocol this profile has retired. Asserted absent so a
+# resurrected inbound cannot pass unnoticed.
+singbox_verify_forbidden_ports: []
+# A userspace WireGuard endpoint keeps one ephemeral UDP socket open to the hub.
+# That is a transport socket, not a listener. Set this on a host where the
+# "no UDP listener" assertion would otherwise fail for that reason -- which is the
+# honest way to record it, because the alternative is weakening the assertion for
+# everyone.
+singbox_verify_allow_udp_transport: false
+
+# Mesh data-path probe (#179). A host sets the target it must be able to reach
+# THROUGH the tunnel, and the probe fails the stage when it cannot.
+#
+# This replaces a check that only asserted the loopback SOCKS socket was bound,
+# which passes on a guest whose WireGuard handshake never completed. Empty target
+# disables the probe, so a host without a declared target is unaffected.
+#
+# The probe connects through the SOCKS to the target rather than pinging it: ICMP
+# does not traverse SOCKS, and a direct ping to a mesh address is answered by the
+# default gateway on a userspace guest -- a false outage on a healthy tunnel.
+singbox_verify_mesh_probe_target: ""
+# Port on the target. Left empty so it cannot be a silently-wrong literal; the
+# usual choice is the hub's WireGuard-facing SSH or a listener known to answer.
+singbox_verify_mesh_probe_port: 0
+singbox_verify_mesh_probe_timeout: 8
+# Interpreter. Overridden only where a guest does not provide python3 at this
+# path; the NAT bootstrap guarantees /usr/bin/python3.
+singbox_verify_mesh_probe_bin: /usr/bin/python3
 
 # Directory Structure
 singbox_config_dir: "/opt/dockers/singbox/config"

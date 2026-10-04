@@ -7,7 +7,7 @@
     "cache_file": {
       "enabled": true,
       "path": "cache.db",
-      "store_fakeip": true
+      "store_fakeip": {{ (not (docker_apps_singbox_zero_rules | default(false) | bool)) | lower }}
     }
   }
 }

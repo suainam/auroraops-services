@@ -1,0 +1,54 @@
+server {
+    # Internal read-only subscription origin for NAT nodes with no public HTTP
+    # entry (#137 / #178).
+    #
+    # A node's rendered profile.yaml is delivered into the root below, and
+    # Sub-Store fetches it from this alias. This replaces a per-node plaintext
+    # nginx relay that cost 15-25 MiB resident on every node.
+    #
+    # The shape of this file is taken from the one already running on cc15, so a
+    # deploy adopts the live configuration instead of shadowing it. A second
+    # server block on the same port with the same server_name would simply lose,
+    # which is the worst outcome: the file would look deployed and do nothing.
+    #
+    # 127.0.0.1 is never the only bind. Sub-Store runs in a container and a
+    # container's 127.0.0.1 is itself, so a bridge-only bind would make the
+    # fetch time out rather than fail, which reads as a network fault.
+{% for address in nginx_internal_sub_listen | default([]) %}
+    listen {{ address }};
+{% endfor %}
+
+    # Reached by address, never by name.
+    server_name _;
+
+    # A subscription profile is a few KiB. A tight ceiling means a peer cannot
+    # turn this into an upload endpoint or a memory sink.
+    client_max_body_size 64k;
+    client_body_timeout 30s;
+
+    location /internal-sub/ {
+        alias {{ nginx_internal_sub_root }}/;
+        autoindex off;
+        default_type application/x-yaml;
+        charset utf-8;
+
+        # Defence in depth behind the firewall rule. The rule scopes by
+        # interface and destination address; this scopes by source, so a route
+        # that was added without a matching rule still cannot read the files.
+{% for source in nginx_internal_sub_allow | default([]) %}
+        allow {{ source }};
+{% endfor %}
+        deny all;
+
+        # `alias` with a trailing slash plus the pinned root already prevents
+        # escaping the root; rejecting `..` turns a silent misconfiguration into
+        # a 403 instead of a confusing one.
+        location ~ \.\. {
+            deny all;
+        }
+    }
+
+    location / {
+        return 404;
+    }
+}

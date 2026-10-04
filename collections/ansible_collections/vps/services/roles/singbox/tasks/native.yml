@@ -1,11 +1,19 @@
 ---
+- name: Sing-box Native - Resolve the apk package list
+  # openssl exists on this guest for exactly one thing: generating the self-signed
+  # Hysteria2 certificate. A VLESS-Reality-only guest has no certificate to sign,
+  # so the dependency is dropped rather than left installed and unused. Built as a
+  # fact instead of inline so the package list has one owner.
+  ansible.builtin.set_fact:
+    singbox_native_apk_packages: >-
+      {{ ['sing-box', 'sing-box-openrc']
+         + (['openssl'] if singbox_native_self_signed_enabled | default(false) | bool else []) }}
+  tags: [deploy, services, singbox, phase5]
+
 - name: Sing-box Native - Install Alpine packages
   become: true
   community.general.apk:
-    name:
-      - sing-box
-      - sing-box-openrc
-      - openssl
+    name: "{{ singbox_native_apk_packages }}"
     state: present
   # Mutually exclusive with the slim-binary path below. A guest that supplies its
   # own binary must never also attempt the package install, because unpacking the
@@ -38,6 +46,13 @@
     # memory, so the transport is delegated and the role keeps the parts that
     # matter: digest verification and an atomic, idempotent install.
     remote_src: "{{ singbox_native_slim_remote_src | default(true) | bool }}"
+    # Idempotence guard. Without it this task re-copies 30 MiB on every run and
+    # reports changed forever, because nothing consumes the staged file: it stays
+    # at <dest>.new after a successful install. Skipping when it already exists is
+    # safe because the two tasks that follow still checksum it and compare the
+    # digest against singbox_native_slim_sha256 -- a corrupt staged file is still
+    # caught, it is just not re-fetched.
+    creates: "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}.new"
   # Staged, never installed straight over the running binary: a corrupt transfer
   # must not replace a working one.
   when:
@@ -127,6 +142,10 @@
     path: "{{ singbox_native_config_dir }}/certs"
     state: directory
     mode: "0755"
+  # Only a self-signed Hysteria2 inbound needs this directory. Creating it on a
+  # Reality-only guest leaves an empty certs/ behind that reads like a live
+  # certificate dependency and invites the next operator to trust it.
+  when: singbox_native_self_signed_enabled | default(false) | bool
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box Native - Create persistent self-signed private key
@@ -169,6 +188,84 @@
     - not ansible_check_mode
   tags: [deploy, services, singbox, phase5]
 
+- name: Sing-box Native - Resolve effective memory envelope (physical vs cgroup)
+  become: true
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -c
+      - |
+        # Effective memory envelope = physical MemTotal, tightened by every
+        # finite cgroup memory limit that applies to this guest's placement
+        # (PID 1 and self cgroup paths, walked up to the cgroup root).
+        # OpenRC starts sing-box from the guest's own cgroup hierarchy, so
+        # this is the constraint the process actually lives under; it is not
+        # a systemd slice lookup. Unbounded values ('max', or the huge v1
+        # kernel default) simply lose the min to physical memory.
+        # SB_* overrides exist so the behaviour is testable off-host.
+        proc_root="${SB_PROC_ROOT:-/proc}"
+        mounts="${SB_MOUNTS:-${proc_root}/mounts}"
+
+        phys_kb=$(awk '/^MemTotal/{print $2}' "${proc_root}/meminfo")
+        min_kb=${phys_kb:-0}
+        [ "$min_kb" -gt 0 ] || exit 1
+
+        v2_mount=$(awk '$3=="cgroup2"{print $2; exit}' "$mounts")
+        v1_mount=$(awk '$3=="cgroup" && $4 ~ /(^|,)memory(,|$)/{print $2; exit}' "$mounts")
+
+        vals=""
+        for procf in "${proc_root}/1/cgroup" "${proc_root}/self/cgroup"; do
+          [ -r "$procf" ] || continue
+          for cg in $(sed -n 's/^[0-9][0-9]*:[^:]*://p' "$procf" | sort -u); do
+            dir="${cg:-/}"
+            while :; do
+              if [ -n "$v2_mount" ]; then
+                for f in "${v2_mount}${dir}/memory.max"; do
+                  [ -r "$f" ] || continue
+                  v=$(tr -d '[:space:]' < "$f")
+                  case "$v" in
+                    ''|*[!0-9]*) ;;
+                    *) vals="${vals} $((v / 1024))" ;;
+                  esac
+                done
+              fi
+              if [ -n "$v1_mount" ]; then
+                for f in "${v1_mount}${dir}/memory.limit_in_bytes" "${v1_mount}${dir}/memory/memory.limit_in_bytes"; do
+                  [ -r "$f" ] || continue
+                  v=$(tr -d '[:space:]' < "$f")
+                  case "$v" in
+                    ''|*[!0-9]*) ;;
+                    *) vals="${vals} $((v / 1024))" ;;
+                  esac
+                done
+              fi
+              [ "$dir" = "/" ] && break
+              dir=$(dirname "$dir")
+            done
+          done
+        done
+
+        cmin=$(printf '%s\n' $vals | sort -n | head -n 1)
+        if [ -n "$cmin" ] && [ "$cmin" -gt 0 ] && [ "$cmin" -lt "$min_kb" ]; then
+          min_kb=$cmin
+        fi
+        echo $((min_kb / 1024))
+  register: singbox_effective_mem
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, singbox, phase5]
+- name: Sing-box Native - Record effective memory fact
+  ansible.builtin.set_fact:
+    singbox_effective_memtotal_mb: "{{ singbox_effective_mem.stdout | trim | int }}"
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Assert effective memory is sane
+  ansible.builtin.assert:
+    that:
+      - singbox_effective_memtotal_mb | int > 0
+    fail_msg: "Effective memory probe returned a non-positive value; refusing to write GOMEMLIMIT."
+  tags: [deploy, services, singbox, phase5]
+
 - name: Sing-box Native - Configure OpenRC environment defaults
   become: true
   ansible.builtin.copy:
@@ -179,6 +276,12 @@
       SINGBOX_WORKDIR={{ singbox_native_workdir }}
       export ENABLE_DEPRECATED_SPECIAL_OUTBOUNDS=true
       export ENABLE_DEPRECATED_DNS_SERVERS=true
+      # GOMEMLIMIT is a soft goal (~60% of the effective physical/cgroup
+      # memory, floored to MiB), not a hard RSS cap; GOGC=30 makes the GC
+      # run aggressively so a 32 MiB guest stays small. Applied per #175
+      # decision to every native singbox, independent of zero-rule mode.
+      export GOMEMLIMIT={{ (singbox_effective_memtotal_mb | default(ansible_memtotal_mb | default(1024)) | int * 0.6) | int }}MiB
+      export GOGC=30
     mode: "0644"
   notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]

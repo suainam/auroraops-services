@@ -187,6 +187,10 @@
     name: nginx
     state: started
     enabled: true
+  # Skipped when the relay has been retired. Without this the role would
+  # re-enable the very daemon the cutover stopped, and the next idempotence run
+  # would report the retirement as drift and put the 15-25 MiB back.
+  when: not (nginx_relay_retirement_authorized | default(false) | bool)
   tags: [deploy, services, nginx, nginx_config, phase4]
 
 - name: 重新加载 systemd 以识别新的 Nginx 服务
