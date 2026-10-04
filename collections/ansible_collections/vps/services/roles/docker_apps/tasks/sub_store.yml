@@ -251,6 +251,40 @@
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
 
+# Bind the profile template and the catalog to the resolver's output.
+#
+# The template does `{% set capability_providers =
+# docker_apps_sub_store_capability_providers | default([]) %}` and the catalog task
+# reads the same name -- but nothing in the inventory ever defined it. So the
+# distributed profile was rendering from an empty list: on cc15 the file clients
+# pull still carried 16 references to `source-nat-hk084`, a provider already
+# removed from the vault, alongside 16 for its replacement, which is what
+# duplicated the nodes. And the next deploy would have rendered *zero*
+# providers, wiping the profile outright.
+#
+# Binding it to the resolver makes the vault the single source of truth: a
+# provider absent from the vault cannot reach clients, and a new one appears
+# without anyone hand-editing generated data.
+- name: Expose the resolved capability provider list to the profile and catalog
+  ansible.builtin.set_fact:
+    docker_apps_sub_store_capability_providers: >-
+      {{ sub_store_capability_providers_effective | default([]) }}
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
+# Fail loudly instead of shipping an empty provider list. The silent `default([])`
+# in the template is what let a profile with no sources look like a success.
+- name: Assert the capability provider list is not empty
+  ansible.builtin.assert:
+    that:
+      - docker_apps_sub_store_capability_providers | length > 0
+    fail_msg: >-
+      The resolved capability provider list is empty, so the distributed
+      profile would be rendered with no proxy-providers at all. This has
+      happened before: the template defaults the list to empty and the previous
+      cc15 profile kept serving a provider that no longer exists.
+  tags: [deploy, services, docker_apps, sub_store, phase5]
+
 - name: Render Sub-Store capability Mihomo profile
   become: true
   ansible.builtin.template:
