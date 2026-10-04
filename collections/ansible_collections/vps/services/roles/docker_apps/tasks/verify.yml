@@ -495,12 +495,73 @@
   when: verify_docker_app_name | default('') == 'opcotoai_toolkit'
   tags: [verify, services, docker_apps, opcotoai_toolkit, phase5]
 
-- name: Verify Sub-Store is bound to loopback
+- name: Verify Sub-Store publishes no port on a routable host address
   ansible.builtin.assert:
     that:
+      # The loopback publish is what nginx reverse-proxies; it must stay private.
       - docker_apps_container_info.container.NetworkSettings.Ports['3000/tcp'][0].HostIp == '127.0.0.1'
-    fail_msg: "Sub-Store must only publish through loopback"
+      # Every other publish must land on the container bridge or another
+      # loopback address. A wildcard 0.0.0.0 publish here would put the whole
+      # aggregation API on the public internet, which is precisely what retiring
+      # the per-node plaintext relays was meant to avoid.
+      - docker_apps_container_info.container.NetworkSettings.Ports['3000/tcp']
+        | map(attribute='HostIp') | select('match', '^(127\.|::1|172\.17\.0\.1$)')
+        | list | length
+        == docker_apps_container_info.container.NetworkSettings.Ports['3000/tcp'] | length
+    fail_msg: >-
+      Sub-Store must only publish through loopback or the declared container
+      bridge address; a routable host address would expose the aggregation API
+      publicly.
   when: verify_docker_app_name | default('') == 'sub_store'
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Verify Sub-Store internal mesh listener is published on the bridge
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.NetworkSettings.Ports['3000/tcp']
+        | selectattr('HostIp', 'equalto', sub_store_internal_listen_address)
+        | list | length == 1
+    fail_msg: >-
+      The internal mesh listener must be published exactly once on
+      {{ sub_store_internal_listen_address }}. NAT nodes fetch their subscription
+      over the WireGuard mesh through this endpoint; without it the per-node
+      nginx relay cannot be retired.
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_internal_listen_enabled | default(false) | bool
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
+- name: Verify Sub-Store internal mesh listener answers on the bridge address
+  become: true
+  ansible.builtin.uri:
+    url: >-
+      http://{{ sub_store_internal_listen_address }}:{{ sub_store_internal_listen_port
+      }}{{ sub_store_backend_path }}/api/utils/env
+    method: GET
+    status_code: 200
+    return_content: false
+  register: docker_apps_sub_store_internal_probe
+  retries: 10
+  delay: 2
+  until: docker_apps_sub_store_internal_probe.status | default(0) == 200
+  # Proves the path a NAT node actually takes, from the address it would use.
+  # A published port that answers nothing would look identical to a healthy
+  # setup from the container side and fail only on the node.
+  when:
+    - verify_docker_app_name | default('') == 'sub_store'
+    - sub_store_internal_listen_enabled | default(false) | bool
+    - not ansible_check_mode
+  failed_when: false
   tags:
     - verify
     - services
