@@ -33,6 +33,25 @@ singbox_verify_forbidden_ports: []
 # everyone.
 singbox_verify_allow_udp_transport: false
 
+# Mesh data-path probe (#179). A host sets the target it must be able to reach
+# THROUGH the tunnel, and the probe fails the stage when it cannot.
+#
+# This replaces a check that only asserted the loopback SOCKS socket was bound,
+# which passes on a guest whose WireGuard handshake never completed. Empty target
+# disables the probe, so a host without a declared target is unaffected.
+#
+# The probe connects through the SOCKS to the target rather than pinging it: ICMP
+# does not traverse SOCKS, and a direct ping to a mesh address is answered by the
+# default gateway on a userspace guest -- a false outage on a healthy tunnel.
+singbox_verify_mesh_probe_target: ""
+# Port on the target. Left empty so it cannot be a silently-wrong literal; the
+# usual choice is the hub's WireGuard-facing SSH or a listener known to answer.
+singbox_verify_mesh_probe_port: 0
+singbox_verify_mesh_probe_timeout: 8
+# Interpreter. Overridden only where a guest does not provide python3 at this
+# path; the NAT bootstrap guarantees /usr/bin/python3.
+singbox_verify_mesh_probe_bin: /usr/bin/python3
+
 # Directory Structure
 singbox_config_dir: "/opt/dockers/singbox/config"
 singbox_data_dir: "/opt/dockers/singbox"

@@ -31,23 +31,6 @@ docker_apps_hysteria2_client_networks: >-
 # Sub-Store
 docker_apps_sub_store_pull: false
 sub_store_capability_pools_enabled: false
-
-# Internal mesh listener (#137/#178). Lets a NAT node fetch its subscription over
-# the WireGuard mesh instead of running its own plaintext nginx relay, which
-# costs 15-25 MiB resident per node. Off by default: a host that does not declare
-# it keeps publishing through loopback only, exactly as before.
-#
-# The address is the container bridge, not 127.0.0.1, because a container's
-# loopback is itself and a request to it times out rather than erroring. Exposure
-# is bounded by the bridge, which is why this port is deliberately absent from
-# ports.yml: registering it in the public authority would invite a firewall rule.
-sub_store_internal_listen_enabled: false
-sub_store_internal_listen_address: "172.17.0.1"
-sub_store_internal_listen_port: 8081
-sub_store_internal_listen_interfaces: []
-# Disables the backend subscription-write API so a mesh peer can read a
-# subscription without being able to rewrite the provider catalog.
-sub_store_internal_read_only: false
 # Shared Docker data root used by backup-aware setup tasks.  Keep the role
 # runnable when the parent inventory does not import the optional backup.yml.
 backup_source_docker_dir: "/opt/dockers"

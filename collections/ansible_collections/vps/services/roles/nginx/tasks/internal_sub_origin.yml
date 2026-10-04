@@ -1,0 +1,76 @@
+---
+# Read-only subscription origin for mesh-only NAT nodes (#137 / #178).
+#
+# A NAT node with no public HTTP entry pushes its rendered profile.yaml into a
+# restricted directory here, and Sub-Store fetches it from an nginx alias bound to
+# the container bridge. This replaces a per-node plaintext nginx relay that cost
+# 15-25 MiB resident each.
+#
+# Why a file and an alias rather than a writable API on the aggregator: a writable
+# API would hand every mesh peer the ability to rewrite the provider catalog,
+# which is a larger exposure than the relay it replaces. Files plus a read-only
+# alias means the mesh can deliver a subscription and nothing else.
+#
+# Gated on the same declaration cc15 already carries, so a host without it is
+# untouched.
+
+- name: Resolve whether this host serves the internal subscription origin
+  ansible.builtin.set_fact:
+    nginx_internal_sub_enabled: >-
+      {{ (sub_store_internal_listen_enabled | default(false) | bool)
+         and (nginx_internal_sub_root | default('') | length > 0) }}
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+
+- name: Report disabled internal subscription origin
+  ansible.builtin.debug:
+    msg: "Internal subscription origin is not declared; skipping"
+  when: not nginx_internal_sub_enabled | bool
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+
+- name: Ensure the internal subscription root exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ nginx_internal_sub_root }}"
+    state: directory
+    # Traversal-only for nginx's worker, which only ever reads these files. The
+    # group comes from this role's own nginx_user default rather than a literal so
+    # an Alpine host (workers run as `nginx`) does not get a directory the worker
+    # cannot traverse.
+    owner: "root"
+    group: "{{ nginx_user }}"
+    mode: "0750"
+  when: nginx_internal_sub_enabled | bool
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+
+- name: Render the internal subscription origin site
+  become: true
+  ansible.builtin.template:
+    src: internal_sub_alias.conf.j2
+    dest: /etc/nginx/sites-available/internal-sub.conf
+    mode: "0644"
+  when: nginx_internal_sub_enabled | bool
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+
+- name: Enable the internal subscription origin site
+  become: true
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/internal-sub.conf
+    dest: /etc/nginx/sites-enabled/internal-sub.conf
+    state: link
+    force: true
+  when: nginx_internal_sub_enabled | bool
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_site_enable, phase4]
+
+- name: Remove the internal subscription origin site when no longer declared
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/nginx/sites-enabled/internal-sub.conf
+    - /etc/nginx/sites-available/internal-sub.conf
+  when: not nginx_internal_sub_enabled | bool
+  notify: reload nginx
+  tags: [deploy, services, nginx, nginx_site_enable, phase4]

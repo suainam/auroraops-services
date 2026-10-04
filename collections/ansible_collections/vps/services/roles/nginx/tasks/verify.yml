@@ -61,12 +61,56 @@
       - nginx_service_status.ansible_facts.services[nginx_service_fact_key].state == 'running'
       - nginx_service_status.ansible_facts.services[nginx_service_fact_key].status == 'enabled'
     fail_msg: Nginx 服务未运行或未启用
-  when: (ansible_service_mgr | default('systemd')) == 'systemd'
+  when:
+    - (ansible_service_mgr | default('systemd')) == 'systemd'
+    - not (nginx_relay_retirement_authorized | default(false) | bool)
   tags:
     - verify
     - services
     - nginx
     - nginx_verify_service
+    - phase4
+
+- name: 验证退役后 Nginx 确实已停止且未自启
+  become: true
+  ansible.builtin.shell:
+    cmd: |
+      set -eu
+      if command -v pgrep >/dev/null 2>&1; then
+        pgrep -x nginx || true
+      else
+        pidof nginx || true
+      fi
+  register: nginx_retirement_verify_probe
+  changed_when: false
+  when: nginx_relay_retirement_authorized | default(false) | bool
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_service
+    - nginx_relay_retirement
+    - phase4
+
+- name: 断言退役状态与声明一致
+  ansible.builtin.assert:
+    that:
+      # The retirement claim is "the daemon is gone", so it is asserted rather
+      # than inferred from the absence of a deployment step.
+      - nginx_retirement_verify_probe.stdout | trim | length == 0
+      # And the site that was serving the subscription must be gone too, or the
+      # port could be re-served by a later reload.
+      - not (lookup('ansible.builtin.file', '/etc/nginx/sites-enabled/nat_subscription.conf', errors='ignore') | length > 0)
+    fail_msg: >-
+      nginx_relay_retirement_authorized is set but the relay is still present:
+      running={{ nginx_retirement_verify_probe.stdout | trim | default('') }}
+  when: nginx_relay_retirement_authorized | default(false) | bool
+  tags:
+    - verify
+    - services
+    - nginx
+    - nginx_verify_service
+    - nginx_relay_retirement
     - phase4
 - name: 验证 Nginx 配置语法
   become: true

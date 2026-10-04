@@ -1,0 +1,46 @@
+server {
+    # Internal read-only subscription origin for NAT nodes that have no public
+    # HTTP entry (#137 / #178).
+    #
+    # A node pushes its rendered profile.yaml into a restricted directory here
+    # over the WireGuard mesh; Sub-Store then fetches it from this alias. That
+    # replaces a per-node plaintext nginx relay costing 15-25 MiB resident each.
+    #
+    # The listen address is the docker0 gateway, never 127.0.0.1: Sub-Store runs
+    # in a container, and a container's 127.0.0.1 is itself. A request to it
+    # times out rather than failing, which reads as a network fault instead of a
+    # binding mistake and costs a lot of debugging time.
+    #
+    # Read-only by construction: this server only serves files. It exposes no API,
+    # so no mesh peer gains a write path into the aggregator.
+    listen {{ sub_store_internal_listen_address }}:{{ sub_store_internal_listen_port }};
+
+    # No server_name match is intended -- this is not reached by name, only by
+    # address from the container bridge.
+    server_name _;
+
+    # A subscription profile is a few KiB. A tight ceiling means a peer cannot
+    # turn this into an upload endpoint or a memory sink.
+    client_max_body_size 64k;
+    client_body_timeout 30s;
+
+    # Only the declared per-node directories are reachable, and only as files.
+    # No directory listing, no traversal outside the root, no CGI.
+    location /internal-sub/ {
+        alias {{ nginx_internal_sub_root }}/;
+        autoindex off;
+        default_type application/x-yaml;
+        charset utf-8;
+
+        # Defence in depth against traversal. `alias` with a trailing slash plus
+        # the root pin means a `..` cannot resolve above nginx_internal_sub_root,
+        # but rejecting it outright turns a silent misconfiguration into a 403.
+        location ~ \.\. {
+            deny all;
+        }
+    }
+
+    location / {
+        return 404;
+    }
+}

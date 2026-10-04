@@ -91,6 +91,27 @@
     - nginx_site_enable
     - phase4
 
+- name: Retire the plaintext subscription relay when authorized
+  ansible.builtin.import_tasks: relay_retirement.yml
+  when: (nginx_installed | bool) or not ansible_check_mode
+  tags:
+    - deploy
+    - services
+    - nginx
+    - nginx_relay_retirement
+    - phase4
+
+- name: Deploy the internal subscription origin for mesh-only NAT nodes
+  ansible.builtin.import_tasks: internal_sub_origin.yml
+  when: (nginx_installed | bool) or not ansible_check_mode
+  tags:
+    - deploy
+    - services
+    - nginx
+    - nginx_site_config
+    - nginx_site_enable
+    - phase4
+
 - name: Clean stale Nginx site links
   ansible.builtin.import_tasks: site_cleanup.yml
   when: (nginx_installed | bool) or not ansible_check_mode

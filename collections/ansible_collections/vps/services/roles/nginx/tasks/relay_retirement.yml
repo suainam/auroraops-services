@@ -1,0 +1,71 @@
+---
+# Retire the plaintext subscription relay daemon (#138 / #178).
+#
+# Skipping the role is not retirement. `makefiles/nat.mk` skips services.nginx on a
+# host with `nat_nginx_required: false`, which stops new configuration but leaves
+# an already-installed daemon running and enabled -- the 15-25 MiB is still
+# resident and the host still serves the plaintext port. These tasks are the
+# actual stop-and-disable, and they exist so that "retired" is an action with a
+# verifiable end state rather than an absence of work.
+#
+# Gated on `nginx_relay_retirement_authorized`, which the parent sets only when
+# the #138 observation gate has been satisfied. Default off: a host that has not
+# been through the cutover is untouched.
+
+- name: Retire the subscription relay daemon
+  when: nginx_relay_retirement_authorized | default(false) | bool
+  block:
+    - name: Report that the relay retirement is authorized
+      ansible.builtin.debug:
+        msg: >-
+          nginx_relay_retirement_authorized is set: stopping and disabling nginx
+          and removing the subscription site on this host.
+
+    # The site goes before the daemon so the daemon is never stopped while still
+    # serving the only copy of the subscription. Order is deliberate: stop serving,
+    # then stop the process.
+    - name: Remove the plaintext subscription site
+      become: true
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/nginx/sites-enabled/nat_subscription.conf
+        - /etc/nginx/sites-available/nat_subscription.conf
+      notify: reload nginx
+
+    # Stopped AND disabled. `enabled: false` is the part that matters most: a
+    # stopped-but-enabled daemon returns on the next boot, and the reclaimed
+    # memory silently goes back.
+    - name: Stop and disable nginx
+      become: true
+      ansible.builtin.service:
+        name: nginx
+        state: stopped
+        enabled: false
+
+    # Proves the end state rather than trusting the service module. `pidof` is
+    # used because it works under both OpenRC (these Alpine guests) and systemd,
+    # and its absence is the claim being made.
+    - name: Assert no nginx process remains
+      become: true
+      ansible.builtin.shell:
+        cmd: |
+          set -eu
+          if command -v pgrep >/dev/null 2>&1; then
+            pgrep -x nginx || true
+          else
+            pidof nginx || true
+          fi
+      register: nginx_retirement_process_probe
+      changed_when: false
+
+    - name: Fail if nginx is still running after retirement
+      ansible.builtin.assert:
+        that:
+          - nginx_retirement_process_probe.stdout | trim | length == 0
+        fail_msg: >-
+          nginx_relay_retirement_authorized is set but nginx is still running
+          ({{ nginx_retirement_process_probe.stdout | trim }}). The relay
+          retirement did not take effect and the memory was not reclaimed.
+  tags: [deploy, services, nginx, nginx_relay_retirement, phase4]

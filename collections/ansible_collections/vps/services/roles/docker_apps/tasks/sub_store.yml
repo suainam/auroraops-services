@@ -10,24 +10,8 @@
     cdp_memory: "{{ docker_apps_sub_store_memory | default('512m') }}"
     cdp_memory_reservation: "{{ docker_apps_sub_store_memory_reservation | default('64m') }}"
     cdp_dirs: ["data"]
-    # Two publishes, deliberately. The loopback one is what nginx reverse-proxies
-    # for client-facing subscriptions and stays private. The bridge one is the
-    # internal read-only path NAT nodes use over the WireGuard mesh (#137/#178),
-    # which replaces a per-node plaintext nginx relay costing 15-25 MiB each.
-    #
-    # The bridge address, not 127.0.0.1: Sub-Store runs in a container, and a
-    # container's 127.0.0.1 is itself -- a request to it times out rather than
-    # failing, which reads as a network problem instead of a binding mistake.
-    #
-    # Not added to ports.yml on purpose. This endpoint is reachable only from the
-    # container bridge; registering it in the public authority would invite the
-    # next operator to open a firewall rule for it. Its exposure is bounded by
-    # sub_store_internal_listen_interfaces instead.
-    cdp_ports: >-
-      {{ ['127.0.0.1:' ~ app_port_sub_store ~ ':3000']
-         + ([sub_store_internal_listen_address ~ ':'
-             ~ sub_store_internal_listen_port ~ ':3000']
-            if sub_store_internal_listen_enabled | default(false) | bool else []) }}
+    cdp_ports:
+      - "127.0.0.1:{{ app_port_sub_store }}:3000"
     cdp_volumes:
       - "/opt/dockers/sub_store/data:/opt/app/data"
     cdp_env:
@@ -36,12 +20,6 @@
       SUB_STORE_FRONTEND_BACKEND_PATH: "{{ sub_store_backend_path }}"
       SUB_STORE_CORS_ALLOWED_ORIGINS: "http://127.0.0.1:{{ app_port_sub_store }}"
       SUB_STORE_BACKEND_CUSTOM_NAME: "AuroraOps Sub-Store"
-      # Read-only over the internal listener. The mesh path exists so a NAT node
-      # can fetch a subscription; it must not also let that node rewrite the
-      # aggregator's provider catalog. The frontend still needs to manage its own
-      # subscriptions, so the backend's subscription-API write surface is closed
-      # rather than the whole service.
-      SUB_STORE_BACKEND_SUBSCRIPTION_API_DISABLED: "{{ 'true' if sub_store_internal_read_only | default(false) | bool else 'false' }}"
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Resolve effective Sub-Store providers
