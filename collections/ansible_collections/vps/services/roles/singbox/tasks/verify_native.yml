@@ -169,3 +169,8 @@
 # All four need the real guest. They are properties of a running host under a
 # real 5 Mbps link and a real cgroup limit, and a role task cannot observe them
 # without pretending to.
+#
+# On the mesh specifically: the SOCKS check above proves a listener is bound, and
+# a guest can pass it with a completely dead tunnel -- no handshake, no hub peer
+# entry, no packet delivered. It is a liveness check on this process, not on the
+# mesh. #179's mesh AC stays unmet until the round trip is measured on the host.
