@@ -169,39 +169,61 @@
     - not ansible_check_mode
   tags: [deploy, services, singbox, phase5]
 
-- name: Sing-box Native - Read cgroup v2 memory limit
+- name: Sing-box Native - Resolve effective memory (physical vs actual process cgroup)
   become: true
-  ansible.builtin.command: cat /sys/fs/cgroup/memory.max
-  register: singbox_cgroup_memory_max_v2
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -c
+      - |
+        # Effective memory = physical MemTotal, tightened by every finite
+        # ancestor cgroup limit of the service's own cgroup (v2 memory.max,
+        # v1 memory.limit_in_bytes). Unbounded values ('max', negative, or
+        # absurd v1 kernel defaults) simply lose the min to physical.
+        phys_kb=$(awk '/^MemTotal/{print $2}' /proc/meminfo)
+        min_kb=${phys_kb:-0}
+        [ "$min_kb" -gt 0 ] || exit 1
+        cand=/tmp/.sb_mem_cand
+        : > "$cand"
+        for procf in /proc/1/cgroup /proc/self/cgroup; do
+          [ -r "$procf" ] || continue
+          sed -n 's/^[0-9][0-9]*:[^:]*://p' "$procf" | sort -u | while read -r cg; do
+            dir="${cg:-/}"
+            while :; do
+              for f in "/sys/fs/cgroup${dir}/memory.max" "/sys/fs/cgroup${dir}/memory/memory.limit_in_bytes"; do
+                [ -r "$f" ] || continue
+                v=$(tr -d '[:space:]' < "$f")
+                case "$v" in
+                  ''|*[!0-9]*) ;;
+                  *) kb=$((v / 1024)); [ "$kb" -gt 0 ] && echo "$kb" >> "$cand" ;;
+                esac
+              done
+              [ "$dir" = "/" ] && break
+              dir=$(dirname "$dir")
+            done
+          done
+        done
+        if [ -s "$cand" ]; then
+          cmin=$(sort -n "$cand" | head -n 1)
+          [ "$cmin" -lt "$min_kb" ] && min_kb=$cmin
+        fi
+        rm -f "$cand"
+        echo $((min_kb / 1024))
+  register: singbox_effective_mem
   changed_when: false
   failed_when: false
   tags: [deploy, services, singbox, phase5]
 
-- name: Sing-box Native - Read cgroup v1 memory limit
-  become: true
-  ansible.builtin.command: cat /sys/fs/cgroup/memory/memory.limit_in_bytes
-  register: singbox_cgroup_memory_limit_v1
-  changed_when: false
-  failed_when: false
-  tags: [deploy, services, singbox, phase5]
-
-- name: Sing-box Native - Resolve effective memory (physical vs cgroup)
+- name: Sing-box Native - Record effective memory fact
   ansible.builtin.set_fact:
-    singbox_cgroup_memory_max_v2_raw: "{{ singbox_cgroup_memory_max_v2.stdout | default('') }}"
-    singbox_cgroup_memory_limit_v1_raw: "{{ singbox_cgroup_memory_limit_v1.stdout | default('') }}"
-    singbox_effective_memtotal_mb: >-
-      {%- set phys = (ansible_memtotal_mb | default(1024)) | int -%}
-      {%- set candidates = [phys] -%}
-      {%- for raw in [singbox_cgroup_memory_max_v2.stdout | default(''), singbox_cgroup_memory_limit_v1.stdout | default('')] -%}
-        {%- set trimmed = raw | trim -%}
-        {%- if trimmed.isdigit() -%}
-          {%- set mb = (trimmed | int) // 1048576 -%}
-          {%- if mb > 0 and mb < 100000000 -%}
-            {%- set _ = candidates.append(mb) -%}
-          {%- endif -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {{ candidates | min }}
+    singbox_effective_memtotal_mb: "{{ singbox_effective_mem.stdout | trim | int }}"
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Assert effective memory is sane
+  ansible.builtin.assert:
+    that:
+      - singbox_effective_memtotal_mb | int > 0
+    fail_msg: "Effective memory probe returned a non-positive value; refusing to write GOMEMLIMIT."
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box Native - Configure OpenRC environment defaults
@@ -214,9 +236,10 @@
       SINGBOX_WORKDIR={{ singbox_native_workdir }}
       export ENABLE_DEPRECATED_SPECIAL_OUTBOUNDS=true
       export ENABLE_DEPRECATED_DNS_SERVERS=true
-      # Go runtime memory targets: GOMEMLIMIT is a soft goal (~60% of the
-      # effective physical/cgroup memory, floored to MiB), not a hard RSS cap;
-      # GOGC=30 makes the GC run aggressively so a 32 MiB guest stays small.
+      # GOMEMLIMIT is a soft goal (~60% of the effective physical/cgroup
+      # memory, floored to MiB), not a hard RSS cap; GOGC=30 makes the GC
+      # run aggressively so a 32 MiB guest stays small. Applied per #175
+      # decision to every native singbox, independent of zero-rule mode.
       export GOMEMLIMIT={{ (singbox_effective_memtotal_mb | default(ansible_memtotal_mb | default(1024)) | int * 0.6) | int }}MiB
       export GOGC=30
     mode: "0644"

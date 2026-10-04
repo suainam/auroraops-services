@@ -113,17 +113,25 @@ def test_default_mode_keeps_full_rules_and_fakeip() -> None:
     assert len(relay["rule_set"]) == 2
 
 
-def test_openrc_conf_declares_dynamic_go_memory() -> None:
+def test_openrc_conf_declares_dynamic_go_memory_unconditionally() -> None:
     tasks = yaml.safe_load((ROLE / "tasks/native.yml").read_text(encoding="utf-8"))
     env_task = next(t for t in tasks if "/etc/conf.d/sing-box" in str(t.get("ansible.builtin.copy", {}).get("dest", "")))
     content = env_task["ansible.builtin.copy"]["content"]
     assert "GOGC=30" in content
     assert re.search(r"GOMEMLIMIT=\{\{.*0\.6.*\}\}MiB", content)
-    assert "ansible_memtotal_mb" in content or "singbox_effective_memtotal_mb" in content
+    assert "singbox_effective_memtotal_mb" in content
+    # #175 决策：GOMEMLIMIT=60% 有效内存、GOGC=30 为统一默认，与零规则开关无关。
+    assert "docker_apps_singbox_zero_rules" not in content
 
 
-def test_effective_memory_fact_considers_cgroup_limit() -> None:
-    native = (ROLE / "tasks" / "native.yml").read_text(encoding="utf-8")
-    assert "/sys/fs/cgroup/memory.max" in native
-    assert "memory.limit_in_bytes" in native
+def test_effective_memory_probe_walks_actual_service_cgroup() -> None:
+    native = (ROLE / "tasks/native.yml").read_text(encoding="utf-8")
+    assert "/proc/1/cgroup" in native
+    assert "/proc/self/cgroup" in native
+    assert "/sys/fs/cgroup${dir}/memory.max" in native
+    assert "/sys/fs/cgroup${dir}/memory/memory.limit_in_bytes" in native
+    # bounded ancestors: dirname loop up to the cgroup root
+    assert "dirname" in native
     assert "singbox_effective_memtotal_mb" in native
+    # probe runs by default, not gated on zero-rules
+    assert "when: docker_apps_singbox_zero_rules" not in native
