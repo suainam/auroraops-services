@@ -8,7 +8,9 @@ proves GOMEMLIMIT/GOGC reach the process.
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -113,25 +115,88 @@ def test_default_mode_keeps_full_rules_and_fakeip() -> None:
     assert len(relay["rule_set"]) == 2
 
 
-def test_openrc_conf_declares_dynamic_go_memory_unconditionally() -> None:
+def _probe_script() -> str:
     tasks = yaml.safe_load((ROLE / "tasks/native.yml").read_text(encoding="utf-8"))
-    env_task = next(t for t in tasks if "/etc/conf.d/sing-box" in str(t.get("ansible.builtin.copy", {}).get("dest", "")))
-    content = env_task["ansible.builtin.copy"]["content"]
-    assert "GOGC=30" in content
-    assert re.search(r"GOMEMLIMIT=\{\{.*0\.6.*\}\}MiB", content)
-    assert "singbox_effective_memtotal_mb" in content
-    # #175 决策：GOMEMLIMIT=60% 有效内存、GOGC=30 为统一默认，与零规则开关无关。
-    assert "docker_apps_singbox_zero_rules" not in content
+    task = next(t for t in tasks if t["name"].startswith("Sing-box Native - Resolve effective memory"))
+    return task["ansible.builtin.command"]["argv"][2]
 
 
-def test_effective_memory_probe_walks_actual_service_cgroup() -> None:
-    native = (ROLE / "tasks/native.yml").read_text(encoding="utf-8")
-    assert "/proc/1/cgroup" in native
-    assert "/proc/self/cgroup" in native
-    assert "/sys/fs/cgroup${dir}/memory.max" in native
-    assert "/sys/fs/cgroup${dir}/memory/memory.limit_in_bytes" in native
-    # bounded ancestors: dirname loop up to the cgroup root
-    assert "dirname" in native
-    assert "singbox_effective_memtotal_mb" in native
-    # probe runs by default, not gated on zero-rules
-    assert "when: docker_apps_singbox_zero_rules" not in native
+def _run_probe(root: Path, mounts: str, cgroup_lines: list[str], meminfo_kb: int = 4 * 1024 * 1024) -> int:
+    proc = root / "proc"
+    proc.mkdir(parents=True, exist_ok=True)
+    (proc / "meminfo").write_text(f"MemTotal:       {meminfo_kb} kB\n", encoding="utf-8")
+    (proc / "1").mkdir(exist_ok=True)
+    (proc / "self").mkdir(exist_ok=True)
+    (proc / "1" / "cgroup").write_text("\n".join(cgroup_lines) + "\n", encoding="utf-8")
+    (proc / "self" / "cgroup").write_text("\n".join(cgroup_lines) + "\n", encoding="utf-8")
+    (proc / "mounts").write_text(mounts, encoding="utf-8")
+    env = dict(os.environ, SB_PROC_ROOT=str(proc), SB_MOUNTS=str(proc / "mounts"))
+    out = subprocess.run(["/bin/sh", "-c", _probe_script()], capture_output=True, text=True, env=env)
+    assert out.returncode == 0, out.stderr
+    return int(out.stdout.strip())
+
+
+def test_probe_takes_v2_leaf_and_ancestor_limits(tmp_path: Path) -> None:
+    root = tmp_path / "cg2"
+    sys2 = root / "sys/fs/cgroup"
+    (sys2 / "openrc" / "sing-box").mkdir(parents=True)
+    (sys2 / "memory.max").write_text("max\n", encoding="utf-8")
+    (sys2 / "openrc" / "memory.max").write_text("134217728\n", encoding="utf-8")  # 128 MiB
+    (sys2 / "openrc" / "sing-box" / "memory.max").write_text("max\n", encoding="utf-8")
+    mounts = f"cgroup2 {sys2} cgroup2 rw,0\n"
+    assert _run_probe(root, mounts, ["0::/openrc/sing-box"]) == 128
+
+
+def test_probe_takes_v1_controller_limit_with_mount_point_first(tmp_path: Path) -> None:
+    root = tmp_path / "cg1"
+    memmount = root / "sys/fs/cgroup/memory"
+    (memmount / "docker" / "abc").mkdir(parents=True)
+    (memmount / "memory.limit_in_bytes").write_text("9223372036854771712\n", encoding="utf-8")  # kernel default
+    (memmount / "docker" / "memory.limit_in_bytes").write_text("268435456\n", encoding="utf-8")  # 256 MiB
+    (memmount / "docker" / "abc" / "memory.limit_in_bytes").write_text("max\n", encoding="utf-8")
+    mounts = f"memory {memmount} cgroup rw,memory\n"
+    assert _run_probe(root, mounts, ["5:memory:/docker/abc"]) == 256
+
+
+def test_probe_falls_back_to_physical_when_unbounded(tmp_path: Path) -> None:
+    root = tmp_path / "cgmax"
+    sys2 = root / "sys/fs/cgroup"
+    sys2.mkdir(parents=True)
+    (sys2 / "memory.max").write_text("max\n", encoding="utf-8")
+    mounts = f"cgroup2 {sys2} cgroup2 rw,0\n"
+    assert _run_probe(root, mounts, ["0::/"], meminfo_kb=1_048_576) == 1024
+
+
+def test_probe_caps_by_physical_when_cgroup_is_larger(tmp_path: Path) -> None:
+    root = tmp_path / "cgbig"
+    sys2 = root / "sys/fs/cgroup"
+    sys2.mkdir(parents=True)
+    (sys2 / "memory.max").write_text(f"{16 * 1024 * 1024 * 1024}\n", encoding="utf-8")  # 16 GiB
+    mounts = f"cgroup2 {sys2} cgroup2 rw,0\n"
+    assert _run_probe(root, mounts, ["0::/"], meminfo_kb=65_536) == 64
+
+
+def test_probe_writes_no_temporary_files(tmp_path: Path) -> None:
+    root = tmp_path / "cgclean"
+    sys2 = root / "sys/fs/cgroup"
+    sys2.mkdir(parents=True)
+    (sys2 / "memory.max").write_text("max\n", encoding="utf-8")
+    mounts = f"cgroup2 {sys2} cgroup2 rw,0\n"
+    _run_probe(root, mounts, ["0::/"], meminfo_kb=1_048_576)
+    assert [p.name for p in root.iterdir()] == ["proc", "sys"]
+
+
+def test_conf_d_renders_19MiB_for_32_mib_effective_memory() -> None:
+    tasks = yaml.safe_load((ROLE / "tasks/native.yml").read_text(encoding="utf-8"))
+    env_task = next(t for t in tasks if t.get("ansible.builtin.copy", {}).get("dest") == "/etc/conf.d/sing-box")
+    jinja2 = Environment()
+    jinja2.filters["bool"] = bool
+    rendered = jinja2.from_string(env_task["ansible.builtin.copy"]["content"]).render(
+        singbox_native_config_dir="/etc/sing-box",
+        singbox_native_workdir="/var/lib/sing-box",
+        docker_apps_singbox_zero_rules=True,
+        singbox_effective_memtotal_mb=32,
+        ansible_memtotal_mb=32,
+    )
+    assert "export GOMEMLIMIT=19MiB" in rendered
+    assert "export GOGC=30" in rendered

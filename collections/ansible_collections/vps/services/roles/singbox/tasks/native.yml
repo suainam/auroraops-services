@@ -169,51 +169,72 @@
     - not ansible_check_mode
   tags: [deploy, services, singbox, phase5]
 
-- name: Sing-box Native - Resolve effective memory (physical vs actual process cgroup)
+- name: Sing-box Native - Resolve effective memory envelope (physical vs cgroup)
   become: true
   ansible.builtin.command:
     argv:
       - /bin/sh
       - -c
       - |
-        # Effective memory = physical MemTotal, tightened by every finite
-        # ancestor cgroup limit of the service's own cgroup (v2 memory.max,
-        # v1 memory.limit_in_bytes). Unbounded values ('max', negative, or
-        # absurd v1 kernel defaults) simply lose the min to physical.
-        phys_kb=$(awk '/^MemTotal/{print $2}' /proc/meminfo)
+        # Effective memory envelope = physical MemTotal, tightened by every
+        # finite cgroup memory limit that applies to this guest's placement
+        # (PID 1 and self cgroup paths, walked up to the cgroup root).
+        # OpenRC starts sing-box from the guest's own cgroup hierarchy, so
+        # this is the constraint the process actually lives under; it is not
+        # a systemd slice lookup. Unbounded values ('max', or the huge v1
+        # kernel default) simply lose the min to physical memory.
+        # SB_* overrides exist so the behaviour is testable off-host.
+        proc_root="${SB_PROC_ROOT:-/proc}"
+        mounts="${SB_MOUNTS:-${proc_root}/mounts}"
+
+        phys_kb=$(awk '/^MemTotal/{print $2}' "${proc_root}/meminfo")
         min_kb=${phys_kb:-0}
         [ "$min_kb" -gt 0 ] || exit 1
-        cand=/tmp/.sb_mem_cand
-        : > "$cand"
-        for procf in /proc/1/cgroup /proc/self/cgroup; do
+
+        v2_mount=$(awk '$3=="cgroup2"{print $2; exit}' "$mounts")
+        v1_mount=$(awk '$3=="cgroup" && $4 ~ /(^|,)memory(,|$)/{print $2; exit}' "$mounts")
+
+        vals=""
+        for procf in "${proc_root}/1/cgroup" "${proc_root}/self/cgroup"; do
           [ -r "$procf" ] || continue
-          sed -n 's/^[0-9][0-9]*:[^:]*://p' "$procf" | sort -u | while read -r cg; do
+          for cg in $(sed -n 's/^[0-9][0-9]*:[^:]*://p' "$procf" | sort -u); do
             dir="${cg:-/}"
             while :; do
-              for f in "/sys/fs/cgroup${dir}/memory.max" "/sys/fs/cgroup${dir}/memory/memory.limit_in_bytes"; do
-                [ -r "$f" ] || continue
-                v=$(tr -d '[:space:]' < "$f")
-                case "$v" in
-                  ''|*[!0-9]*) ;;
-                  *) kb=$((v / 1024)); [ "$kb" -gt 0 ] && echo "$kb" >> "$cand" ;;
-                esac
-              done
+              if [ -n "$v2_mount" ]; then
+                for f in "${v2_mount}${dir}/memory.max"; do
+                  [ -r "$f" ] || continue
+                  v=$(tr -d '[:space:]' < "$f")
+                  case "$v" in
+                    ''|*[!0-9]*) ;;
+                    *) vals="${vals} $((v / 1024))" ;;
+                  esac
+                done
+              fi
+              if [ -n "$v1_mount" ]; then
+                for f in "${v1_mount}${dir}/memory.limit_in_bytes" "${v1_mount}${dir}/memory/memory.limit_in_bytes"; do
+                  [ -r "$f" ] || continue
+                  v=$(tr -d '[:space:]' < "$f")
+                  case "$v" in
+                    ''|*[!0-9]*) ;;
+                    *) vals="${vals} $((v / 1024))" ;;
+                  esac
+                done
+              fi
               [ "$dir" = "/" ] && break
               dir=$(dirname "$dir")
             done
           done
         done
-        if [ -s "$cand" ]; then
-          cmin=$(sort -n "$cand" | head -n 1)
-          [ "$cmin" -lt "$min_kb" ] && min_kb=$cmin
+
+        cmin=$(printf '%s\n' $vals | sort -n | head -n 1)
+        if [ -n "$cmin" ] && [ "$cmin" -gt 0 ] && [ "$cmin" -lt "$min_kb" ]; then
+          min_kb=$cmin
         fi
-        rm -f "$cand"
         echo $((min_kb / 1024))
   register: singbox_effective_mem
   changed_when: false
   failed_when: false
   tags: [deploy, services, singbox, phase5]
-
 - name: Sing-box Native - Record effective memory fact
   ansible.builtin.set_fact:
     singbox_effective_memtotal_mb: "{{ singbox_effective_mem.stdout | trim | int }}"
