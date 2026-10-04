@@ -1,7 +1,18 @@
 proxy-providers:
 {% for provider in capability_providers %}
 {% if provider.enabled | default(true) %}
-{% set prefix = provider['additional-prefix'] | default('[' ~ provider.name ~ ']') %}
+{#-
+  Prefix normalisation. `additional-prefix` reaches this template as a bare
+  string from the resolver, but the vaulted provider list carries it as a
+  single-element YAML list. Coercing that list straight to text produced the
+  literal `["hk084-resi"]` on every node, because Jinja renders a list as its
+  Python repr. Normalise here rather than trusting every writer to agree:
+  take the first element of a list, trim, and guarantee a single compact pair of
+  brackets. `(prefix ~ ' ')` below then behaves for both shapes.
+-#}
+{% set raw_prefix = provider['additional-prefix'] | default('[' ~ provider.name ~ ']') %}
+{% set flat_prefix = (raw_prefix if raw_prefix is string else (raw_prefix | first)) | string | trim %}
+{% set prefix = flat_prefix if flat_prefix.startswith('[') else '[' ~ flat_prefix ~ ']' %}
 {% set provider_id = provider['provider-id'] | default(provider.name) %}
   source-{{ provider_id }}:
     type: http
