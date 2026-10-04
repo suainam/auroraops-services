@@ -46,6 +46,13 @@
     # memory, so the transport is delegated and the role keeps the parts that
     # matter: digest verification and an atomic, idempotent install.
     remote_src: "{{ singbox_native_slim_remote_src | default(true) | bool }}"
+    # Idempotence guard. Without it this task re-copies 30 MiB on every run and
+    # reports changed forever, because nothing consumes the staged file: it stays
+    # at <dest>.new after a successful install. Skipping when it already exists is
+    # safe because the two tasks that follow still checksum it and compare the
+    # digest against singbox_native_slim_sha256 -- a corrupt staged file is still
+    # caught, it is just not re-fetched.
+    creates: "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}.new"
   # Staged, never installed straight over the running binary: a corrupt transfer
   # must not replace a working one.
   when:
