@@ -38,3 +38,134 @@
     state: started
     timeout: 5
   tags: [verify, services, singbox, phase5]
+
+# ---------------------------------------------------------------------------
+# Pilot verification seam (#179)
+# ---------------------------------------------------------------------------
+# Everything below is opt-in and asserts externally observable state rather than
+# file contents. The rule the spec sets is "assert what the host does, not what
+# the template wrote" -- a config that renders correctly and a host that runs it
+# are different claims, and only the second one is worth a verify stage.
+#
+# Each assertion is separately gated so a host opts into exactly the checks it
+# can actually satisfy. A single umbrella flag would mean a host either declares
+# the whole contract or none of it, and a host that cannot satisfy one item would
+# quietly lose the others.
+- name: Read Sing-box resident set size
+  become: true
+  ansible.builtin.shell:
+    # VmRSS is in kB. `ps` is not used because its output format is not stable
+    # across busybox and procps, and this has to work on both.
+    cmd: |
+      set -eu
+      pid=$(pidof sing-box 2>/dev/null | awk '{print $1}')
+      [ -n "$pid" ] || { echo 0; exit 0; }
+      awk '/^VmRSS/{print $2; found=1} END{exit !found}' "/proc/${pid}/status" || echo 0
+  register: singbox_native_rss_kb
+  changed_when: false
+  failed_when: false
+  when: singbox_verify_rss_max_kb | default(0) | int > 0
+  tags: [verify, services, singbox, phase5]
+
+- name: Assert Sing-box resident set size is within the declared ceiling
+  ansible.builtin.assert:
+    that:
+      - singbox_native_rss_kb.stdout | trim | int > 0
+      - singbox_native_rss_kb.stdout | trim | int <= singbox_verify_rss_max_kb | int
+    fail_msg: >-
+      sing-box RSS is {{ singbox_native_rss_kb.stdout | trim | int }} kB, above the
+      declared ceiling of {{ singbox_verify_rss_max_kb }} kB. A zero reading means
+      the process was not found at all, which is a different failure and is
+      reported as one rather than as a passing measurement.
+  when: singbox_verify_rss_max_kb | default(0) | int > 0
+  tags: [verify, services, singbox, phase5]
+
+- name: Read Sing-box listening sockets
+  become: true
+  ansible.builtin.shell:
+    # Both families, because the claim under test is about absence as much as
+    # presence: "no UDP listener" cannot be established by listing TCP.
+    cmd: |
+      set -eu
+      if command -v ss >/dev/null 2>&1; then
+        ss -lntuH 2>/dev/null || true
+      else
+        netstat -lntu 2>/dev/null || true
+      fi
+  register: singbox_native_listeners
+  changed_when: false
+  failed_when: false
+  when: singbox_verify_expected_tcp_ports is defined
+  tags: [verify, services, singbox, phase5]
+
+- name: Assert no unexpected TCP listener and no UDP listener at all
+  ansible.builtin.assert:
+    that:
+      # Every configured inbound port is actually listening. Asserting only the
+      # absence of extras would pass on a host where sing-box died and left
+      # nothing bound.
+      - singbox_verify_expected_tcp_ports | difference(
+          singbox_native_listeners.stdout
+          | regex_findall('[:.]([0-9]{2,5})\s')
+          | map('int') | list
+        ) | length == 0
+      # A UDP socket bound by sing-box means a protocol came back that this
+      # profile retired. The Mesh transport is a userspace endpoint inside the
+      # same process, so this cannot be satisfied by the tunnel itself -- see
+      # singbox_verify_allow_udp_transport for the one documented exception.
+      - singbox_verify_allow_udp_transport | default(false) | bool
+        or singbox_native_listeners.stdout is not search('udp', true)
+    fail_msg: >-
+      Listener contract violated. Expected TCP ports
+      {{ singbox_verify_expected_tcp_ports }}; observed:
+      {{ singbox_native_listeners.stdout | default('') | truncate(400) }}
+  when: singbox_verify_expected_tcp_ports is defined
+  tags: [verify, services, singbox, phase5]
+
+- name: Assert no retired protocol inbound is configured
+  ansible.builtin.assert:
+    that:
+      - singbox_native_listeners.stdout is not search('LISTEN.*:' ~ item, true)
+        or singbox_verify_expected_tcp_ports | default([]) | difference([item]) | length == 0
+    fail_msg: >-
+      Port {{ item }} is listening but is not part of the declared ingress
+      contract for this profile.
+  loop: "{{ singbox_verify_forbidden_ports | default([]) }}"
+  when: singbox_verify_forbidden_ports is defined
+  tags: [verify, services, singbox, phase5]
+
+- name: Assert the mesh SOCKS ingress this guest needs is listening
+  ansible.builtin.wait_for:
+    host: "{{ singbox_mesh_socks_listen | default('127.0.0.1') }}"
+    port: "{{ singbox_mesh_socks_port }}"
+    state: started
+    timeout: 5
+  # This is the only mesh reachability check that can be made from inside the
+  # guest, and it is deliberately that narrow. A userspace endpoint means the
+  # host's own routing table has no route to 10.144.10.0/24, so `ping` from a
+  # shell is answered by the default gateway and times out even when the tunnel
+  # is perfectly healthy -- probing that way reports a false outage and invites
+  # someone to "fix" a tunnel that was never broken. ICMP also does not traverse
+  # SOCKS.
+  #
+  # An actual round trip to the hub is a live-network claim and belongs to the
+  # production lifecycle on a real host, not to a role assertion.
+  when:
+    - singbox_mesh_socks_enabled | default(false) | bool
+    - singbox_mesh_socks_port | default('') | length > 0
+  tags: [verify, services, singbox, phase5]
+
+# What this seam deliberately does NOT assert, stated here so the gap is visible
+# in the role rather than only in a handoff:
+#
+#   * An inbound Reality handshake against an external client (#179 AC). A
+#     self-referential handshake -- sing-box dialling its own Reality listener --
+#     would prove the config parses and the socket accepts, which the tasks above
+#     already cover. Counting that as the acceptance handshake would make a green
+#     verify stage mean nothing.
+#   * Throughput, and stop-the-world pause duration under load.
+#   * WireGuard round-trip latency and loss to the hub.
+#
+# All four need the real guest. They are properties of a running host under a
+# real 5 Mbps link and a real cgroup limit, and a role task cannot observe them
+# without pretending to.
