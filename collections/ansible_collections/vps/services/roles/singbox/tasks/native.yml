@@ -1,11 +1,19 @@
 ---
+- name: Sing-box Native - Resolve the apk package list
+  # openssl exists on this guest for exactly one thing: generating the self-signed
+  # Hysteria2 certificate. A VLESS-Reality-only guest has no certificate to sign,
+  # so the dependency is dropped rather than left installed and unused. Built as a
+  # fact instead of inline so the package list has one owner.
+  ansible.builtin.set_fact:
+    singbox_native_apk_packages: >-
+      {{ ['sing-box', 'sing-box-openrc']
+         + (['openssl'] if singbox_native_self_signed_enabled | default(false) | bool else []) }}
+  tags: [deploy, services, singbox, phase5]
+
 - name: Sing-box Native - Install Alpine packages
   become: true
   community.general.apk:
-    name:
-      - sing-box
-      - sing-box-openrc
-      - openssl
+    name: "{{ singbox_native_apk_packages }}"
     state: present
   # Mutually exclusive with the slim-binary path below. A guest that supplies its
   # own binary must never also attempt the package install, because unpacking the
@@ -127,6 +135,10 @@
     path: "{{ singbox_native_config_dir }}/certs"
     state: directory
     mode: "0755"
+  # Only a self-signed Hysteria2 inbound needs this directory. Creating it on a
+  # Reality-only guest leaves an empty certs/ behind that reads like a live
+  # certificate dependency and invites the next operator to trust it.
+  when: singbox_native_self_signed_enabled | default(false) | bool
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box Native - Create persistent self-signed private key
