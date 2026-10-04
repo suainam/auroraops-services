@@ -169,6 +169,41 @@
     - not ansible_check_mode
   tags: [deploy, services, singbox, phase5]
 
+- name: Sing-box Native - Read cgroup v2 memory limit
+  become: true
+  ansible.builtin.command: cat /sys/fs/cgroup/memory.max
+  register: singbox_cgroup_memory_max_v2
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Read cgroup v1 memory limit
+  become: true
+  ansible.builtin.command: cat /sys/fs/cgroup/memory/memory.limit_in_bytes
+  register: singbox_cgroup_memory_limit_v1
+  changed_when: false
+  failed_when: false
+  tags: [deploy, services, singbox, phase5]
+
+- name: Sing-box Native - Resolve effective memory (physical vs cgroup)
+  ansible.builtin.set_fact:
+    singbox_cgroup_memory_max_v2_raw: "{{ singbox_cgroup_memory_max_v2.stdout | default('') }}"
+    singbox_cgroup_memory_limit_v1_raw: "{{ singbox_cgroup_memory_limit_v1.stdout | default('') }}"
+    singbox_effective_memtotal_mb: >-
+      {%- set phys = (ansible_memtotal_mb | default(1024)) | int -%}
+      {%- set candidates = [phys] -%}
+      {%- for raw in [singbox_cgroup_memory_max_v2.stdout | default(''), singbox_cgroup_memory_limit_v1.stdout | default('')] -%}
+        {%- set trimmed = raw | trim -%}
+        {%- if trimmed.isdigit() -%}
+          {%- set mb = (trimmed | int) // 1048576 -%}
+          {%- if mb > 0 and mb < 100000000 -%}
+            {%- set _ = candidates.append(mb) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ candidates | min }}
+  tags: [deploy, services, singbox, phase5]
+
 - name: Sing-box Native - Configure OpenRC environment defaults
   become: true
   ansible.builtin.copy:
@@ -179,6 +214,11 @@
       SINGBOX_WORKDIR={{ singbox_native_workdir }}
       export ENABLE_DEPRECATED_SPECIAL_OUTBOUNDS=true
       export ENABLE_DEPRECATED_DNS_SERVERS=true
+      # Go runtime memory targets: GOMEMLIMIT is a soft goal (~60% of the
+      # effective physical/cgroup memory, floored to MiB), not a hard RSS cap;
+      # GOGC=30 makes the GC run aggressively so a 32 MiB guest stays small.
+      export GOMEMLIMIT={{ (singbox_effective_memtotal_mb | default(ansible_memtotal_mb | default(1024)) | int * 0.6) | int }}MiB
+      export GOGC=30
     mode: "0644"
   notify: Restart singbox service
   tags: [deploy, services, singbox, phase5]

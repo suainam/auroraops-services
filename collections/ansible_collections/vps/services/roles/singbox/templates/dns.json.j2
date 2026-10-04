@@ -5,21 +5,25 @@
       { "tag": "google-dns-udp", "type": "udp", "server": "8.8.8.8" },
       { "tag": "google-dns-tcp", "type": "tcp", "server": "8.8.8.8" },
       { "tag": "ali-dns", "type": "udp", "server": "223.5.5.5" },
-      { "tag": "local-dns", "type": "local" },
+      { "tag": "local-dns", "type": "local" }
+      {%- if not (docker_apps_singbox_zero_rules | default(false) | bool) %},
       { "tag": "block-dns", "type": "fakeip", "inet4_range": "198.18.0.0/15" }
+      {%- endif %}
     ],
     "rules": [
+{%- if not (docker_apps_singbox_zero_rules | default(false) | bool) %}
 {%- if docker_apps_singbox_block_ads | default(true) %}
       { "rule_set": "geosite-category-ads-all", "server": "block-dns" },
 {%- endif %}
       { "rule_set": ["geosite-cn"], "server": "local-dns" },
+{%- endif %}
       {
         "domain_suffix": [
           "aws.amazon.com",
           "www.cloudflare.com"
         ],
         "server": "google-dns-udp"
-      }{%- if docker_apps_singbox_warp_enabled | default(false) | bool -%},
+      }{%- if docker_apps_singbox_warp_enabled | default(false) | bool and not (docker_apps_singbox_zero_rules | default(false) | bool) %},
       {
         "rule_set": [
           "geosite-openai",

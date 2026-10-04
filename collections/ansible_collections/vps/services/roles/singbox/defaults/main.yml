@@ -2,6 +2,12 @@
 singbox_enabled: true
 singbox_deploy_mode: auto
 
+# Zero-rule mode: no remote rule_set downloads/parsing, no FakeIP DNS, no
+# ruleset DNS rules. The default outbound stays direct-out and Mesh/private/
+# Relay routing is untouched. Off by default so every non-NAT node keeps its
+# full rules.
+docker_apps_singbox_zero_rules: false
+
 # Image and Binary
 singbox_image: "ghcr.io/sagernet/sing-box:v1.13.21"
 singbox_version: "1.13.11"

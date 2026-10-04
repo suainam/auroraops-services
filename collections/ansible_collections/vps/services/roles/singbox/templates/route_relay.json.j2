@@ -1,8 +1,10 @@
 {
   "route": {
     "rule_set": [
+      {%- if not (docker_apps_singbox_zero_rules | default(false) | bool) %}
       { "tag": "geosite-cn", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/cn.srs" },
       { "tag": "geosite-category-ads-all", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-ads-all.srs" }
+      {%- endif %}
     ],
     "rules": [
       { "protocol": "dns", "action": "hijack-dns" },
@@ -28,7 +30,9 @@
         ],
         "action": "reject"
       },
+      {% if not (docker_apps_singbox_zero_rules | default(false) | bool) %}
       { "rule_set": "geosite-category-ads-all", "action": "reject" },
+      {% endif %}
       {
         "inbound": [
           {%- set ns = namespace(first_tag=true) -%}
