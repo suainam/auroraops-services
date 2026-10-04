@@ -42,35 +42,26 @@
   when: nginx_internal_sub_enabled | bool
   tags: [deploy, services, nginx, nginx_site_config, phase4]
 
+# Deployed to conf.d under the name the live file already uses. Writing a
+# sites-available file plus a symlink would put a second server block on the same
+# listen addresses with the same server_name: nginx accepts that, the first block
+# wins, and the deployed file would be inert. Taking over the existing path is the
+# only way this role can own the configuration rather than shadow it.
 - name: Render the internal subscription origin site
   become: true
   ansible.builtin.template:
     src: internal_sub_alias.conf.j2
-    dest: /etc/nginx/sites-available/internal-sub.conf
+    dest: "{{ nginx_internal_sub_conf }}"
     mode: "0644"
   when: nginx_internal_sub_enabled | bool
   notify: reload nginx
   tags: [deploy, services, nginx, nginx_site_config, phase4]
 
-- name: Enable the internal subscription origin site
-  become: true
-  ansible.builtin.file:
-    src: /etc/nginx/sites-available/internal-sub.conf
-    dest: /etc/nginx/sites-enabled/internal-sub.conf
-    state: link
-    force: true
-  when: nginx_internal_sub_enabled | bool
-  notify: reload nginx
-  tags: [deploy, services, nginx, nginx_site_enable, phase4]
-
 - name: Remove the internal subscription origin site when no longer declared
   become: true
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ nginx_internal_sub_conf }}"
     state: absent
-  loop:
-    - /etc/nginx/sites-enabled/internal-sub.conf
-    - /etc/nginx/sites-available/internal-sub.conf
   when: not nginx_internal_sub_enabled | bool
   notify: reload nginx
   tags: [deploy, services, nginx, nginx_site_enable, phase4]

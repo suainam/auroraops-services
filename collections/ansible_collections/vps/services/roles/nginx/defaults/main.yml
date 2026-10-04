@@ -88,3 +88,11 @@ nginx_site_baseline_reseed: false
 nginx_site_baseline_fact_path: /etc/ansible/facts.d/nginx_site_config.fact
 nginx_site_target: ""
 nginx_site_baseline_allow_additive_reconcile: false
+
+# Where the internal read-only subscription origin is rendered.
+#
+# conf.d, not sites-available, and the name is the one the live file already has
+# on cc15 (/etc/nginx/conf.d/99-internal-sub.conf). Deploying a second server
+# block on the same listen addresses under a different name would be accepted by
+# nginx and then lose every request, which looks like the deploy did nothing.
+nginx_internal_sub_conf: /etc/nginx/conf.d/99-internal-sub.conf
