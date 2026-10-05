@@ -260,6 +260,16 @@
   tags: [deploy, services, singbox, phase5]
 
 - name: Sing-box Native - Assert effective memory is sane
+  # Skipped in check mode, and only there. The probe above is a `command`, which
+  # Ansible skips under --check, so `stdout` is empty, the fact above becomes 0,
+  # and this assertion fails on a host whose memory is perfectly fine. That made
+  # every NAT node's `nat-deploy` die in its check stage with a message that reads
+  # like a real memory fault.
+  #
+  # The fail-closed semantics are deliberately untouched for real runs: when this
+  # actually deploys, a non-positive envelope still refuses to write GOMEMLIMIT.
+  # A dry run has nothing to write, so there is nothing to protect.
+  when: not ansible_check_mode
   ansible.builtin.assert:
     that:
       - singbox_effective_memtotal_mb | int > 0
