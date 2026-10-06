@@ -16,6 +16,8 @@
 - name: Verify Sing-box native configuration parses
   become: true
   ansible.builtin.command: sing-box check -C "{{ singbox_native_config_dir }}"
+  environment:
+    GOMEMLIMIT: "15MiB"
   register: singbox_native_check
   changed_when: false
   failed_when: singbox_native_check.rc != 0
@@ -104,7 +106,7 @@
       # Every configured inbound port is actually listening. Asserting only the
       # absence of extras would pass on a host where sing-box died and left
       # nothing bound.
-      - singbox_verify_expected_tcp_ports | difference(
+      - (singbox_verify_expected_tcp_ports | map('int') | list) | difference(
           singbox_native_listeners.stdout
           | regex_findall('[:.]([0-9]{2,5})\s')
           | map('int') | list
@@ -145,7 +147,17 @@
   # completed. The data-path probe below is what actually tests the mesh.
   when:
     - singbox_mesh_socks_enabled | default(false) | bool
-    - singbox_mesh_socks_port | default('') | length > 0
+    - (singbox_mesh_socks_port | default('') | string | length) > 0
+  tags: [verify, services, singbox, phase5]
+- name: Install the mesh data-path probe onto the guest
+  become: true
+  ansible.builtin.copy:
+    src: mesh_probe.py
+    dest: "{{ singbox_native_workdir }}/mesh_probe.py"
+    mode: "0755"
+  when:
+    - singbox_verify_mesh_probe_target | default('') | length > 0
+    - not ansible_check_mode
   tags: [verify, services, singbox, phase5]
 
 - name: Probe the mesh data path through the userspace tunnel
@@ -166,32 +178,9 @@
       - "{{ singbox_verify_mesh_probe_timeout | default(8) }}"
   register: singbox_native_mesh_probe
   changed_when: false
-  # The probe opens a TCP connection to the hub THROUGH the loopback SOCKS, so the
-  # only way it can succeed is if sing-box accepted the connection, routed it into
-  # the WireGuard endpoint, encrypted it, and the far end answered.
-  #
-  # Not a ping: ICMP does not traverse SOCKS, and a direct ping to a mesh address
-  # is answered by the default gateway on these guests because the host's own
-  # routing table has no route into the subnet -- that would report a false outage
-  # on a perfectly healthy tunnel and invite someone to "repair" a tunnel that was
-  # never broken.
   when:
     - singbox_verify_mesh_probe_target | default('') | length > 0
     - singbox_mesh_socks_enabled | default(false) | bool
-  # A failed probe must fail the stage. `failed_when` is left at its default for
-  # exactly that reason: swallowing a non-zero rc here would turn "the mesh is
-  # down" into a green verify, which is the failure mode this replaces.
-  tags: [verify, services, singbox, phase5]
-
-- name: Install the mesh data-path probe onto the guest
-  become: true
-  ansible.builtin.copy:
-    src: mesh_probe.py
-    dest: "{{ singbox_native_workdir }}/mesh_probe.py"
-    mode: "0755"
-  when:
-    - singbox_verify_mesh_probe_target | default('') | length > 0
-    - not ansible_check_mode
   tags: [verify, services, singbox, phase5]
 
 # What this seam deliberately does NOT assert, stated here so the gap is visible
