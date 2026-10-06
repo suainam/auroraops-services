@@ -83,6 +83,31 @@ def test_served_mihomo_profile_uses_the_ordered_policy_and_defines_its_targets()
     assert {"🚀 默认代理", "⚡ 快速节点", "🤖 AI 服务", "🇭🇰 港澳", "⚡ 国际流媒体", "⚡ 千兆极速"} <= group_names
     # 13 remote rule-providers eliminated (#218): profile defines 0 external rule-providers
     assert "rule-providers" not in profile or len(profile.get("rule-providers", {})) == 0
+    rendered_text = template.render(synthetic_policy)
+    assert "raw.githubusercontent.com" not in rendered_text
+    assert ".mrs" not in rendered_text
+
+    # Verify preserved routing precedence and target mappings
+    assert rules.index("GEOSITE,category-ai-!cn,🤖 AI 服务") < rules.index("GEOSITE,google,🤖 AI 服务")
+    assert rules.index("GEOSITE,bilibili@!cn,🇭🇰 港澳") < rules.index("DOMAIN-SUFFIX,bilibili.com,DIRECT")
+    assert rules.index("GEOSITE,youtube,⚡ 国际流媒体") < rules.index("GEOSITE,geolocation-!cn,🚀 默认代理")
+    assert rules.index("GEOSITE,disney,⚡ 国际流媒体") < rules.index("GEOSITE,geolocation-!cn,🚀 默认代理")
+    assert rules.index("GEOSITE,netflix,⚡ 国际流媒体") < rules.index("GEOSITE,geolocation-!cn,🚀 默认代理")
+    assert rules.index("GEOSITE,spotify,⚡ 国际流媒体") < rules.index("GEOSITE,geolocation-!cn,🚀 默认代理")
+    assert rules.index("GEOSITE,telegram,⚡ 千兆极速") < rules.index("GEOSITE,geolocation-!cn,🚀 默认代理")
+    assert rules.index("GEOSITE,github,🚀 默认代理") < rules.index("GEOSITE,microsoft,DIRECT")
+    assert rules.index("GEOSITE,microsoft,DIRECT") < rules.index("GEOSITE,geolocation-!cn,🚀 默认代理")
+    assert rules.index("GEOSITE,apple,DIRECT") < rules.index("GEOSITE,geolocation-!cn,🚀 默认代理")
+    assert rules.index("GEOSITE,geolocation-!cn,🚀 默认代理") < rules.index("GEOSITE,cn,DIRECT")
+    assert rules.index("GEOSITE,cn,DIRECT") < rules.index("MATCH,🚀 默认代理")
+
+    # Verify DNS nameserver-policy consolidation
+    dns = profile["dns"]
+    assert "geosite:cn,private" in dns["nameserver-policy"]
+    assert dns["nameserver-policy"]["geosite:cn,private"] == [
+        "https://dns.alidns.com/dns-query",
+        "https://doh.pub/dns-query",
+    ]
 
 def test_verify_checks_served_profile_rule_precedence_without_logging():
     tasks = yaml.safe_load(
@@ -104,11 +129,9 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
         "🤖 AI 服务",
         "🇭🇰 港澳",
         "⚡ 千兆极速",
-        "bilibili-hmt",
-        "github",
-        "proxy-domains",
     ):
         assert required_name in structure_assertions
+    assert "rule-providers" in structure_assertions
 
     task = next(
         item
@@ -130,7 +153,7 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
         "DOMAIN,ad.com,REJECT",
         "DOMAIN-SUFFIX,doubleclick.net,REJECT",
         "DOMAIN-KEYWORD,tracker,REJECT",
-        "RULE-SET,ai-services,🤖 AI 服务",
+        "GEOSITE,category-ai-!cn,🤖 AI 服务",
         "DOMAIN-SUFFIX,googleapis.com,🤖 AI 服务",
         "DOMAIN-KEYWORD,cloudaicompanion,🤖 AI 服务",
         "DOMAIN-KEYWORD,cloudcode,🤖 AI 服务",
@@ -139,17 +162,17 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
         "DOMAIN-SUFFIX,gemini.google.com,🤖 AI 服务",
         "DOMAIN-SUFFIX,aistudio.google.com,🤖 AI 服务",
         "DOMAIN-SUFFIX,api.bilibili.com,🇭🇰 港澳",
-        "RULE-SET,bilibili-hmt,🇭🇰 港澳",
+        "GEOSITE,bilibili@!cn,🇭🇰 港澳",
         "DOMAIN-SUFFIX,bilibili.tv,🇭🇰 港澳",
         "DOMAIN-SUFFIX,bilibili.com,DIRECT",
-        "RULE-SET,youtube,⚡ 国际流媒体",
-        "RULE-SET,disney,⚡ 国际流媒体",
-        "RULE-SET,netflix,⚡ 国际流媒体",
-        "RULE-SET,spotify,⚡ 国际流媒体",
-        "RULE-SET,telegram,⚡ 千兆极速",
-        "RULE-SET,github,🚀 默认代理",
-        "RULE-SET,microsoft,DIRECT",
-        "RULE-SET,apple,DIRECT",
+        "GEOSITE,youtube,⚡ 国际流媒体",
+        "GEOSITE,disney,⚡ 国际流媒体",
+        "GEOSITE,netflix,⚡ 国际流媒体",
+        "GEOSITE,spotify,⚡ 国际流媒体",
+        "GEOSITE,telegram,⚡ 千兆极速",
+        "GEOSITE,github,🚀 默认代理",
+        "GEOSITE,microsoft,DIRECT",
+        "GEOSITE,apple,DIRECT",
         "GEOSITE,google,🤖 AI 服务",
     }
     assert process_fallback_task["no_log"] is True
@@ -178,7 +201,7 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
         "DOMAIN,ad.com,REJECT",
         "DOMAIN-SUFFIX,doubleclick.net,REJECT",
         "DOMAIN-KEYWORD,tracker,REJECT",
-        "RULE-SET,ai-services,🤖 AI 服务",
+        "GEOSITE,category-ai-!cn,🤖 AI 服务",
         "DOMAIN-SUFFIX,googleapis.com,🤖 AI 服务",
         "DOMAIN-KEYWORD,cloudaicompanion,🤖 AI 服务",
         "DOMAIN-KEYWORD,cloudcode,🤖 AI 服务",
@@ -186,26 +209,26 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
         "DOMAIN-SUFFIX,gemini.ai,🤖 AI 服务",
         "DOMAIN-SUFFIX,gemini.google.com,🤖 AI 服务",
         "DOMAIN-SUFFIX,aistudio.google.com,🤖 AI 服务",
-        "RULE-SET,youtube,⚡ 国际流媒体",
-        "RULE-SET,disney,⚡ 国际流媒体",
-        "RULE-SET,netflix,⚡ 国际流媒体",
-        "RULE-SET,spotify,⚡ 国际流媒体",
-        "RULE-SET,telegram,⚡ 千兆极速",
-        "RULE-SET,microsoft,DIRECT",
-        "RULE-SET,apple,DIRECT",
+        "GEOSITE,youtube,⚡ 国际流媒体",
+        "GEOSITE,disney,⚡ 国际流媒体",
+        "GEOSITE,netflix,⚡ 国际流媒体",
+        "GEOSITE,spotify,⚡ 国际流媒体",
+        "GEOSITE,telegram,⚡ 千兆极速",
+        "GEOSITE,microsoft,DIRECT",
+        "GEOSITE,apple,DIRECT",
     ]
     for rule in before_google:
         assert asserts_before(rule, broad_google)
 
     for rule in (
         "DOMAIN-SUFFIX,api.bilibili.com,🇭🇰 港澳",
-        "RULE-SET,bilibili-hmt,🇭🇰 港澳",
+        "GEOSITE,bilibili@!cn,🇭🇰 港澳",
         "DOMAIN-SUFFIX,bilibili.tv,🇭🇰 港澳",
     ):
         assert asserts_before(rule, broad_bilibili)
 
     for rule in (
-        "RULE-SET,github,🚀 默认代理",
+        "GEOSITE,github,🚀 默认代理",
         broad_google,
     ):
         normalized_rule = re.sub(r"\s+", "", rule)
@@ -217,7 +240,7 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
 
     for rule in (
         "DOMAIN-SUFFIX,api.bilibili.com,🇭🇰 港澳",
-        "RULE-SET,bilibili-hmt,🇭🇰 港澳",
+        "GEOSITE,bilibili@!cn,🇭🇰 港澳",
         "DOMAIN-SUFFIX,bilibili.tv,🇭🇰 港澳",
         broad_bilibili,
     ):
@@ -229,8 +252,64 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
                 for assertion in normalized_assertions
             )
 
-    assert "RULE-SET,proxy-domains,🚀 默认代理" in all_assertions
+    assert "GEOSITE,geolocation-!cn,🚀 默认代理" in all_assertions
     assert "AND,((NETWORK,UDP),(DST-PORT,443)),REJECT" in all_assertions
-    assert "RULE-SET,cn-domains,DIRECT" in all_assertions
+    assert "GEOSITE,cn,DIRECT" in all_assertions
     assert "GEOIP,CN,DIRECT" in all_assertions
     assert "NETWORK,udp,DIRECT" in all_assertions
+
+
+def test_offline_rendered_profile_passes_mihomo_validation(tmp_path):
+    """Issue #218: Rendered offline profile contains 0 remote rule-providers and validates under Mihomo."""
+    import os
+    import shutil
+    import subprocess
+    jinja2 = pytest.importorskip("jinja2")
+    import json
+
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(str(TEMPLATES)),
+        undefined=jinja2.StrictUndefined,
+    )
+    env.filters["to_json"] = json.dumps
+    template = env.get_template("sub_store_capability_profile.yaml.j2")
+    context = {
+        "docker_apps_sub_store_capability_providers": [
+            {"name": "cc15", "provider-id": "cc15", "display-group": "VPS", "enabled": True},
+            {"name": "qqg1299", "provider-id": "qqg1299", "display-group": "VPS", "enabled": True},
+            {"name": "nat-jp3", "provider-id": "nat-jp3", "display-group": "NAT", "enabled": True},
+            {"name": "hk96-resi", "provider-id": "hk96-resi", "display-group": "NAT", "enabled": True},
+            {"name": "yfjc", "provider-id": "yfjc", "display-group": "AIRPORT", "enabled": True},
+            {"name": "baipiao", "provider-id": "baipiao", "display-group": "BP", "enabled": True},
+            {"name": "sakura", "provider-id": "sakura", "display-group": "SK", "enabled": True},
+        ],
+        "singbox_domain": "stout7183.suai.eu.org",
+        "sub_store_capability_fake_ip_range": "198.19.0.0/16",
+        "sub_store_capability_source_provider_suffix": "cap-prov",
+        "sub_store_capability_private_rules": [],
+        "sub_store_capability_private_fake_ip_filter": ["+.corp.example.com"],
+        "sub_store_capability_private_tun_route_exclude_address": [],
+    }
+    rendered = template.render(context)
+    assert "raw.githubusercontent.com" not in rendered
+    assert "rule-providers" not in rendered
+
+    mihomo_bin = shutil.which("mihomo") or "/Applications/Clash Verge.app/Contents/MacOS/verge-mihomo"
+    if not os.path.exists(mihomo_bin):
+        pytest.skip(f"mihomo binary not found at {mihomo_bin}")
+
+    geodata_dir = os.path.expanduser(
+        "~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
+    )
+    if not os.path.exists(geodata_dir):
+        pytest.skip(f"Client geodata directory not found at {geodata_dir}")
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(rendered, encoding="utf-8")
+
+    res = subprocess.run(
+        [mihomo_bin, "-t", "-d", geodata_dir, "-f", str(config_file)],
+        capture_output=True,
+        text=True,
+    )
+    assert res.returncode == 0, f"Mihomo validation failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}"

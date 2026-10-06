@@ -562,7 +562,6 @@
       - docker_apps_sub_store_public_mihomo_payload['proxy-providers'].keys() | length >= 1
       - (docker_apps_sub_store_public_mihomo_payload['proxy-groups'] | type_debug) == 'list'
       - docker_apps_sub_store_public_mihomo_payload['proxy-groups'] | length >= 3
-      - (docker_apps_sub_store_public_mihomo_payload['rule-providers'] | type_debug) == 'dict'
       - >-
         (
           [
@@ -578,27 +577,7 @@
             )
           | length
         ) == 0
-      - >-
-        (
-          [
-            'ai-services',
-            'bilibili-hmt',
-            'disney',
-            'netflix',
-            'spotify',
-            'youtube',
-            'telegram',
-            'github',
-            'microsoft',
-            'apple',
-            'proxy-domains',
-            'cn-domains'
-          ]
-          | difference(
-              docker_apps_sub_store_public_mihomo_payload['rule-providers'].keys() | list
-            )
-          | length
-        ) == 0
+      - "'rule-providers' not in docker_apps_sub_store_public_mihomo_payload or (docker_apps_sub_store_public_mihomo_payload['rule-providers'] | length == 0)"
       - (docker_apps_sub_store_public_mihomo_payload['rules'] | type_debug) == 'list'
       - docker_apps_sub_store_public_mihomo_payload['rules'] | length >= 1
     fail_msg: "Public Sub-Store Mihomo profile is missing providers, proxy groups, or rules"
@@ -621,7 +600,7 @@
           :docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,category-ads-all,REJECT')
         ] == (sub_store_capability_user_rules | default([]))
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,ai-services,🤖 AI 服务')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,category-ai-!cn,🤖 AI 服务')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
         docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,category-ads-all,REJECT')
@@ -657,31 +636,31 @@
         docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,aistudio.google.com,🤖 AI 服务')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,youtube,⚡ 国际流媒体')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,youtube,⚡ 国际流媒体')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,disney,⚡ 国际流媒体')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,disney,⚡ 国际流媒体')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,netflix,⚡ 国际流媒体')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,netflix,⚡ 国际流媒体')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,spotify,⚡ 国际流媒体')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,spotify,⚡ 国际流媒体')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,telegram,⚡ 千兆极速')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,telegram,⚡ 千兆极速')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,microsoft,DIRECT')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,microsoft,DIRECT')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,apple,DIRECT')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,apple,DIRECT')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
         docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,api.bilibili.com,🇭🇰 港澳')
         < docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,bilibili.com,DIRECT')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,bilibili-hmt,🇭🇰 港澳')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,bilibili@!cn,🇭🇰 港澳')
         < docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,bilibili.com,DIRECT')
       - >-
         docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,bilibili.tv,🇭🇰 港澳')
@@ -693,7 +672,7 @@
           | select('match', '^PROCESS-NAME-REGEX,') | first
         )
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,bilibili-hmt,🇭🇰 港澳')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,bilibili@!cn,🇭🇰 港澳')
         < docker_apps_sub_store_public_mihomo_rules.index(
           docker_apps_sub_store_public_mihomo_rules
           | select('match', '^PROCESS-NAME-REGEX,') | first
@@ -717,7 +696,7 @@
           | select('match', '^PROCESS-PATH') | first
         )
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,bilibili-hmt,🇭🇰 港澳')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,bilibili@!cn,🇭🇰 港澳')
         < docker_apps_sub_store_public_mihomo_rules.index(
           docker_apps_sub_store_public_mihomo_rules
           | select('match', '^PROCESS-PATH') | first
@@ -735,10 +714,10 @@
           | select('match', '^PROCESS-PATH') | first
         )
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,github,🚀 默认代理')
-        < docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,microsoft,DIRECT')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,github,🚀 默认代理')
+        < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,microsoft,DIRECT')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,github,🚀 默认代理')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,github,🚀 默认代理')
         < docker_apps_sub_store_public_mihomo_rules.index(
           docker_apps_sub_store_public_mihomo_rules
           | select('match', '^PROCESS-NAME-REGEX,') | first
@@ -750,7 +729,7 @@
           | select('match', '^PROCESS-NAME-REGEX,') | first
         )
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,github,🚀 默认代理')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,github,🚀 默认代理')
         < docker_apps_sub_store_public_mihomo_rules.index(
           docker_apps_sub_store_public_mihomo_rules
           | select('match', '^PROCESS-PATH') | first
@@ -760,15 +739,15 @@
           docker_apps_sub_store_public_mihomo_rules
           | select('match', '^PROCESS-PATH') | first
         )
-        < docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,proxy-domains,🚀 默认代理')
+        < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,geolocation-!cn,🚀 默认代理')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,proxy-domains,🚀 默认代理')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,geolocation-!cn,🚀 默认代理')
         < docker_apps_sub_store_public_mihomo_rules.index('AND,((NETWORK,UDP),(DST-PORT,443)),REJECT')
       - >-
         docker_apps_sub_store_public_mihomo_rules.index('AND,((NETWORK,UDP),(DST-PORT,443)),REJECT')
-        < docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,cn-domains,DIRECT')
+        < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,cn,DIRECT')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('RULE-SET,cn-domains,DIRECT')
+        docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,cn,DIRECT')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOIP,CN,DIRECT')
       - >-
         docker_apps_sub_store_public_mihomo_rules.index('GEOIP,CN,DIRECT')
@@ -808,7 +787,7 @@
     - DOMAIN,ad.com,REJECT
     - DOMAIN-SUFFIX,doubleclick.net,REJECT
     - DOMAIN-KEYWORD,tracker,REJECT
-    - RULE-SET,ai-services,🤖 AI 服务
+    - GEOSITE,category-ai-!cn,🤖 AI 服务
     - DOMAIN-SUFFIX,googleapis.com,🤖 AI 服务
     - DOMAIN-KEYWORD,cloudaicompanion,🤖 AI 服务
     - DOMAIN-KEYWORD,cloudcode,🤖 AI 服务
@@ -817,17 +796,17 @@
     - DOMAIN-SUFFIX,gemini.google.com,🤖 AI 服务
     - DOMAIN-SUFFIX,aistudio.google.com,🤖 AI 服务
     - DOMAIN-SUFFIX,api.bilibili.com,🇭🇰 港澳
-    - RULE-SET,bilibili-hmt,🇭🇰 港澳
+    - GEOSITE,bilibili@!cn,🇭🇰 港澳
     - DOMAIN-SUFFIX,bilibili.tv,🇭🇰 港澳
     - DOMAIN-SUFFIX,bilibili.com,DIRECT
-    - RULE-SET,youtube,⚡ 国际流媒体
-    - RULE-SET,disney,⚡ 国际流媒体
-    - RULE-SET,netflix,⚡ 国际流媒体
-    - RULE-SET,spotify,⚡ 国际流媒体
-    - RULE-SET,telegram,⚡ 千兆极速
-    - RULE-SET,github,🚀 默认代理
-    - RULE-SET,microsoft,DIRECT
-    - RULE-SET,apple,DIRECT
+    - GEOSITE,youtube,⚡ 国际流媒体
+    - GEOSITE,disney,⚡ 国际流媒体
+    - GEOSITE,netflix,⚡ 国际流媒体
+    - GEOSITE,spotify,⚡ 国际流媒体
+    - GEOSITE,telegram,⚡ 千兆极速
+    - GEOSITE,github,🚀 默认代理
+    - GEOSITE,microsoft,DIRECT
+    - GEOSITE,apple,DIRECT
     - GEOSITE,google,🤖 AI 服务
   when: verify_docker_app_name | default('') == 'sub_store'
   no_log: true
@@ -1031,9 +1010,9 @@
       - "'DOMAIN-SUFFIX,bilibili.com,DIRECT' in docker_apps_sub_store_capability_profile_payload['rules']"
       - >-
         docker_apps_sub_store_capability_profile_payload['rules'].index(
-        'RULE-SET,bilibili-hmt,📺 B站港澳台') <
+        'GEOSITE,bilibili@!cn,📺 B站港澳台') <
         docker_apps_sub_store_capability_profile_payload['rules'].index(
-        'RULE-SET,cn-domains,DIRECT')
+        'GEOSITE,cn,DIRECT')
       - "'__FILTER_' not in docker_apps_sub_store_capability_profile.content"
     fail_msg: "Capability profile must preserve Provider boundaries, user-facing groups, runtime network policy, rules, and resolved filters"
   when:

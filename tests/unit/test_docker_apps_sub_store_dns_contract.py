@@ -60,10 +60,16 @@ def test_capability_profile_renders_cc15_dns_contract():
         "https://1.1.1.1/dns-query#🚀 默认代理",
         "https://8.8.8.8/dns-query#🚀 默认代理",
     ]
-    # Consolidated domestic policy contains cn, private, and internal domain entries in one key
-    domestic_key = next((k for k in dns["nameserver-policy"] if "geosite:cn,private" in k), None)
-    assert domestic_key is not None
-    assert dns["nameserver-policy"][domestic_key] == [
+    assert "geosite:cn,private" in dns["nameserver-policy"]
+    assert dns["nameserver-policy"]["geosite:cn,private"] == [
+        "https://dns.alidns.com/dns-query",
+        "https://doh.pub/dns-query",
+    ]
+    domestic_domains_key = next((k for k in dns["nameserver-policy"] if "+.argotunnel.com" in k), None)
+    assert domestic_domains_key is not None
+    assert "+.corp.example.com" in domestic_domains_key
+    assert "proxy.example.com" in domestic_domains_key
+    assert dns["nameserver-policy"][domestic_domains_key] == [
         "https://dns.alidns.com/dns-query",
         "https://doh.pub/dns-query",
     ]

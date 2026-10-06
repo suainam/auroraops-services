@@ -60,9 +60,6 @@ def test_profile_template_generates_bounded_clean_10_visible_groups():
             "sub_store_capability_profile/proxy_providers.yaml.j2": (
                 TEMPLATES_DIR / "proxy_providers.yaml.j2"
             ).read_text(encoding="utf-8"),
-            "sub_store_capability_profile/rule_providers.yaml.j2": (
-                TEMPLATES_DIR / "rule_providers.yaml.j2"
-            ).read_text(encoding="utf-8"),
             "sub_store_capability_profile/routing_dns.yaml.j2": f"rules:\n{rules_content}\ndns: {{}}\n",
             "sub_store_capability_profile/private_rules.yaml.j2": "",
             "sub_store_capability_profile/rules.yaml": rules_content,
@@ -128,12 +125,12 @@ def test_profile_template_generates_bounded_clean_10_visible_groups():
     assert hk_fast["hidden"] is True
     assert "hk" in hk_fast["filter"].lower()
     # 6. Assert US airport AI group uses precise regex avoiding baipiao noise
-    us_ai = group_map["🇺🇸 机场 · AI"]
+    us_ai = group_map.get("🇺🇸 US · 机场AI") or group_map["🇺🇸 机场 · AI"]
     assert us_ai["hidden"] is True
     us_ai_re = re.compile(us_ai["filter"])
     assert not us_ai_re.search("[baipiao] 白嫖机场.com-官网")
     assert not us_ai_re.search("[baipiao] 剩余流量：858.94 GB")
-    assert us_ai_re.search("[baipiao] 🇺🇸美国光速1-解锁GPT")
+    assert us_ai_re.search("[baipiao] 🇺🇸美国光速1-OpenAI")
 
     # 7. Assert SK has zero probes
     sk_group = group_map["🌸 SK"]
@@ -157,9 +154,6 @@ def test_mihomo_syntax_validation():
         {
             "sub_store_capability_profile/proxy_providers.yaml.j2": (
                 TEMPLATES_DIR / "proxy_providers.yaml.j2"
-            ).read_text(encoding="utf-8"),
-            "sub_store_capability_profile/rule_providers.yaml.j2": (
-                TEMPLATES_DIR / "rule_providers.yaml.j2"
             ).read_text(encoding="utf-8"),
             "sub_store_capability_profile/routing_dns.yaml.j2": f"rules:\n{rules_content}\ndns: {{}}\n",
             "sub_store_capability_profile/private_rules.yaml.j2": "",
