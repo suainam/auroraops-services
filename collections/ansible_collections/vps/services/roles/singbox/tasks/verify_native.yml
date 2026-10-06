@@ -145,7 +145,7 @@
   # completed. The data-path probe below is what actually tests the mesh.
   when:
     - singbox_mesh_socks_enabled | default(false) | bool
-    - singbox_mesh_socks_port | default('') | length > 0
+    - (singbox_mesh_socks_port | default('') | string | length) > 0
   tags: [verify, services, singbox, phase5]
 
 - name: Probe the mesh data path through the userspace tunnel
