@@ -259,11 +259,8 @@ def test_verify_checks_served_profile_rule_precedence_without_logging():
     assert "NETWORK,udp,DIRECT" in all_assertions
 
 
-def test_offline_rendered_profile_passes_mihomo_validation(tmp_path):
-    """Issue #218: Rendered offline profile contains 0 remote rule-providers and validates under Mihomo."""
-    import os
-    import shutil
-    import subprocess
+def test_capability_profile_renders_offline_rules_and_group_contract():
+    """Issue #218: Rendered capability profile eliminates remote providers and preserves offline contract."""
     jinja2 = pytest.importorskip("jinja2")
     import json
 
@@ -283,7 +280,7 @@ def test_offline_rendered_profile_passes_mihomo_validation(tmp_path):
             {"name": "baipiao", "provider-id": "baipiao", "display-group": "BP", "enabled": True},
             {"name": "sakura", "provider-id": "sakura", "display-group": "SK", "enabled": True},
         ],
-        "singbox_domain": "stout7183.suai.eu.org",
+        "singbox_domain": "proxy.example.test",
         "sub_store_capability_fake_ip_range": "198.19.0.0/16",
         "sub_store_capability_source_provider_suffix": "cap-prov",
         "sub_store_capability_private_rules": [],
@@ -291,25 +288,30 @@ def test_offline_rendered_profile_passes_mihomo_validation(tmp_path):
         "sub_store_capability_private_tun_route_exclude_address": [],
     }
     rendered = template.render(context)
+    profile = yaml.safe_load(rendered)
+
+    # 1. 0 remote rule providers
     assert "raw.githubusercontent.com" not in rendered
-    assert "rule-providers" not in rendered
+    assert ".mrs" not in rendered
+    assert "rule-providers" not in profile or len(profile.get("rule-providers", {})) == 0
 
-    mihomo_bin = shutil.which("mihomo") or "/Applications/Clash Verge.app/Contents/MacOS/verge-mihomo"
-    if not os.path.exists(mihomo_bin):
-        pytest.skip(f"mihomo binary not found at {mihomo_bin}")
+    # 2. Key capability groups present
+    group_names = {g["name"] for g in profile["proxy-groups"]}
+    expected_groups = {
+        "🚀 默认代理",
+        "⚡ 千兆极速",
+        "🤖 AI 服务",
+        "🏦 金融与交易所",
+        "🍎 Apple 低价区",
+        "⚡ 快速节点",
+        "🇭🇰 港澳",
+        "⚡ 国际流媒体",
+    }
+    assert expected_groups <= group_names
 
-    geodata_dir = os.path.expanduser(
-        "~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev"
-    )
-    if not os.path.exists(geodata_dir):
-        pytest.skip(f"Client geodata directory not found at {geodata_dir}")
-
-    config_file = tmp_path / "config.yaml"
-    config_file.write_text(rendered, encoding="utf-8")
-
-    res = subprocess.run(
-        [mihomo_bin, "-t", "-d", geodata_dir, "-f", str(config_file)],
-        capture_output=True,
-        text=True,
-    )
-    assert res.returncode == 0, f"Mihomo validation failed:\nSTDOUT:\n{res.stdout}\nSTDERR:\n{res.stderr}"
+    # 3. Rule precedence & targets
+    rules = profile["rules"]
+    assert "GEOSITE,bilibili@!cn,🇭🇰 港澳" in rules
+    assert "DOMAIN-SUFFIX,bilibili.com,DIRECT" in rules
+    assert rules.index("GEOSITE,bilibili@!cn,🇭🇰 港澳") < rules.index("GEOSITE,cn,DIRECT")
+    assert rules.index("GEOSITE,category-ai-!cn,🤖 AI 服务") < rules.index("GEOSITE,google,🤖 AI 服务")

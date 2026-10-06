@@ -975,26 +975,25 @@
         | select('string') | list | length ==
         docker_apps_sub_store_capability_profile_payload['proxy-providers'] | length
       - (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | type_debug) == 'list'
-      - "'🚀 默认代理' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
-      - "'🤖 AI 服务' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
-      - "'🧼 纯净节点' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
-      - "'📺 B站港澳台' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
-      - "'🛡️ 稳定优先' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
-      - "'⚡ 快速节点' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
-      - "'🌍 国际媒体' in (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)"
       - >-
-        (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)
-        | intersect(['🇭🇰 港澳 · 自动优选', '🇹🇼 台湾 · 自动优选', '🇯🇵 日本 · 自动优选',
-                     '🇸🇬 新加坡 · 自动优选', '🇺🇸 美国 · 自动优选', '🇪🇺 欧洲 · 自动优选',
-                     '🌐 其他 · 自动优选'])
-        | length == 7
-      - >-
-        (docker_apps_sub_store_capability_profile_payload['proxy-groups'] | map(attribute='name') | list)
-        | intersect(['📹 YouTube', '🎬 国际流媒体', '🎵 Spotify', '✈️ Telegram',
-                     '🐙 GitHub', 'Ⓜ️ 微软服务', '🍎 苹果服务', '🐟 漏网之鱼'])
-        | length == 8
-      - (docker_apps_sub_store_capability_profile_payload['rule-providers'] | type_debug) == 'dict'
-      - docker_apps_sub_store_capability_profile_payload['rule-providers'] | length >= 10
+        (
+          [
+            '🚀 默认代理',
+            '⚡ 快速节点',
+            '🤖 AI 服务',
+            '🇭🇰 港澳',
+            '⚡ 千兆极速',
+            '⚡ 国际流媒体',
+            '🏦 金融与交易所',
+            '🍎 Apple 低价区'
+          ]
+          | difference(
+              docker_apps_sub_store_capability_profile_payload['proxy-groups']
+              | map(attribute='name') | list
+            )
+          | length
+        ) == 0
+      - "'rule-providers' not in docker_apps_sub_store_capability_profile_payload or (docker_apps_sub_store_capability_profile_payload['rule-providers'] | length == 0)"
       - docker_apps_sub_store_capability_profile_payload['enable-process'] | bool
       - docker_apps_sub_store_capability_profile_payload['find-process-mode'] == 'always'
       - docker_apps_sub_store_capability_profile_payload['tun']['enable'] | bool
@@ -1006,11 +1005,11 @@
       - '"fallback" not in docker_apps_sub_store_capability_profile_payload["dns"]'
       - '"fallback-filter" not in docker_apps_sub_store_capability_profile_payload["dns"]'
       - "'geosite:cn' not in docker_apps_sub_store_capability_profile_payload['dns']['fake-ip-filter']"
-      - "'DOMAIN-SUFFIX,api.bilibili.com,📺 B站港澳台' in docker_apps_sub_store_capability_profile_payload['rules']"
+      - "'DOMAIN-SUFFIX,api.bilibili.com,🇭🇰 港澳' in docker_apps_sub_store_capability_profile_payload['rules']"
       - "'DOMAIN-SUFFIX,bilibili.com,DIRECT' in docker_apps_sub_store_capability_profile_payload['rules']"
       - >-
         docker_apps_sub_store_capability_profile_payload['rules'].index(
-        'GEOSITE,bilibili@!cn,📺 B站港澳台') <
+        'GEOSITE,bilibili@!cn,🇭🇰 港澳') <
         docker_apps_sub_store_capability_profile_payload['rules'].index(
         'GEOSITE,cn,DIRECT')
       - "'__FILTER_' not in docker_apps_sub_store_capability_profile.content"
