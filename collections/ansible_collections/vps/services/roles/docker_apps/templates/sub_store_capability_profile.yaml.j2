@@ -90,7 +90,7 @@ proxy-groups:
     hidden: true
   - name: "⚡ 国际流媒体"
     type: fallback
-    proxies: ["🇸🇬 SG · 极速", "🇯🇵 JP · 极速", "🇺🇸 US · 极速", "🇹🇼 TW · 极速"]
+    proxies: ["🇯🇵 JP · 极速", "🇺🇸 US · 极速", "🇸🇬 SG · 极速", "🇹🇼 TW · 极速", "🌐 紧急专线逃生通道"]
     url: {{ test_url }}
     interval: 180
     lazy: true
@@ -114,7 +114,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 千兆"
     type: fallback
     use: {{ (vps_src.items + nat_src.items + general_airport_src.items) | to_json }}
-    filter: "(?i)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*千兆"
+    filter: {{ (sub_store_routing_regexes.streaming_gigabit | default('(?i)(\\[{region}\\]|\\b{region}\\b|{flag}).*千兆(?!.*(?:窄带|备用|普通|百兆))') | replace('{region}', r.c) | replace('{flag}', r.f)) | to_json }}
     url: {{ test_url }}
     interval: 180
     lazy: true
@@ -139,7 +139,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 自建AI"
     type: fallback
     use: {{ (vps_src.items + nat_src.items) | to_json }}
-    filter: "(?i)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*(家宽|原生|静态)"
+    filter: {{ (sub_store_routing_regexes.ai_self_hosted | default('(?i)(\\[{region}\\]|\\b{region}\\b|{flag}).*(家宽|原生|静态|中继)') | replace('{region}', r.c) | replace('{flag}', r.f)) | to_json }}
     url: {{ ai_url }}
     interval: 180
     lazy: true
