@@ -61,10 +61,11 @@ def test_capability_profile_renders_cc15_dns_contract():
         "https://1.1.1.1/dns-query#🚀 默认代理",
         "https://8.8.8.8/dns-query#🚀 默认代理",
     ]
-    assert "geosite:cn,private" in dns["nameserver-policy"]
-    assert dns["nameserver-policy"]["geosite:cn,private"] == [
+    # Consolidated domestic policy contains cn, private, and internal domain entries in one key
+    domestic_key = next((k for k in dns["nameserver-policy"] if "geosite:cn,private" in k), None)
+    assert domestic_key is not None
+    assert dns["nameserver-policy"][domestic_key] == [
         "https://dns.alidns.com/dns-query",
         "https://doh.pub/dns-query",
     ]
-    assert "geosite:cn" in dns["nameserver-policy"]
     assert profile["tun"]["strict-route"] is True

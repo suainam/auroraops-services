@@ -44,7 +44,7 @@
   - DOMAIN-SUFFIX,itunes.apple.com,🍎 Apple 低价区
 
   # 明确 AI 服务
-  - RULE-SET,ai-services,🤖 AI 服务
+  - GEOSITE,category-ai-!cn,🤖 AI 服务
   - DOMAIN-SUFFIX,googleapis.com,🤖 AI 服务
   - DOMAIN-KEYWORD,cloudaicompanion,🤖 AI 服务
   - DOMAIN-KEYWORD,cloudcode,🤖 AI 服务
@@ -55,21 +55,21 @@
 
   # Bilibili API 与港澳台在通用 bilibili.com 直连规则之前。
   - DOMAIN-SUFFIX,api.bilibili.com,🇭🇰 港澳
-  - RULE-SET,bilibili-hmt,🇭🇰 港澳
+  - GEOSITE,bilibili@!cn,🇭🇰 港澳
   - DOMAIN-SUFFIX,bilibili.tv,🇭🇰 港澳
   - DOMAIN-SUFFIX,bilibili.com,DIRECT
 
   # 专项服务规则先于宽 Google、进程规则和通用代理集合。
-  - RULE-SET,youtube,⚡ 国际流媒体
-  - RULE-SET,disney,⚡ 国际流媒体
-  - RULE-SET,netflix,⚡ 国际流媒体
-  - RULE-SET,spotify,⚡ 国际流媒体
-  - RULE-SET,telegram,⚡ 千兆极速
+  - GEOSITE,youtube,⚡ 国际流媒体
+  - GEOSITE,disney,⚡ 国际流媒体
+  - GEOSITE,netflix,⚡ 国际流媒体
+  - GEOSITE,spotify,⚡ 国际流媒体
+  - GEOSITE,telegram,⚡ 千兆极速
   - IP-ASN,44907,⚡ 千兆极速,no-resolve
   - IP-ASN,62041,⚡ 千兆极速,no-resolve
-  - RULE-SET,github,🚀 默认代理
-  - RULE-SET,microsoft,DIRECT
-  - RULE-SET,apple,DIRECT
+  - GEOSITE,github,🚀 默认代理
+  - GEOSITE,microsoft,DIRECT
+  - GEOSITE,apple,DIRECT
 
   # Broad Google routing follows Google service-specific rules above.
   - GEOSITE,google,🤖 AI 服务
@@ -84,13 +84,14 @@
   - PROCESS-PATH-REGEX,(?i).*Application\\chrome.*,🚀 默认代理
 
   # General proxy-domain policy is broader than destination and process selectors.
-  - RULE-SET,proxy-domains,🚀 默认代理
+  - GEOSITE,geolocation-!cn,🚀 默认代理
 
   # QUIC guard must match UDP and destination port 443 together.
   - AND,((NETWORK,UDP),(DST-PORT,443)),REJECT
 
   # Country rules and network fallbacks stay last.
-  - RULE-SET,cn-domains,DIRECT
+  - GEOSITE,cn,DIRECT
+  - GEOSITE,private,DIRECT
   - GEOIP,CN,DIRECT
   - NETWORK,udp,DIRECT
   - MATCH,🚀 默认代理
