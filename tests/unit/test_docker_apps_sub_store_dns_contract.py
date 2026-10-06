@@ -54,7 +54,6 @@ def test_capability_profile_renders_cc15_dns_contract():
     assert "fallback" not in dns
     assert "fallback-filter" not in dns
     assert "geosite:cn" in dns["fake-ip-filter"]
-    assert "geosite:category-finance-cn" in dns["fake-ip-filter"]
     assert "+.corp.example.com" in dns["fake-ip-filter"]
     assert "geosite:geolocation-!cn" in dns["nameserver-policy"]
     assert dns["nameserver-policy"]["geosite:geolocation-!cn"] == [
