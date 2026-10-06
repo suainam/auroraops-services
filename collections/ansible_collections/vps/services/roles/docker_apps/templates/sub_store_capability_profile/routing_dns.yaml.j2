@@ -27,32 +27,17 @@ dns:
     "geosite:geolocation-!cn":
       - "https://1.1.1.1/dns-query#🚀 默认代理"
       - "https://8.8.8.8/dns-query#🚀 默认代理"
-    "geosite:cn,private":
-      - https://dns.alidns.com/dns-query
-      - https://doh.pub/dns-query
-    "geosite:cn":
-      - https://dns.alidns.com/dns-query
-      - https://doh.pub/dns-query
-    "+.argotunnel.com":
-      - https://dns.alidns.com/dns-query
-      - https://doh.pub/dns-query
-    "+.cftunnel.com":
-      - https://dns.alidns.com/dns-query
-      - https://doh.pub/dns-query
-    "{{ singbox_domain }}":
-      - https://dns.alidns.com/dns-query
-      - https://doh.pub/dns-query
     "+.stun.*":
       - 223.5.5.5
       - 119.29.29.29
-{% for domain in sub_store_capability_private_fake_ip_filter | default([]) %}
-    "{{ domain }}":
+    "geosite:cn,private":
       - https://dns.alidns.com/dns-query
       - https://doh.pub/dns-query
-{% endfor %}
+    "+.argotunnel.com,+.cftunnel.com{% if singbox_domain %},{{ singbox_domain }}{% endif %}{% for domain in sub_store_capability_private_fake_ip_filter | default([]) %},{{ domain }}{% endfor %}":
+      - https://dns.alidns.com/dns-query
+      - https://doh.pub/dns-query
   fake-ip-filter:
     - "geosite:cn"
-    - "geosite:category-finance-cn"
     - +.argotunnel.com
     - +.cftunnel.com
     - +.163.com

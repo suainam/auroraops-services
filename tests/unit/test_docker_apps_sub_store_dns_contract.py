@@ -54,7 +54,6 @@ def test_capability_profile_renders_cc15_dns_contract():
     assert "fallback" not in dns
     assert "fallback-filter" not in dns
     assert "geosite:cn" in dns["fake-ip-filter"]
-    assert "geosite:category-finance-cn" in dns["fake-ip-filter"]
     assert "+.corp.example.com" in dns["fake-ip-filter"]
     assert "geosite:geolocation-!cn" in dns["nameserver-policy"]
     assert dns["nameserver-policy"]["geosite:geolocation-!cn"] == [
@@ -66,5 +65,12 @@ def test_capability_profile_renders_cc15_dns_contract():
         "https://dns.alidns.com/dns-query",
         "https://doh.pub/dns-query",
     ]
-    assert "geosite:cn" in dns["nameserver-policy"]
+    domestic_domains_key = next((k for k in dns["nameserver-policy"] if "+.argotunnel.com" in k), None)
+    assert domestic_domains_key is not None
+    assert "+.corp.example.com" in domestic_domains_key
+    assert "proxy.example.com" in domestic_domains_key
+    assert dns["nameserver-policy"][domestic_domains_key] == [
+        "https://dns.alidns.com/dns-query",
+        "https://doh.pub/dns-query",
+    ]
     assert profile["tun"]["strict-route"] is True
