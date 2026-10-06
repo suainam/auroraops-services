@@ -272,13 +272,13 @@ def test_capability_profile_renders_offline_rules_and_group_contract():
     template = env.get_template("sub_store_capability_profile.yaml.j2")
     context = {
         "docker_apps_sub_store_capability_providers": [
-            {"name": "cc15", "provider-id": "cc15", "display-group": "VPS", "enabled": True},
-            {"name": "qqg1299", "provider-id": "qqg1299", "display-group": "VPS", "enabled": True},
-            {"name": "nat-jp3", "provider-id": "nat-jp3", "display-group": "NAT", "enabled": True},
-            {"name": "hk96-resi", "provider-id": "hk96-resi", "display-group": "NAT", "enabled": True},
-            {"name": "yfjc", "provider-id": "yfjc", "display-group": "AIRPORT", "enabled": True},
-            {"name": "baipiao", "provider-id": "baipiao", "display-group": "BP", "enabled": True},
-            {"name": "sakura", "provider-id": "sakura", "display-group": "SK", "enabled": True},
+            {"name": "vps-a", "provider-id": "vps-a", "display-group": "VPS", "enabled": True},
+            {"name": "vps-b", "provider-id": "vps-b", "display-group": "VPS", "enabled": True},
+            {"name": "nat-a", "provider-id": "nat-a", "display-group": "NAT", "enabled": True},
+            {"name": "nat-b", "provider-id": "nat-b", "display-group": "NAT", "enabled": True},
+            {"name": "airport-a", "provider-id": "airport-a", "display-group": "AIRPORT", "enabled": True},
+            {"name": "bp-a", "provider-id": "bp-a", "display-group": "BP", "enabled": True},
+            {"name": "sk-a", "provider-id": "sk-a", "display-group": "SK", "enabled": True},
         ],
         "singbox_domain": "proxy.example.test",
         "sub_store_capability_fake_ip_range": "198.19.0.0/16",
@@ -315,3 +315,7 @@ def test_capability_profile_renders_offline_rules_and_group_contract():
     assert "DOMAIN-SUFFIX,bilibili.com,DIRECT" in rules
     assert rules.index("GEOSITE,bilibili@!cn,🇭🇰 港澳") < rules.index("GEOSITE,cn,DIRECT")
     assert rules.index("GEOSITE,category-ai-!cn,🤖 AI 服务") < rules.index("GEOSITE,google,🤖 AI 服务")
+
+    # 4. DNS fake-ip-filter contract (geosite:cn bypassed from fake-ip)
+    assert "geosite:cn" in profile["dns"]["fake-ip-filter"]
+    assert "+.corp.example.com" in profile["dns"]["fake-ip-filter"]

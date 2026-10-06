@@ -1004,7 +1004,7 @@
       - docker_apps_sub_store_capability_profile_payload['dns']['proxy-server-nameserver'] == ['223.5.5.5', '119.29.29.29']
       - '"fallback" not in docker_apps_sub_store_capability_profile_payload["dns"]'
       - '"fallback-filter" not in docker_apps_sub_store_capability_profile_payload["dns"]'
-      - "'geosite:cn' not in docker_apps_sub_store_capability_profile_payload['dns']['fake-ip-filter']"
+      - "'geosite:cn' in docker_apps_sub_store_capability_profile_payload['dns']['fake-ip-filter']"
       - "'DOMAIN-SUFFIX,api.bilibili.com,🇭🇰 港澳' in docker_apps_sub_store_capability_profile_payload['rules']"
       - "'DOMAIN-SUFFIX,bilibili.com,DIRECT' in docker_apps_sub_store_capability_profile_payload['rules']"
       - >-
