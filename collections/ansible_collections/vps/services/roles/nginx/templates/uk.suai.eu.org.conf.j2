@@ -148,6 +148,7 @@ server {
     }
 
     # Provider-preserving sources consumed by the capability profile.
+{% if sub_store_capability_external_sources_enabled | default(true) | bool %}
 {% set capability_providers = sub_store_capability_providers_effective | default([]) %}
 {% for provider in capability_providers %}
 {% if provider.enabled | default(true) %}
@@ -163,6 +164,7 @@ server {
     }
 {% endif %}
 {% endfor %}
+{% endif %}
 
     # HTTPS Camouflage
     location / {
