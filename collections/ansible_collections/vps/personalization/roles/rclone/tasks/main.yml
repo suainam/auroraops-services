@@ -249,3 +249,38 @@
         group: root
         mode: "0600"
       tags: [deploy, personalization, rclone, phase2]
+
+    - name: Ensure Linux WebDAV cache directory exists
+      become: true
+      ansible.builtin.file:
+        path: "{{ rclone_webdav_linux_cache_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: rclone_webdav_enabled | default(false) | bool
+      tags: [deploy, personalization, rclone, phase2]
+
+    - name: Deploy Linux WebDAV systemd unit
+      become: true
+      ansible.builtin.template:
+        src: rclone-webdav.service.j2
+        dest: "/etc/systemd/system/{{ rclone_webdav_linux_service_name }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+      register: rclone_webdav_linux_service_result
+      when: rclone_webdav_enabled | default(false) | bool
+      tags: [deploy, personalization, rclone, phase2]
+
+    - name: Enable and restart Linux WebDAV service if updated
+      become: true
+      ansible.builtin.systemd:
+        name: "{{ rclone_webdav_linux_service_name }}"
+        state: restarted
+        enabled: true
+        daemon_reload: true
+      when:
+        - rclone_webdav_enabled | default(false) | bool
+        - rclone_webdav_linux_service_result.changed
+      tags: [deploy, personalization, rclone, phase2]

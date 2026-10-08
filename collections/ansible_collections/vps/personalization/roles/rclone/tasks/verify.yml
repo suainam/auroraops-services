@@ -62,3 +62,23 @@
     - rclone
     - rclone_verify_conf_content
     - phase2
+
+- name: 验证 WebDAV 服务健康检查 (HTTP/PROPFIND)
+  ansible.builtin.uri:
+    url: "http://{{ rclone_webdav_addr }}/"
+    method: PROPFIND
+    headers:
+      Depth: "1"
+    status_code: [200, 207]
+    timeout: 10
+  register: rclone_webdav_check
+  retries: 3
+  delay: 2
+  until: rclone_webdav_check.status in [200, 207]
+  when: rclone_webdav_enabled | default(false) | bool
+  tags:
+    - verify
+    - personalization
+    - rclone
+    - rclone_verify_webdav
+    - phase2

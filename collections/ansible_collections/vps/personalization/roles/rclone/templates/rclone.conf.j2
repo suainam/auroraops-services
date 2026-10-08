@@ -9,7 +9,12 @@ type = drive
 scope = drive
 token = {{ rclone_gdrive_token }}
 use_trash = false
-
+{% if rclone_gdrive_client_id | default('') | length > 0 %}
+client_id = {{ rclone_gdrive_client_id }}
+{% endif %}
+{% if rclone_gdrive_client_secret | default('') | length > 0 %}
+client_secret = {{ rclone_gdrive_client_secret }}
+{% endif %}
 # Include user-defined configuration snippets when configured.
 {% if rclone_include_user_configs | default(true) %}
 {% if ansible_system == 'Darwin' %}
