@@ -34,7 +34,7 @@ proxies: []
   {% endif %}
 {% endfor %}
 {% set test_url = 'https://www.gstatic.com/generate_204' %}
-{% set ai_url   = 'https://chatgpt.com/cdn-cgi/trace' %}
+{% set ai_url   = 'https://www.cloudflare.com/cdn-cgi/trace' %}
 {% set regions = [{'c': 'HK', 'f': '🇭🇰'}, {'c': 'TW', 'f': '🇹🇼'}, {'c': 'JP', 'f': '🇯🇵'}, {'c': 'SG', 'f': '🇸🇬'}, {'c': 'US', 'f': '🇺🇸'}] %}
 
 proxy-groups:
@@ -134,6 +134,7 @@ proxy-groups:
     proxies: ["{{ r.f }} {{ r.c }} · 自建AI", "{{ r.f }} {{ r.c }} · 机场AI"]
     url: {{ ai_url }}
     interval: 180
+    timeout: 5000
     lazy: true
     hidden: true
   - name: "{{ r.f }} {{ r.c }} · 自建AI"
@@ -142,6 +143,7 @@ proxy-groups:
     filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*(家宽|原生|静态|中继)"
     url: {{ ai_url }}
     interval: 180
+    timeout: 5000
     lazy: true
     hidden: true
   - name: "{{ r.f }} {{ r.c }} · 机场AI"
@@ -150,6 +152,7 @@ proxy-groups:
     filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*AI"
     url: {{ ai_url }}
     interval: 180
+    timeout: 5000
     lazy: true
     hidden: true
 {% endfor %}

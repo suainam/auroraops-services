@@ -48,6 +48,10 @@
   - DOMAIN-SUFFIX,googleapis.com,🤖 AI 服务
   - DOMAIN-KEYWORD,cloudaicompanion,🤖 AI 服务
   - DOMAIN-KEYWORD,cloudcode,🤖 AI 服务
+  - DOMAIN-SUFFIX,chatgpt.com,🤖 AI 服务
+  - DOMAIN-SUFFIX,openai.com,🤖 AI 服务
+  - DOMAIN-SUFFIX,claude.ai,🤖 AI 服务
+  - DOMAIN-SUFFIX,anthropic.com,🤖 AI 服务
   - DOMAIN-SUFFIX,chat.openai.com,🤖 AI 服务
   - DOMAIN-SUFFIX,gemini.ai,🤖 AI 服务
   - DOMAIN-SUFFIX,gemini.google.com,🤖 AI 服务
