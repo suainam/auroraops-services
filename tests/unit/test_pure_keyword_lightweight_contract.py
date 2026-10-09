@@ -1,5 +1,7 @@
 """Contract tests for Data-Driven Keyword Grouping (#29, #46, #47, #48)."""
 
+import os
+import sys
 import json
 import re
 from pathlib import Path
@@ -54,13 +56,16 @@ def test_profile_template_generates_bounded_clean_10_visible_groups():
     ).read_text(encoding="utf-8")
 
     rules_content = (TEMPLATES_DIR / "rules.yaml").read_text(encoding="utf-8")
+    routing_dns_content = (TEMPLATES_DIR / "rules.yaml.j2").read_text(encoding="utf-8")
+    dns_content = (TEMPLATES_DIR / "dns.yaml.j2").read_text(encoding="utf-8")
 
     loader = jinja2.DictLoader(
         {
             "sub_store_capability_profile/proxy_providers.yaml.j2": (
                 TEMPLATES_DIR / "proxy_providers.yaml.j2"
             ).read_text(encoding="utf-8"),
-            "sub_store_capability_profile/routing_dns.yaml.j2": f"rules:\n{rules_content}\ndns: {{}}\n",
+            "sub_store_capability_profile/rules.yaml.j2": routing_dns_content,
+            "sub_store_capability_profile/dns.yaml.j2": dns_content,
             "sub_store_capability_profile/private_rules.yaml.j2": "",
             "sub_store_capability_profile/rules.yaml": rules_content,
         }
@@ -149,13 +154,15 @@ def test_mihomo_syntax_validation():
     ).read_text(encoding="utf-8")
 
     rules_content = (TEMPLATES_DIR / "rules.yaml").read_text(encoding="utf-8")
-
+    routing_dns_content = (TEMPLATES_DIR / "rules.yaml.j2").read_text(encoding="utf-8")
+    dns_content = (TEMPLATES_DIR / "dns.yaml.j2").read_text(encoding="utf-8")
     loader = jinja2.DictLoader(
         {
             "sub_store_capability_profile/proxy_providers.yaml.j2": (
                 TEMPLATES_DIR / "proxy_providers.yaml.j2"
             ).read_text(encoding="utf-8"),
-            "sub_store_capability_profile/routing_dns.yaml.j2": f"rules:\n{rules_content}\ndns: {{}}\n",
+            "sub_store_capability_profile/rules.yaml.j2": routing_dns_content,
+            "sub_store_capability_profile/dns.yaml.j2": dns_content,
             "sub_store_capability_profile/private_rules.yaml.j2": "",
             "sub_store_capability_profile/rules.yaml": rules_content,
         }
@@ -177,6 +184,7 @@ def test_mihomo_syntax_validation():
         docker_apps_sub_store_capability_providers=providers,
         singbox_domain="uk.suai.eu.org",
         sub_store_capability_source_provider_suffix="cap-prov",
+        sub_store_capability_fake_ip_range="198.19.0.0/16",
     )
 
     with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
@@ -184,10 +192,20 @@ def test_mihomo_syntax_validation():
         tmp_name = f.name
 
     import shutil
-    mihomo_bin = shutil.which("mihomo") or "/opt/homebrew/bin/mihomo"
-    if not Path(mihomo_bin).exists():
+    mihomo_bin = (
+        shutil.which("mihomo")
+        or os.environ.get("CLASH_VERGE_MIHOMO_BIN")
+        or ("/opt/homebrew/bin/mihomo" if Path("/opt/homebrew/bin/mihomo").exists() else None)
+    )
+    if not mihomo_bin and sys.platform == "darwin":
+        app_bundle = Path("/Applications/Clash Verge.app/Contents/MacOS")
+        mihomo_bin = next(
+            (str(path) for path in (app_bundle / "verge-mihomo", app_bundle / "verge-mihomo-alpha") if path.is_file()),
+            None,
+        )
+    if not mihomo_bin:
         Path(tmp_name).unlink()
-        pytest.skip("mihomo binary not installed in test environment")
+        pytest.skip("Mihomo binary not installed; set CLASH_VERGE_MIHOMO_BIN to run syntax validation")
     res = subprocess.run([mihomo_bin, "-t", "-f", tmp_name], capture_output=True, text=True)
     Path(tmp_name).unlink()
     assert res.returncode == 0, f"Mihomo syntax check failed:\n{res.stdout}\n{res.stderr}"
