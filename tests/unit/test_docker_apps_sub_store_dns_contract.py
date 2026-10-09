@@ -18,7 +18,7 @@ def _regex_replace(value: str, pattern: str, replacement: str) -> str:
     return re.sub(pattern, replacement, value)
 
 
-def test_capability_profile_renders_cc15_dns_contract():
+def test_client_capability_profile_renders_dns_contract_without_app_managed_tun():
     environment = jinja2.Environment(
         loader=jinja2.FileSystemLoader(str(TEMPLATE_ROOT)),
         undefined=jinja2.StrictUndefined,
@@ -33,13 +33,13 @@ def test_capability_profile_renders_cc15_dns_contract():
         singbox_domain="proxy.example.com",
         sub_store_capability_private_rules=[],
         sub_store_capability_private_fake_ip_filter=["+.corp.example.com"],
-        sub_store_capability_private_tun_route_exclude_address=[],
     )
     try:
         profile = yaml.safe_load(rendered)
     except yaml.scanner.ScannerError as exc:
         pytest.fail(f"PyYAML ScannerError encountered while parsing rendered template: {exc}")
     assert isinstance(profile, dict)
+    assert "tun" not in profile
 
     dns = profile["dns"]
 
@@ -73,4 +73,3 @@ def test_capability_profile_renders_cc15_dns_contract():
         "https://dns.alidns.com/dns-query",
         "https://doh.pub/dns-query",
     ]
-    assert profile["tun"]["strict-route"] is True

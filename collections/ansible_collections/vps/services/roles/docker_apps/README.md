@@ -288,7 +288,7 @@ CLIProxyAPI 的 Antigravity 请求同时存在两个相互独立的概念：
           * **极速三级闭环**：`专线 ➔ 千兆 ➔ 普通`，机场未打标常规节点自动落入 `普通` 兜底，专线全灭时普通节点自动接管，绝不熔断。
           * **AI 与金融严格隔离**：严禁 `DIRECT`；AI 优先调度纯净自建家宽/原生，机场 AI 兜底；金融绝对物理隔离商业机场，仅限自建纯净节点。
           * **国际流媒体**：专属排除香港落地（`新 ➔ 日 ➔ 美 ➔ 台`）。
-        - **单真源分发**：Mihomo profile 统一由 `sub_store_capability_profile.yaml.j2` 驱动，杜绝多份模板漂移。
+        - **Profile 模板职责分离**：客户端 capability profile（`sub_store_capability_profile.yaml.j2`）负责 providers、groups、rules 和 DNS，不输出 Clash Verge 接管的 TUN 字段；服务器 Mihomo profile 在共享客户端配置上追加 `sub_store_capability_profile/tun.yaml.j2`，由它唯一维护服务器 TUN 排除地址。
     *   **New API Suite**:
         -   整合了 New API 和 Neko API Key Tool (查询工具)。
         -   使用 Docker Compose 进行原子化管理。

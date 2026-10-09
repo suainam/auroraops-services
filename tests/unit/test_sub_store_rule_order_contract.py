@@ -20,17 +20,11 @@ def test_rendered_rules_keep_private_and_specific_routes_ahead_of_fallbacks():
         loader=jinja2.FileSystemLoader(str(TEMPLATES)),
         undefined=jinja2.StrictUndefined,
     )
-    template = env.get_template("sub_store_capability_profile/routing_dns.yaml.j2")
-    rendered = template.render(
+    rendered = env.get_template("sub_store_capability_profile/rules.yaml.j2").render(
         {
             "sub_store_capability_user_rules": [
                 "DOMAIN-SUFFIX,private-example.test,DIRECT",
             ],
-            "sub_store_capability_user_fake_ip_filter": [
-                "+.private-example.test",
-            ],
-            "sub_store_capability_fake_ip_range": "198.19.0.0/16",
-            "singbox_domain": "proxy.example.test",
         }
     )
     profile = yaml.safe_load(rendered)
@@ -38,11 +32,7 @@ def test_rendered_rules_keep_private_and_specific_routes_ahead_of_fallbacks():
     raw_shared_rules = yaml.safe_load(
         (TEMPLATES / "sub_store_capability_profile/rules.yaml").read_text(encoding="utf-8")
     )
-    expected_rules = [
-        "DOMAIN-SUFFIX,private-example.test,DIRECT",
-    ] + raw_shared_rules
-    assert rules == expected_rules
-    assert "+.private-example.test" in profile["dns"]["fake-ip-filter"]
+    assert rules == ["DOMAIN-SUFFIX,private-example.test,DIRECT"] + raw_shared_rules
 
 
 def test_served_mihomo_profile_uses_the_ordered_policy_and_defines_its_targets():
@@ -53,8 +43,10 @@ def test_served_mihomo_profile_uses_the_ordered_policy_and_defines_its_targets()
         undefined=jinja2.StrictUndefined,
     )
     env.filters["to_json"] = json.dumps
+    client_template = env.get_template("sub_store_capability_profile.yaml.j2")
     template = env.get_template("sub_store_mihomo_profile.yaml.j2")
     synthetic_policy = {
+        "docker_apps_sub_store_capability_providers": [],
         "singbox_domain": "proxy.example.test",
         "sub_store_mihomo_provider_suffix": "provider-example.yaml",
         "sub_store_capability_user_rules": [
@@ -65,12 +57,24 @@ def test_served_mihomo_profile_uses_the_ordered_policy_and_defines_its_targets()
         ],
         "sub_store_capability_fake_ip_range": "198.19.0.0/16",
     }
-    profile = yaml.safe_load(template.render(synthetic_policy))
+    profile = yaml.safe_load(client_template.render(synthetic_policy))
+    server_profile = yaml.safe_load(template.render(synthetic_policy))
     shared_policy = yaml.safe_load(
-        env.get_template("sub_store_capability_profile/routing_dns.yaml.j2").render(
+        env.get_template("sub_store_capability_profile/rules.yaml.j2").render(
             synthetic_policy
         )
     )
+    assert "tun" not in profile
+    assert server_profile["tun"]["route-exclude-address"] == [
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "169.254.0.0/16",
+        "224.0.0.0/4",
+        "60.188.233.97/32",
+        "124.160.141.98/32",
+        "183.3.205.13/32",
+    ]
 
     rules = profile["rules"]
     assert rules == shared_policy["rules"]
@@ -289,6 +293,25 @@ def test_capability_profile_renders_offline_rules_and_group_contract():
     }
     rendered = template.render(context)
     profile = yaml.safe_load(rendered)
+    assert "tun" not in profile
+    server_context = {
+        **context,
+        "sub_store_capability_private_tun_route_exclude_address": ["192.0.2.42/32"],
+    }
+    server_profile = yaml.safe_load(
+        env.get_template("sub_store_mihomo_profile.yaml.j2").render(server_context)
+    )
+    assert server_profile["tun"]["route-exclude-address"] == [
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "169.254.0.0/16",
+        "224.0.0.0/4",
+        "60.188.233.97/32",
+        "124.160.141.98/32",
+        "183.3.205.13/32",
+        "192.0.2.42/32",
+    ]
 
     # 1. 0 remote rule providers
     assert "raw.githubusercontent.com" not in rendered

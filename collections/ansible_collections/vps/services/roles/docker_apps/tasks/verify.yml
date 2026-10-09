@@ -580,6 +580,9 @@
       - "'rule-providers' not in docker_apps_sub_store_public_mihomo_payload or (docker_apps_sub_store_public_mihomo_payload['rule-providers'] | length == 0)"
       - (docker_apps_sub_store_public_mihomo_payload['rules'] | type_debug) == 'list'
       - docker_apps_sub_store_public_mihomo_payload['rules'] | length >= 1
+      - docker_apps_sub_store_public_mihomo_payload['tun']['enable'] | bool
+      - docker_apps_sub_store_public_mihomo_payload['tun']['stack'] == 'mixed'
+      - "'172.16.0.0/12' in docker_apps_sub_store_public_mihomo_payload['tun']['route-exclude-address']"
     fail_msg: "Public Sub-Store Mihomo profile is missing providers, proxy groups, or rules"
   when: verify_docker_app_name | default('') == 'sub_store'
   no_log: true
@@ -996,9 +999,6 @@
       - "'rule-providers' not in docker_apps_sub_store_capability_profile_payload or (docker_apps_sub_store_capability_profile_payload['rule-providers'] | length == 0)"
       - docker_apps_sub_store_capability_profile_payload['enable-process'] | bool
       - docker_apps_sub_store_capability_profile_payload['find-process-mode'] == 'always'
-      - docker_apps_sub_store_capability_profile_payload['tun']['enable'] | bool
-      - docker_apps_sub_store_capability_profile_payload['tun']['stack'] == 'mixed'
-      - "'172.16.0.0/12' in docker_apps_sub_store_capability_profile_payload['tun']['route-exclude-address']"
       - docker_apps_sub_store_capability_profile_payload['dns']['respect-rules'] | bool
       - docker_apps_sub_store_capability_profile_payload['dns']['nameserver'][:2] == ['223.5.5.5', '119.29.29.29']
       - docker_apps_sub_store_capability_profile_payload['dns']['proxy-server-nameserver'] == ['223.5.5.5', '119.29.29.29']
