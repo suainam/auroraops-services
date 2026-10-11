@@ -65,7 +65,8 @@
   ansible.builtin.command:
     argv:
       - grep
-      - "listen_addresses = '{{ postgresql_listen_addresses }}'"
+      - -E
+      - "^\\s*listen_addresses\\s*=\\s*'({{ postgresql_listen_addresses }}|\\*)'"
       - "/etc/postgresql/{{ postgresql_version }}/main/postgresql.conf"
   register: postgresql_pg_conf_check
   changed_when: false
