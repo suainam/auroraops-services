@@ -1,0 +1,17 @@
+---
+- name: "[Redis] Check redis-server binary presence"
+  become: true
+  ansible.builtin.command: which redis-server
+  register: redis_preflight_binary
+  failed_when: false
+  changed_when: false
+  tags: [preflight, applications, redis, phase4]
+
+- name: "[Redis] Gather service facts for preflight"
+  ansible.builtin.service_facts:
+  tags: [preflight, applications, redis, phase4]
+
+- name: "[Redis] Summarize preflight status"
+  ansible.builtin.debug:
+    msg: "RedisInstalled={{ redis_preflight_binary.rc == 0 }} ServicePresent={{ 'redis-server.service' in ansible_facts.services }}"
+  tags: [preflight, applications, redis, phase4]

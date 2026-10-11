@@ -1,0 +1,17 @@
+---
+- name: "[Nginx] Check nginx binary and service state"
+  become: true
+  ansible.builtin.command: which nginx
+  register: nginx_preflight_binary
+  failed_when: false
+  changed_when: false
+  tags: [preflight, services, nginx, phase4]
+
+- name: "[Nginx] Gather service facts for preflight"
+  ansible.builtin.service_facts:
+  tags: [preflight, services, nginx, phase4]
+
+- name: "[Nginx] Summarize preflight status"
+  ansible.builtin.debug:
+    msg: "NginxBinary={{ nginx_preflight_binary.rc == 0 }} ServicePresent={{ 'nginx.service' in ansible_facts.services }}"
+  tags: [preflight, services, nginx, phase4]

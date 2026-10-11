@@ -1,0 +1,14 @@
+---
+- name: "[PostgreSQL] Verify managed logrotate fragment is removed after rollback"
+  become: true
+  ansible.builtin.stat:
+    path: "{{ postgresql_logrotate_config_path }}"
+  register: postgresql_rollback_logrotate_stat
+  tags: [rollback_verify, applications, postgresql, phase4]
+
+- name: "[PostgreSQL] Assert PostgreSQL logrotate fragment was cleaned up"
+  ansible.builtin.assert:
+    that:
+      - not postgresql_rollback_logrotate_stat.stat.exists
+    fail_msg: "PostgreSQL logrotate fragment still present after rollback"
+  tags: [rollback_verify, applications, postgresql, phase4]

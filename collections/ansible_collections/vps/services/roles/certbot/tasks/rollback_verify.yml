@@ -1,0 +1,21 @@
+---
+- name: "[Certbot] Verify existing TLS certificates remain preserved after rollback"
+  become: true
+  ansible.builtin.stat:
+    path: /etc/letsencrypt/live
+  register: certbot_rollback_live_stat
+  tags: [rollback_verify, services, certbot, phase3]
+
+- name: "[Certbot] Verify managed logrotate fragment is removed after rollback"
+  become: true
+  ansible.builtin.stat:
+    path: "{{ certbot_logrotate_config_path }}"
+  register: certbot_rollback_logrotate_stat
+  tags: [rollback_verify, services, certbot, phase3]
+
+- name: "[Certbot] Assert rollback preserved certificates and cleaned managed config"
+  ansible.builtin.assert:
+    that:
+      - not certbot_rollback_logrotate_stat.stat.exists
+    fail_msg: "Certbot logrotate fragment was not cleaned up during rollback"
+  tags: [rollback_verify, services, certbot, phase3]
