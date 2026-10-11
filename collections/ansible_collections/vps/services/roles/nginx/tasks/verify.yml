@@ -304,6 +304,35 @@
     - nginx_verify_port_443
     - phase4
 
+
+- name: Check internal subscription origin systemd drop-in exists
+  become: true
+  ansible.builtin.stat:
+    path: /etc/systemd/system/nginx.service.d/internal-sub-deps.conf
+  register: nginx_verify_internal_sub_dropin
+  when:
+    - (sub_store_internal_listen_enabled | default(false) | bool)
+    - (ansible_service_mgr | default('systemd')) == 'systemd'
+  tags: [verify, services, nginx, nginx_site_config, phase4]
+
+- name: Assert internal subscription origin systemd drop-in is present
+  ansible.builtin.assert:
+    that:
+      - nginx_verify_internal_sub_dropin.stat.exists
+    fail_msg: "Missing /etc/systemd/system/nginx.service.d/internal-sub-deps.conf"
+  when:
+    - (sub_store_internal_listen_enabled | default(false) | bool)
+    - (ansible_service_mgr | default('systemd')) == 'systemd'
+  tags: [verify, services, nginx, nginx_site_config, phase4]
+
+- name: Verify internal subscription origin port is listening on loopback
+  ansible.builtin.wait_for:
+    port: "{{ sub_store_internal_listen_port | default(8081) }}"
+    host: 127.0.0.1
+    state: started
+    timeout: 2
+  when: sub_store_internal_listen_enabled | default(false) | bool
+  tags: [verify, services, nginx, nginx_site_config, phase4]
 - name: Check OpenRC Nginx service state
   become: true
   ansible.builtin.command: rc-service nginx status
