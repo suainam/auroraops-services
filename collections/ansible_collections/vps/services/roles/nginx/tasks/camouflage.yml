@@ -15,5 +15,11 @@
       ansible.posix.synchronize:
         src: "camouflage/"
         dest: "/var/www/camouflage/"
+        archive: false
         recursive: true
+        checksum: true
         delete: true
+        owner: false
+        group: false
+        perms: false
+        times: false
