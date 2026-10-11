@@ -1,0 +1,112 @@
+---
+- name: Validate workbuddy2api secrets are defined
+  ansible.builtin.assert:
+    that:
+      - docker_apps_workbuddy2api_panel_password is defined
+      - docker_apps_workbuddy2api_panel_password | string | length > 0
+    fail_msg: >-
+      workbuddy2api panel password must be defined in Ansible Vault.
+  no_log: true
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+- name: Ensure workbuddy2api host directories
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ docker_apps_docker_user_uid }}"
+    group: "{{ docker_apps_docker_user_gid }}"
+    mode: "0750"
+  loop:
+    - "{{ docker_apps_workbuddy2api_data_dir }}/accounts"
+    - "{{ docker_apps_workbuddy2api_data_dir }}/usage"
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+- name: Check workbuddy2api settings file
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_apps_workbuddy2api_data_dir }}/accounts/settings.json"
+  register: _wb_settings_stat
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+- name: Seed workbuddy2api initial settings
+  become: true
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        import sys, json, hashlib, secrets
+        accounts_file = sys.argv[1]
+        password = sys.argv[2]
+        api_key = sys.argv[3]
+        salt = secrets.token_hex(16)
+        rounds = 120000
+        pwd_hash = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt), rounds).hex()
+        data = {
+            "panel_password_hash": pwd_hash,
+            "panel_password_salt": salt,
+            "panel_password_rounds": rounds,
+            "panel_password_default": False,
+            "api_key": api_key,
+            "api_key_set": bool(api_key),
+        }
+        with open(accounts_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+      - "{{ docker_apps_workbuddy2api_data_dir }}/accounts/settings.json"
+      - "{{ docker_apps_workbuddy2api_panel_password }}"
+      - "{{ docker_apps_workbuddy2api_api_key }}"
+  when: not _wb_settings_stat.stat.exists
+  no_log: true
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+- name: Ensure workbuddy2api settings permissions
+  become: true
+  ansible.builtin.file:
+    path: "{{ docker_apps_workbuddy2api_data_dir }}/accounts/settings.json"
+    owner: "{{ docker_apps_docker_user_uid }}"
+    group: "{{ docker_apps_docker_user_gid }}"
+    mode: "0600"
+  when: not _wb_settings_stat.stat.exists
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+- name: Deploy workbuddy2api
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+    apply:
+      tags:
+        - workbuddy2api
+  vars:
+    cdp_name: "workbuddy2api"
+    cdp_image: "{{ docker_apps_workbuddy2api_image }}"
+    cdp_pull: "{{ docker_apps_workbuddy2api_pull | default(false) | bool }}"
+    container_deployer_cdp_pull: "{{ docker_apps_workbuddy2api_pull | default(false) | bool }}"
+    cdp_dirs: ["accounts", "usage"]
+    cdp_dir_owner: "{{ docker_apps_docker_user_uid }}"
+    cdp_dir_group: "{{ docker_apps_docker_user_gid }}"
+    cdp_dir_mode: "0750"
+    cdp_memory: "{{ docker_apps_workbuddy2api_memory }}"
+    cdp_cpus: "{{ docker_apps_workbuddy2api_cpus }}"
+    cdp_memory_reservation: "{{ docker_apps_workbuddy2api_memory_reservation }}"
+    cdp_restart_policy: "unless-stopped"
+    cdp_networks: [{name: "sweb"}]
+    cdp_ports:
+      - "127.0.0.1:{{ docker_apps_app_port_workbuddy2api }}:8788"
+    cdp_volumes:
+      - "{{ docker_apps_workbuddy2api_data_dir }}/accounts:/app/accounts"
+      - "{{ docker_apps_workbuddy2api_data_dir }}/usage:/app/usage"
+    cdp_env:
+      TZ: "Asia/Shanghai"
+      HOST: "0.0.0.0"
+      PORT: "8788"
+    cdp_healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8788/health', timeout=3)"
+      interval: 1800s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]

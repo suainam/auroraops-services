@@ -30,6 +30,7 @@
         - hysteria2_client
         - ds2api
         - vertex
+        - workbuddy2api
         - phase5
 
     - name: 加载 Docker Apps 公共准备任务
@@ -51,6 +52,7 @@
         - opcotoai_toolkit
         - hysteria2_client
         - vertex
+        - workbuddy2api
         - phase5
 
     - name: 加载 Docker Apps 数据恢复任务
@@ -66,6 +68,11 @@
       ansible.builtin.import_tasks: ds2api.yml
       when: "'ds2api' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'ds2api')"
       tags: [deploy, services, docker_apps, ds2api, phase5]
+
+    - name: 加载 workbuddy2api 部署任务
+      ansible.builtin.import_tasks: workbuddy2api.yml
+      when: "'workbuddy2api' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'workbuddy2api')"
+      tags: [deploy, services, docker_apps, workbuddy2api, phase5]
 
     - name: 加载 Vertex AI Proxy 部署任务
       ansible.builtin.import_tasks: vertex.yml
