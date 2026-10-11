@@ -67,7 +67,7 @@
     owner: "{{ docker_apps_docker_user_uid }}"
     group: "{{ docker_apps_docker_user_gid }}"
     mode: "0600"
-  when: _wb_settings_stat.stat.exists or not ansible_check_mode
+  when: not ansible_check_mode or _wb_settings_stat.stat.exists
   tags: [deploy, services, docker_apps, workbuddy2api, phase5]
 
 - name: Deploy workbuddy2api
