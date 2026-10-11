@@ -74,7 +74,7 @@ proxy-groups:
   - name: "🌸 SK"
     type: select
     use: {{ all_airport_src.items | to_json }}
-    filter: "(?i)\\[SK\\](?!.*(?:剩余流量|套餐到期))"
+    filter: "(?i)^(?!.*(?:剩余流量|套餐到期)).*\\[SK\\]"
 
   - name: "💰 低倍率走廊"
     type: select
@@ -122,7 +122,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 普通"
     type: fallback
     use: {{ general_airport_src.items | to_json }}
-    filter: "(?i)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }})"
+    filter: "(?i)^(?!.*(?:剩余流量|套餐到期|距离下次|请每月|更-?新.*订阅|官网|更换客户端|Shadowrocket客户端|clash.*客户端|请自行修改|去油管广告|Youtube去广告)).*(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }})"
     url: {{ test_url }}
     interval: 180
     lazy: true
@@ -183,13 +183,13 @@ proxy-groups:
   - name: "{{ f }} {{ c }}"
     type: select
     use: {{ all_airport_src.items | to_json }}
-    filter: "(?i){{ kw }}"
+    filter: "(?i)^(?!.*(?:去油管广告|剩余流量|套餐到期)).*({{ kw }})"
     hidden: true
 {% endfor %}
   - name: "🇭🇰 港澳"
     type: url-test
     use: {{ general_airport_src.items | to_json }}
-    filter: "(?i)(\\[(HK|TW)\\]|\\b(HK|TW)\\b|🇭🇰|🇹🇼)"
+    filter: "(?i)^(?!.*(?:剩余流量|套餐到期|距离下次|请每月|更-?新.*订阅|官网)).*(\\[(HK|TW)\\]|\\b(HK|TW)\\b|🇭🇰|🇹🇼)"
     url: {{ test_url }}
     interval: 300
     lazy: true
