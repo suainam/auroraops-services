@@ -59,6 +59,7 @@
     - manifest
     - shellcrash
     - vertex
+    - workbuddy2api
     - phase5
 
 - name: 停止并移除 Docker 应用程序容器 (批量)
@@ -76,5 +77,6 @@
     - docker_apps_manifest
     - ds2api
     - vertex-proxy
+    - workbuddy2api
   when: rollback_docker_app_name is not defined
   tags: [rollback, services, docker_apps, docker_apps_manifest, phase5]

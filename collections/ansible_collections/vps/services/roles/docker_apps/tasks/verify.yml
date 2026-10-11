@@ -54,6 +54,7 @@
       shellcrash: shellcrash
       ds2api: ds2api
       vertex: vertex-proxy
+      workbuddy2api: workbuddy2api
   tags:
     - verify
     - services
@@ -92,6 +93,7 @@
     - manifest
     - phase5
     - shellcrash
+    - workbuddy2api
 
 - name: Verify Sing-box native service is active and enabled on systemd
   become: true
@@ -165,6 +167,7 @@
       shellcrash: true
       ds2api: true
       vertex: true
+      workbuddy2api: true
   tags:
     - verify
     - services
@@ -304,6 +307,43 @@
   loop: "{{ docker_apps_vertex_secret_files.results }}"
   when: verify_docker_app_name | default('') == 'vertex'
   tags: [verify, services, docker_apps, vertex, phase5]
+- name: Verify workbuddy2api is bound to loopback
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.NetworkSettings.Ports['8788/tcp'][0].HostIp == '127.0.0.1'
+      - docker_apps_container_info.container.NetworkSettings.Ports['8788/tcp'][0].HostPort == (docker_apps_app_port_workbuddy2api | string)
+      - docker_apps_container_info.container.Config.Image == docker_apps_workbuddy2api_image
+    fail_msg: "workbuddy2api must use the pinned image and loopback-only port binding"
+  when: verify_docker_app_name | default('') == 'workbuddy2api'
+  tags: [verify, services, docker_apps, workbuddy2api, phase5]
+
+- name: Verify workbuddy2api local health endpoint
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ docker_apps_app_port_workbuddy2api }}/health"
+    method: GET
+    status_code: 200
+    return_content: false
+  when: verify_docker_app_name | default('') == 'workbuddy2api'
+  tags: [verify, services, docker_apps, workbuddy2api, phase5]
+
+- name: Verify workbuddy2api settings file permissions
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_apps_workbuddy2api_data_dir }}/accounts/settings.json"
+  register: docker_apps_workbuddy2api_settings_stat
+  when: verify_docker_app_name | default('') == 'workbuddy2api'
+  tags: [verify, services, docker_apps, workbuddy2api, phase5]
+
+- name: Validate workbuddy2api settings file permissions
+  ansible.builtin.assert:
+    that:
+      - docker_apps_workbuddy2api_settings_stat.stat.exists
+      - docker_apps_workbuddy2api_settings_stat.stat.isreg
+      - docker_apps_workbuddy2api_settings_stat.stat.mode == '0600'
+    fail_msg: "workbuddy2api settings.json must exist as a regular file with mode 0600"
+  when: verify_docker_app_name | default('') == 'workbuddy2api'
+  tags: [verify, services, docker_apps, workbuddy2api, phase5]
+
 - name: Verify vaultwarden is bound to loopback
   ansible.builtin.assert:
     that:
@@ -1228,3 +1268,4 @@
     - ds2api
     - phase5
     - vertex
+    - workbuddy2api
