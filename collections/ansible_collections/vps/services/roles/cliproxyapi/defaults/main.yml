@@ -59,8 +59,11 @@ cliproxyapi_docker_host_config_path: "{{ cliproxyapi_docker_dir }}/config.yaml"
 cliproxyapi_docker_auth_dir: "{{ cliproxyapi_docker_dir }}/auths"
 cliproxyapi_image: "eceasy/cli-proxy-api:v7.3.2"
 cliproxyapi_docker_image: "{{ cliproxyapi_image }}"
-cliproxyapi_docker_memory: "128m"
-cliproxyapi_docker_memory_reservation: "32m"
+cliproxyapi_docker_memory: "512m"
+cliproxyapi_docker_memory_reservation: "256m"
+cliproxyapi_docker_cpus: "1.0"
+cliproxyapi_docker_restart_schedule:
+  - "*-*-* 04:00:00"
 cliproxyapi_docker_networks: "{{ cliproxyapi_networks | default([{'name': 'sweb'}]) }}"
 # cc15 类主机通过 sysctl 关闭 IPv6，但宿主机 /etc/resolv.conf 仍保留 IPv6 DNS。
 # Go 解析器会把不可达的 IPv6 nameserver 当作整次解析失败，导致 R2 对象存储

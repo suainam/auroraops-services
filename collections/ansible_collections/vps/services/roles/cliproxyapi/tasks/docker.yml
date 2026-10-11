@@ -464,7 +464,7 @@
     cdp_image: "{{ cliproxyapi_image }}"
     cdp_dirs: ["", "logs", "objectstore"]
     cdp_memory: "{{ cliproxyapi_docker_memory | default('128m') }}"
-    cdp_cpus: "0.5"
+    cdp_cpus: "{{ cliproxyapi_docker_cpus | default('1.0') }}"
     cdp_memory_reservation: "{{ cliproxyapi_docker_memory_reservation | default('32m') }}"
     cdp_oom_score_adj: "-300"
     cdp_networks: "{{ cliproxyapi_docker_networks }}"
