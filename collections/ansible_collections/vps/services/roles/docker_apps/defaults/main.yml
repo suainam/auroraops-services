@@ -53,7 +53,7 @@ docker_apps_ds2api_config: >-
 
 # WorkBuddy2API-Hub
 docker_apps_workbuddy2api_enabled: false
-docker_apps_app_port_workbuddy2api: "{{ app_port_workbuddy2api | default(30021) }}"
+docker_apps_app_port_workbuddy2api: "{{ app_port_workbuddy2api }}"
 docker_apps_workbuddy2api_image: "{{ workbuddy2api_image | default('ghcr.io/ardeyouxipianyi/workbuddy2api-hub:v1.6.20') }}"
 docker_apps_workbuddy2api_memory: "{{ workbuddy2api_memory | default('512m') }}"
 docker_apps_workbuddy2api_memory_reservation: "{{ workbuddy2api_memory_reservation | default('128m') }}"
