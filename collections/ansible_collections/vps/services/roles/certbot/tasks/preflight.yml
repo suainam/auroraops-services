@@ -1,0 +1,20 @@
+---
+- name: "[Certbot] Check certbot binary presence"
+  become: true
+  ansible.builtin.command: which certbot
+  register: certbot_preflight_binary
+  failed_when: false
+  changed_when: false
+  tags: [preflight, services, certbot, phase3]
+
+- name: "[Certbot] Check /etc/letsencrypt/live directory"
+  become: true
+  ansible.builtin.stat:
+    path: /etc/letsencrypt/live
+  register: certbot_preflight_live_dir
+  tags: [preflight, services, certbot, phase3]
+
+- name: "[Certbot] Summarize preflight status"
+  ansible.builtin.debug:
+    msg: "CertbotBinary={{ certbot_preflight_binary.rc == 0 }} LiveDirExists={{ certbot_preflight_live_dir.stat.exists }}"
+  tags: [preflight, services, certbot, phase3]

@@ -1,0 +1,14 @@
+---
+- name: "[Docker] Check Docker retirement baseline absence after rollback"
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_retirement_fact_path }}"
+  register: docker_rollback_verify_fact
+  tags: [rollback_verify, services, docker, phase3]
+
+- name: "[Docker] Assert retirement baseline was cleaned up"
+  ansible.builtin.assert:
+    that:
+      - not docker_rollback_verify_fact.stat.exists
+    fail_msg: "Docker retirement baseline fact was not cleaned up during rollback"
+  tags: [rollback_verify, services, docker, phase3]

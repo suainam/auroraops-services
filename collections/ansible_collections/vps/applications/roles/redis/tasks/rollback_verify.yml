@@ -1,0 +1,14 @@
+---
+- name: "[Redis] Verify managed logrotate fragment is removed after rollback"
+  become: true
+  ansible.builtin.stat:
+    path: "{{ redis_logrotate_config_path }}"
+  register: redis_rollback_logrotate_stat
+  tags: [rollback_verify, applications, redis, phase4]
+
+- name: "[Redis] Assert Redis logrotate fragment was cleaned up"
+  ansible.builtin.assert:
+    that:
+      - not redis_rollback_logrotate_stat.stat.exists
+    fail_msg: "Redis logrotate fragment still present after rollback"
+  tags: [rollback_verify, applications, redis, phase4]

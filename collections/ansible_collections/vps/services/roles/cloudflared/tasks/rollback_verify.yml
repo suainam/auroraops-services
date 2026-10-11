@@ -1,0 +1,14 @@
+---
+- name: "[Cloudflared] Check cloudflared rollback baseline absence"
+  become: true
+  ansible.builtin.stat:
+    path: "{{ cloudflared_fact_path }}"
+  register: cloudflared_rollback_verify_fact
+  tags: [rollback_verify, services, cloudflared, phase3]
+
+- name: "[Cloudflared] Assert cloudflared rollback baseline was cleaned up"
+  ansible.builtin.assert:
+    that:
+      - not cloudflared_rollback_verify_fact.stat.exists
+    fail_msg: "cloudflared baseline fact still exists after rollback"
+  tags: [rollback_verify, services, cloudflared, phase3]
