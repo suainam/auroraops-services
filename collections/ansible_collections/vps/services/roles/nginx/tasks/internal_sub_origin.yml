@@ -57,6 +57,77 @@
   notify: reload nginx
   tags: [deploy, services, nginx, nginx_site_config, phase4]
 
+
+- name: Ensure nginx.service.d directory exists for internal sub origin self-healing
+  become: true
+  ansible.builtin.file:
+    path: /etc/systemd/system/nginx.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - nginx_internal_sub_enabled | bool
+    - (ansible_facts.service_mgr | default('systemd')) == 'systemd'
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+
+- name: Configure nginx systemd drop-in for virtual interface ordering and docker0 IP self-healing
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/nginx.service.d/internal-sub-deps.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by AuroraOps: vps.services.nginx (internal_sub_origin)
+      [Unit]
+      After=network-online.target docker.service wg-quick@wg0.service
+      Wants=network-online.target
+
+      [Service]
+      ExecStartPre=-/usr/sbin/sysctl -w net.ipv4.ip_nonlocal_bind=1
+      ExecStartPre=-/bin/sh -c 'ip link show docker0 >/dev/null 2>&1 && ! ip -4 addr show dev docker0 | grep -q {{ sub_store_internal_listen_address | default("172.17.0.1") }} && ip addr add {{ sub_store_internal_listen_address | default("172.17.0.1") }}/16 dev docker0 || true'
+      Restart=on-failure
+      RestartSec=5s
+  register: nginx_internal_sub_dropin
+  when:
+    - nginx_internal_sub_enabled | bool
+    - (ansible_facts.service_mgr | default('systemd')) == 'systemd'
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+
+- name: Reload systemd when nginx internal-sub drop-in changes
+  become: true
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when:
+    - nginx_internal_sub_enabled | bool
+    - (ansible_facts.service_mgr | default('systemd')) == 'systemd'
+    - nginx_internal_sub_dropin is changed
+    - not ansible_check_mode
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+
+- name: Check if /etc/cloud/cloud.cfg.d exists on host
+  become: true
+  ansible.builtin.stat:
+    path: /etc/cloud/cloud.cfg.d
+  register: nginx_cloud_init_dir
+  when: nginx_internal_sub_enabled | bool
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
+
+- name: Disable cloud-init network re-initialization to protect docker0 bridge IP across reboots
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-auroraops-disable-network-config.cfg
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by AuroraOps: prevent cloud-init from flushing docker0 172.17.0.1/16 on boot
+      network: {config: disabled}
+  when:
+    - nginx_internal_sub_enabled | bool
+    - nginx_cloud_init_dir.stat.exists | default(false)
+  tags: [deploy, services, nginx, nginx_site_config, phase4]
 - name: Remove the internal subscription origin site when no longer declared
   become: true
   ansible.builtin.file:
