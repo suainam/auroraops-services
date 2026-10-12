@@ -40,8 +40,8 @@
     - certbot
     - certbot_verify_cert_exists
     - phase4
-- name: 验证 Certbot 证书有效期 (示例：检查是否在未来 30 天内过期)
-  ansible.builtin.command: openssl x509 -in /etc/letsencrypt/live/{{ item }}/fullchain.pem -checkend 2592000 -noout
+- name: 验证 Certbot 证书有效期 (检查是否在未来 14 天内过期)
+  ansible.builtin.command: openssl x509 -in /etc/letsencrypt/live/{{ item }}/fullchain.pem -checkend {{ certbot_expiry_check_seconds | default(1209600) }} -noout
   loop: "{{ certbot_certs | map(attribute='domains') | map('first') | list }}"
   register: certbot_cert_expiry_check
   changed_when: false

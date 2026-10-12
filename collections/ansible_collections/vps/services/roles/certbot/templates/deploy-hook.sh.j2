@@ -1,0 +1,23 @@
+#!/bin/bash
+# Certbot deployment hook managed by AuroraOps
+set -euo pipefail
+
+# 1. Reload local Nginx
+if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nginx; then
+    systemctl reload nginx
+fi
+
+# 2. Synchronize certificates to remote target nodes (if configured)
+{% for target in certbot_sync_targets | default([]) %}
+if [ -d "/etc/letsencrypt/live" ]; then
+    rsync -avz --delete \
+        -e "ssh -p {{ target.port | default(6868) }} -o StrictHostKeyChecking=accept-new -o BatchMode=yes" \
+        /etc/letsencrypt/live/ /etc/letsencrypt/archive/ \
+        root@{{ target.host }}:{{ target.dest | default('/etc/letsencrypt') }}/ || true
+
+    {% if target.reload_cmd is defined %}
+    ssh -p {{ target.port | default(6868) }} -o StrictHostKeyChecking=accept-new -o BatchMode=yes \
+        root@{{ target.host }} "{{ target.reload_cmd }}" || true
+    {% endif %}
+fi
+{% endfor %}
