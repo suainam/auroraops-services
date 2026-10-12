@@ -34,6 +34,7 @@ sub_store_capability_pools_enabled: false
 # Shared Docker data root used by backup-aware setup tasks.  Keep the role
 # runnable when the parent inventory does not import the optional backup.yml.
 backup_source_docker_dir: "/opt/dockers"
+docker_apps_docker_base_dir: "{{ backup_source_docker_dir | default('/opt/dockers') }}"
 
 # GCLI2API
 docker_apps_app_port_gcli2api_api: "{{ app_port_gcli2api_api | default(30006) }}"
@@ -100,10 +101,16 @@ docker_apps_vaultwarden_smtp_username: >-
   {{ vaultwarden_smtp_username | default(vault_vaultwarden_smtp_username | default('')) }}
 docker_apps_vaultwarden_smtp_password: >-
   {{ vaultwarden_smtp_password | default(vault_vaultwarden_smtp_password | default('')) }}
+docker_apps_vaultwarden_dir: >-
+  {{ vaultwarden_dir | default((docker_apps_docker_base_dir | default(backup_source_docker_dir | default('/opt/dockers'))) ~ '/vaultwarden') }}
+docker_apps_vaultwarden_data_dir: >-
+  {{ vaultwarden_data_dir | default(docker_apps_vaultwarden_dir ~ '/data') }}
+docker_apps_vaultwarden_env_file: >-
+  {{ vaultwarden_env_file | default(docker_apps_vaultwarden_dir ~ '/vaultwarden.env') }}
 docker_apps_vaultwarden_admin_token_hash_file: >-
-  {{ vaultwarden_admin_token_hash_file | default('/opt/dockers/vaultwarden/.admin_token.argon2') }}
+  {{ vaultwarden_admin_token_hash_file | default(docker_apps_vaultwarden_dir ~ '/.admin_token.argon2') }}
 docker_apps_vaultwarden_admin_token_fingerprint_file: >-
-  {{ vaultwarden_admin_token_fingerprint_file | default('/opt/dockers/vaultwarden/.admin_token.sha256') }}
+  {{ vaultwarden_admin_token_fingerprint_file | default(docker_apps_vaultwarden_dir ~ '/.admin_token.sha256') }}
 docker_apps_vaultwarden_ip_header: >-
   {{ vaultwarden_ip_header | default('X-Forwarded-For') }}
 docker_apps_vaultwarden_ip_header_trusted_proxies: >-

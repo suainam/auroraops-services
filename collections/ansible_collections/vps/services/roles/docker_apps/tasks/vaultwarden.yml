@@ -2,18 +2,20 @@
 # Vaultwarden - 使用 container_deployer Meta 角色部署
 
 - name: Ensure vaultwarden config directory exists
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.file:
-    path: "/opt/dockers/vaultwarden"
+    path: "{{ docker_apps_vaultwarden_dir }}"
     state: directory
     mode: "0755"
+    owner: "{{ docker_apps_dir_owner | default('root') if ((ansible_system | default('Linux')) != 'Darwin') else omit }}"
+    group: "{{ docker_apps_dir_group | default('root') if ((ansible_system | default('Linux')) != 'Darwin') else omit }}"
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Copy vaultwarden env file to remote
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.copy:
     src: "vaultwarden.env"
-    dest: "/opt/dockers/vaultwarden/vaultwarden.env"
+    dest: "{{ docker_apps_vaultwarden_env_file }}"
     mode: "0600"
     force: false
   no_log: true
@@ -40,14 +42,14 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Check cached vaultwarden admin token hash
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.stat:
     path: "{{ docker_apps_vaultwarden_admin_token_hash_file }}"
   register: docker_apps_vaultwarden_admin_token_hash_stat
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Check cached vaultwarden admin token fingerprint
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.stat:
     path: "{{ docker_apps_vaultwarden_admin_token_fingerprint_file }}"
   register: docker_apps_vaultwarden_admin_token_fingerprint_stat
@@ -129,7 +131,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Cache inherited Vaultwarden admin token hash locally
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.copy:
     content: "{{ docker_apps_vaultwarden_source_hash.content | b64decode | trim }}\n"
     dest: "{{ docker_apps_vaultwarden_admin_token_hash_file }}"
@@ -141,7 +143,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Cache inherited Vaultwarden admin token fingerprint locally
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.copy:
     content: "{{ docker_apps_vaultwarden_source_fingerprint.content | b64decode | trim }}\n"
     dest: "{{ docker_apps_vaultwarden_admin_token_fingerprint_file }}"
@@ -153,7 +155,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Read cached vaultwarden admin token hash
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.slurp:
     src: "{{ docker_apps_vaultwarden_admin_token_hash_file }}"
   register: docker_apps_vaultwarden_admin_token_hash_cached
@@ -162,7 +164,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Read cached vaultwarden admin token fingerprint
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.slurp:
     src: "{{ docker_apps_vaultwarden_admin_token_fingerprint_file }}"
   register: docker_apps_vaultwarden_admin_token_fingerprint_cached
@@ -193,7 +195,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Generate vaultwarden admin token hash from plaintext
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.command:
     argv:
       - script
@@ -209,7 +211,6 @@
   no_log: true
   when: docker_apps_vaultwarden_admin_token_hash_generation_required | bool
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
-
 - name: Extract generated vaultwarden admin token hash
   ansible.builtin.set_fact:
     docker_apps_vaultwarden_admin_token_hash_generated_value: >-
@@ -233,7 +234,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Cache generated vaultwarden admin token hash
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.copy:
     content: "{{ docker_apps_vaultwarden_admin_token_hash_generated_value }}\n"
     dest: "{{ docker_apps_vaultwarden_admin_token_hash_file }}"
@@ -243,7 +244,7 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Cache vaultwarden admin token fingerprint
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.copy:
     content: "{{ docker_apps_vaultwarden_admin_token_fingerprint }}\n"
     dest: "{{ docker_apps_vaultwarden_admin_token_fingerprint_file }}"
@@ -273,9 +274,9 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Render vaultwarden admin token from generated hash
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.lineinfile:
-    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    path: "{{ docker_apps_vaultwarden_env_file }}"
     regexp: '^ADMIN_TOKEN='
     line: "ADMIN_TOKEN={{ docker_apps_vaultwarden_admin_token_hash_value }}"
     create: true
@@ -284,9 +285,9 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Render vaultwarden SMTP username from vault
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.lineinfile:
-    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    path: "{{ docker_apps_vaultwarden_env_file }}"
     regexp: '^SMTP_USERNAME='
     line: "SMTP_USERNAME={{ docker_apps_vaultwarden_smtp_username }}"
     create: true
@@ -295,9 +296,9 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Render vaultwarden SMTP password from vault
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.lineinfile:
-    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    path: "{{ docker_apps_vaultwarden_env_file }}"
     regexp: '^SMTP_PASSWORD='
     line: "SMTP_PASSWORD={{ docker_apps_vaultwarden_smtp_password }}"
     create: true
@@ -307,9 +308,9 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Configure vaultwarden DOMAIN in env
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.lineinfile:
-    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    path: "{{ docker_apps_vaultwarden_env_file }}"
     regexp: '^DOMAIN='
     line: "DOMAIN=https://{{ docker_apps_vaultwarden_domain | default('bws.msuai.top') }}"
     create: true
@@ -318,9 +319,9 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Configure vaultwarden IP_HEADER in env
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.lineinfile:
-    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    path: "{{ docker_apps_vaultwarden_env_file }}"
     regexp: '^IP_HEADER='
     line: "IP_HEADER={{ docker_apps_vaultwarden_ip_header }}"
     create: true
@@ -329,9 +330,9 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Configure vaultwarden IP_HEADER_TRUSTED_PROXIES in env
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.lineinfile:
-    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    path: "{{ docker_apps_vaultwarden_env_file }}"
     regexp: '^IP_HEADER_TRUSTED_PROXIES='
     line: "IP_HEADER_TRUSTED_PROXIES={{ docker_apps_vaultwarden_ip_header_trusted_proxies }}"
     create: true
@@ -340,9 +341,9 @@
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
 
 - name: Check rendered Vaultwarden env file for container dry-run
-  become: true
+  become: "{{ (docker_apps_become | default(true)) if ((ansible_system | default('Linux')) != 'Darwin') else false }}"
   ansible.builtin.stat:
-    path: "/opt/dockers/vaultwarden/vaultwarden.env"
+    path: "{{ docker_apps_vaultwarden_env_file }}"
   register: docker_apps_vaultwarden_env_stat
   check_mode: false
   tags: [deploy, services, docker_apps, vaultwarden, phase5]
@@ -357,6 +358,7 @@
     container_deployer_cdp_pull: "{{ docker_apps_vaultwarden_pull }}"
     cdp_state: "{{ docker_apps_vaultwarden_state }}"
     cdp_restart_policy: "{{ docker_apps_vaultwarden_restart_policy }}"
+    cdp_base_path: "{{ docker_apps_docker_base_dir | default(backup_source_docker_dir | default('/opt/dockers')) }}"
     cdp_dirs: ["data"]
     cdp_memory: "{{ docker_apps_vaultwarden_memory | default('128m') }}"
     cdp_cpus: "0.5"
@@ -366,10 +368,10 @@
     cdp_ports:
       - "{{ docker_apps_vaultwarden_publish_prefix }}{{ docker_apps_app_port_vaultwarden_http }}:80"
     cdp_volumes:
-      - "/opt/dockers/vaultwarden/data:/data"
+      - "{{ docker_apps_vaultwarden_data_dir }}:/data"
     cdp_env_file: >-
       {{
-        '/opt/dockers/vaultwarden/vaultwarden.env'
+        docker_apps_vaultwarden_env_file
         if docker_apps_vaultwarden_env_stat.stat.exists
         else ''
       }}
