@@ -91,6 +91,26 @@
     label: "{{ item.path }}"
   tags: [deploy, services, certbot, certs, phase4]
 
+- name: Ensure Certbot renewal deploy-hooks directory exists
+  become: true
+  ansible.builtin.file:
+    path: /etc/letsencrypt/renewal-hooks/deploy
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [deploy, services, certbot, certs, phase4]
+
+- name: Deploy Certbot renewal deploy-hook script
+  become: true
+  ansible.builtin.template:
+    src: deploy-hook.sh.j2
+    dest: "{{ certbot_deploy_hook_script_path | default('/etc/letsencrypt/renewal-hooks/deploy/01-auroraops-deploy-hook.sh') }}"
+    owner: root
+    group: root
+    mode: "0750"
+  tags: [deploy, services, certbot, certs, phase4]
+
 - name: Generate certificates with DNS Cloudflare plugin
   become: true
   ansible.builtin.command: >
@@ -99,26 +119,13 @@
     --dns-{{ certbot_dns_plugin }}-credentials {{ certbot_dns_credentials_file }}
     --email {{ certbot_admin_email }}
     --agree-tos
-    --deploy-hook "systemctl reload nginx"
+    --deploy-hook "{{ certbot_deploy_hook | default('/etc/letsencrypt/renewal-hooks/deploy/01-auroraops-deploy-hook.sh') }}"
     --non-interactive
     --keep-until-expiring
     --expand
     {% for domain in item.domains %}
     -d {{ domain }}
     {% endfor %}
-  loop: "{{ certbot_certs }}"
-  when: certbot_create_method == 'dns' and certbot_dns_plugin == 'cloudflare'
-  register: certbot_result
-  changed_when: >-
-    certbot_result.rc == 0 and
-    'not yet due for renewal' not in certbot_result.stdout | lower
-  failed_when: certbot_result.rc != 0 and "already exists" not in certbot_result.stderr
-  environment:
-    http_proxy: "{{ certbot_proxy_http }}"
-    https_proxy: "{{ certbot_proxy_https }}"
-    HTTP_PROXY: "{{ certbot_proxy_http }}"
-    HTTPS_PROXY: "{{ certbot_proxy_https }}"
-  tags: [deploy, services, certbot, certs, phase4]
 
 - name: 部署 Certbot Systemd 服务 (pipx 独立运行需要)
   become: true

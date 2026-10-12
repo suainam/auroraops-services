@@ -25,6 +25,12 @@ certbot_auto_renew_options: "--quiet --dns-{{ certbot_dns_plugin }} --dns-{{ cer
 # DNS 凭证文件路径
 certbot_dns_credentials_file: "/etc/letsencrypt/{{ certbot_dns_plugin }}.ini"
 
+# 证书部署与同步钩子配置
+certbot_deploy_hook_script_path: "/etc/letsencrypt/renewal-hooks/deploy/01-auroraops-deploy-hook.sh"
+certbot_deploy_hook: "{{ certbot_deploy_hook_script_path }}"
+certbot_sync_targets: []
+certbot_expiry_check_seconds: 1209600 # 14 天
+
 # Optional role-local Logrotate configuration
 certbot_logrotate_enabled: true
 certbot_logrotate_config_path: "/etc/logrotate.d/certbot"
