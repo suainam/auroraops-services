@@ -126,7 +126,19 @@
     {% for domain in item.domains %}
     -d {{ domain }}
     {% endfor %}
-
+  loop: "{{ certbot_certs }}"
+  when: certbot_create_method == 'dns' and certbot_dns_plugin == 'cloudflare'
+  register: certbot_result
+  changed_when: >-
+    certbot_result.rc == 0 and
+    'not yet due for renewal' not in certbot_result.stdout | lower
+  failed_when: certbot_result.rc != 0 and "already exists" not in certbot_result.stderr
+  environment:
+    http_proxy: "{{ certbot_proxy_http }}"
+    https_proxy: "{{ certbot_proxy_https }}"
+    HTTP_PROXY: "{{ certbot_proxy_http }}"
+    HTTPS_PROXY: "{{ certbot_proxy_https }}"
+  tags: [deploy, services, certbot, certs, phase4]
 - name: 部署 Certbot Systemd 服务 (pipx 独立运行需要)
   become: true
   ansible.builtin.template:
