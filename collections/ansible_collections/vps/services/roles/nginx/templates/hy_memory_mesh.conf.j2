@@ -1,0 +1,40 @@
+{% set wg_ip = network_topology.nodes[inventory_hostname].wireguard_ip | default('10.144.10.11') %}
+{% set backend_port = site_config.backend_port | default(app_port_hy_memory | default(30024), true) %}
+{% set allowed_subnets = site_config.allowed_subnets | default(['10.144.10.0/24', '127.0.0.1/32']) %}
+
+server {
+    listen {{ wg_ip }}:80;
+    server_name {{ item }} {{ wg_ip }};
+
+    include /etc/nginx/conf.d/common_headers.conf;
+    include /etc/nginx/conf.d/common_performance.conf;
+
+    # Mesh CIDR source restrictions
+    {% for subnet in allowed_subnets %}
+    allow {{ subnet }};
+    {% endfor %}
+    deny all;
+
+    location / {
+        {% if site_config.bearer_token_required | default(true) | bool %}
+        # Bearer token authentication check
+        if ($http_authorization = "") {
+            return 401;
+        }
+        {% endif %}
+
+        proxy_pass http://127.0.0.1:{{ backend_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header X-Accel-Buffering no;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_connect_timeout 30s;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+}
