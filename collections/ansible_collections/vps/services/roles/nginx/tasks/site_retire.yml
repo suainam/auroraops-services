@@ -1,0 +1,87 @@
+---
+# tasks/site_retire.yml
+# ==============================================================================
+# Site-Scoped Nginx Retirement Workflow
+# ==============================================================================
+# Safely removes specific retired Nginx sites from sites-enabled while
+# preserving their configuration files in sites-available and preserving
+# the fixed lifecycle baseline.
+# ==============================================================================
+
+- name: Validate focused Nginx site retire target
+  ansible.builtin.assert:
+    that:
+      - >-
+        nginx_site_retire_target | default('') | length == 0
+        or nginx_site_retire_target in nginx_sites_to_retire
+    fail_msg: >-
+      nginx_site_retire_target must be empty or name one site from the declared
+      nginx_sites_to_retire set.
+  tags: &nginx_site_retire_tags
+    - deploy
+    - check
+    - services
+    - nginx
+    - nginx_site_retire
+    - phase4
+
+- name: Build focused Nginx site retire list
+  ansible.builtin.set_fact:
+    nginx_sites_to_retire_effective: >-
+      {{
+        [nginx_site_retire_target]
+        if nginx_site_retire_target | default('') | length > 0
+        else nginx_sites_to_retire
+      }}
+  tags: *nginx_site_retire_tags
+
+- name: Assert retired sites are declared and excluded from deployment set
+  ansible.builtin.assert:
+    that:
+      - nginx_sites_to_retire_effective | length > 0
+      - (nginx_sites_to_retire_effective | intersect(nginx_sites_to_deploy)) | length == 0
+    fail_msg: >-
+      Retirement requires at least one declared retired site, and no retired site
+      may remain in nginx_sites_to_deploy.
+  tags: *nginx_site_retire_tags
+
+- name: Inspect retired Nginx site symlinks in sites-enabled
+  become: true
+  ansible.builtin.stat:
+    path: "/etc/nginx/sites-enabled/{{ item }}.conf"
+    follow: false
+  loop: "{{ nginx_sites_to_retire_effective }}"
+  register: nginx_site_retire_enabled_stats
+  tags: *nginx_site_retire_tags
+
+- name: Reject non-symlink enabled paths for retired Nginx sites
+  ansible.builtin.assert:
+    that:
+      - not (item.stat.exists | default(false)) or (item.stat.islnk | default(false))
+    fail_msg: "Retired site enabled path is not a symlink; refusing to remove it: {{ item.item }}"
+  loop: "{{ nginx_site_retire_enabled_stats.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  tags: *nginx_site_retire_tags
+
+- name: Remove retired Nginx site symlinks from sites-enabled
+  become: true
+  ansible.builtin.file:
+    path: "/etc/nginx/sites-enabled/{{ item.item }}.conf"
+    state: absent
+  loop: "{{ nginx_site_retire_enabled_stats.results }}"
+  when: item.stat.exists | default(false)
+  notify: reload nginx
+  register: nginx_site_retire_link_removal
+  tags: *nginx_site_retire_tags
+
+- name: Validate Nginx syntax after site retirement
+  become: true
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  when: not ansible_check_mode
+  tags: *nginx_site_retire_tags
+
+- name: Flush handlers to reload Nginx if site link was removed
+  ansible.builtin.meta: flush_handlers
+  tags: *nginx_site_retire_tags

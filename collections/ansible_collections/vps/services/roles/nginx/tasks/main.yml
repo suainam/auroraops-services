@@ -18,6 +18,22 @@
     - nginx
     - nginx_site_config
     - nginx_site_enable
+    - nginx_site_retire
+    - phase4
+
+- name: 合并待退役 Nginx 站点列表
+  ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
+  vars:
+    merge_var_name: nginx_sites_to_retire
+  tags:
+    - deploy
+    - check
+    - verify
+    - services
+    - nginx
+    - nginx_site_config
+    - nginx_site_enable
+    - nginx_site_retire
     - phase4
 - name: Check if Nginx is installed
   ansible.builtin.command: which nginx
@@ -32,6 +48,7 @@
     - services
     - nginx
     - nginx_site_config
+    - nginx_site_retire
     - phase4
 - name: Set skip flag (considering force overwrite)
   ansible.builtin.set_fact:
@@ -89,6 +106,19 @@
     - nginx
     - nginx_site_config
     - nginx_site_enable
+    - phase4
+
+- name: Retire declared Nginx sites
+  ansible.builtin.import_tasks: site_retire.yml
+  when:
+    - (nginx_installed | bool) or not ansible_check_mode
+    - (nginx_sites_to_retire | default([]) | length > 0) or (nginx_site_retire_target | default('') | length > 0)
+  tags:
+    - deploy
+    - check
+    - services
+    - nginx
+    - nginx_site_retire
     - phase4
 
 - name: Retire the plaintext subscription relay when authorized
