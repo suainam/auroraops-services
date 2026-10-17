@@ -33,9 +33,9 @@
           os.environ["MEMORY_EMBEDDER_API_KEY"] = api_key
           os.environ["MEMORY_LLM_API_KEY"] = api_key
 
-      app = FastMCP("Hy-Memory PRO", host="127.0.0.1", port=30024)
-      # PRO mode with graph disabled, collision-safe namespace
-      client = HyMemoryClient(mode="pro", enable_graph=False)
+      app = FastMCP("Hy-Memory PRO")
+      # PRO mode, collision-safe namespace
+      client = HyMemoryClient(mode="pro")
 
       @app.tool()
       async def remember(content: str, repo: str = "default-repo", branch: str = "main") -> str:
@@ -60,7 +60,7 @@
           return str(res)
 
       if __name__ == "__main__":
-          app.run(transport="sse")
+          app.run(transport="sse", host="127.0.0.1", port=30024)
     mode: '0600'
   tags: [deploy, services, docker_apps, hy_memory]
 
