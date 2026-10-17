@@ -38,6 +38,11 @@
       - "127.0.0.1:{{ docker_apps_app_port_magpie_web }}:3430"
     cdp_volumes:
       - "{{ docker_apps_magpie_data_dir }}/config:/config"
+    cdp_command:
+      - "web"
+      - "--addr"
+      - "0.0.0.0:3430"
+      - "--no-open"
     cdp_env:
       TZ: "Asia/Shanghai"
       MAGPIE_ADDR: "0.0.0.0:3425"
