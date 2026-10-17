@@ -80,6 +80,12 @@ nginx_sites_config_host: {}
 # 最终合并结果（在 tasks/main.yml 中计算）
 nginx_sites_to_deploy: []
 nginx_sites_config: {}
+# Site retirement declarations
+nginx_sites_to_retire_global: []
+nginx_sites_to_retire_host: []
+nginx_sites_to_retire_exclude: []
+nginx_sites_to_retire: []
+nginx_site_retire_target: ""
 
 # One-time controlled baseline reseed for intentional site-set migrations.
 nginx_site_baseline_reseed: false

@@ -111,8 +111,22 @@
     that:
       - nginx_site_baseline.auroraops_managed | default(false) | bool
       - nginx_site_baseline.version | default(0) | int == 1
-      - nginx_site_baseline.sites | sort == nginx_sites_to_deploy | sort
-      - nginx_site_baseline.certificate_fingerprint == nginx_site_certificate_fingerprint
+      - >-
+        (nginx_site_baseline.sites | sort == nginx_sites_to_deploy | sort)
+        or (
+          (nginx_sites_to_retire | default([]) | length > 0)
+          and ((nginx_site_baseline.sites | difference(nginx_sites_to_retire) | sort) == (nginx_sites_to_deploy | sort))
+        )
+      - >-
+        (nginx_site_baseline.certificate_fingerprint == nginx_site_certificate_fingerprint)
+        or (
+          (nginx_sites_to_retire | default([]) | length > 0)
+          and (
+            (nginx_site_baseline.certificate_fingerprint | dict2items
+             | rejectattr('key', 'in', nginx_sites_to_retire)
+             | items2dict) == nginx_site_certificate_fingerprint
+          )
+        )
     fail_msg: >-
       Existing Nginx site lifecycle baseline no longer matches the selected
       site set or certificate fingerprint. Reconcile the stale lifecycle

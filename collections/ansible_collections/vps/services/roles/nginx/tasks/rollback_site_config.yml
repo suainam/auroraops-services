@@ -8,16 +8,23 @@
     - services
     - nginx
     - nginx_site_config
+    - nginx_site_retire
     - phase4
+
+- name: Merge retired Nginx site list for focused rollback
+  ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
+  vars:
+    merge_var_name: nginx_sites_to_retire
+  tags: *nginx_site_rollback_tags
 - name: Validate focused Nginx rollback target
   ansible.builtin.assert:
     that:
       - >-
         nginx_site_target | default('') | length == 0
-        or nginx_site_target in nginx_sites_to_deploy
+        or nginx_site_target in (nginx_sites_to_deploy + (nginx_sites_to_retire | default([])))
     fail_msg: >-
       nginx_site_target must be empty or name one site from the selected
-      nginx_sites_to_deploy set.
+      nginx_sites_to_deploy set or retired set.
   tags: *nginx_site_rollback_tags
 
 - name: Build focused Nginx rollback list

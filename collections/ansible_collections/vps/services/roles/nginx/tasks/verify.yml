@@ -4,6 +4,11 @@
   vars:
     merge_var_name: nginx_sites_to_deploy
   tags: [verify, services, nginx, nginx_site_config, phase4]
+- name: 合并待退役 Nginx 站点列表
+  ansible.builtin.include_tasks: ../../../common/tasks/merge_list_vars.yml
+  vars:
+    merge_var_name: nginx_sites_to_retire
+  tags: [verify, services, nginx, nginx_site_config, nginx_site_retire, phase4]
 - name: Validate focused Nginx site verification target
   ansible.builtin.assert:
     that:
@@ -52,6 +57,7 @@
     - services
     - nginx
     - nginx_verify_service
+    - nginx_site_retire
     - phase4
   register: nginx_service_status
 - name: 检查 Nginx 服务是否运行和启用
@@ -69,6 +75,7 @@
     - services
     - nginx
     - nginx_verify_service
+    - nginx_site_retire
     - phase4
 
 - name: 验证退役后 Nginx 确实已停止且未自启
@@ -124,7 +131,46 @@
     - nginx
     - nginx_verify_syntax
     - nginx_site_config
+    - nginx_site_retire
     - phase4
+
+- name: Build focused retired Nginx site verification list
+  ansible.builtin.set_fact:
+    nginx_sites_to_retire_verify: >-
+      {{
+        [nginx_site_retire_target]
+        if nginx_site_retire_target | default('') | length > 0
+        else nginx_sites_to_retire | default([])
+      }}
+  tags: [verify, services, nginx, nginx_site_config, nginx_site_retire, phase4]
+
+- name: Validate focused retired Nginx site verification target
+  ansible.builtin.assert:
+    that:
+      - >-
+        nginx_site_retire_target | default('') | length == 0
+        or nginx_site_retire_target in (nginx_sites_to_retire | default([]))
+    fail_msg: >-
+      nginx_site_retire_target must be empty or name one site from the declared
+      nginx_sites_to_retire set.
+  tags: [verify, services, nginx, nginx_site_config, nginx_site_retire, phase4]
+
+- name: 检查退役站点在 sites-enabled 中软链接状态
+  become: true
+  ansible.builtin.stat:
+    path: "/etc/nginx/sites-enabled/{{ item }}.conf"
+    follow: false
+  loop: "{{ nginx_sites_to_retire_verify }}"
+  register: nginx_site_retired_enabled_checks
+  tags: [verify, services, nginx, nginx_site_config, nginx_site_retire, phase4]
+
+- name: 断言退役站点软链接已不存在
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists
+    fail_msg: "退役站点在 sites-enabled 中仍存在软链接: {{ item.item }}"
+  loop: "{{ nginx_site_retired_enabled_checks.results | default([]) }}"
+  tags: [verify, services, nginx, nginx_site_config, nginx_site_retire, phase4]
 
 - name: Verify Nginx logrotate configuration
   ansible.builtin.import_tasks: ../../../common/tasks/verify_optional_logrotate.yml
