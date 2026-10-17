@@ -132,6 +132,10 @@
       when: "'shellcrash' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'shellcrash')"
       tags: [deploy, services, docker_apps, shellcrash, phase5]
 
+    - name: 加载 Hy-Memory 部署任务
+      ansible.builtin.import_tasks: hy_memory.yml
+      when: "'hy_memory' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'hy_memory')"
+      tags: [deploy, services, docker_apps, hy_memory, phase5]
     - name: 加载 Hysteria2 Client 部署任务
       ansible.builtin.import_tasks: hysteria2_client.yml
       when: docker_apps_hysteria2_client_enabled | default(false) | bool

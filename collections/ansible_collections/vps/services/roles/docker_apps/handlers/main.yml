@@ -1,9 +1,16 @@
 ---
-- name: Reload systemd daemon
-  become: true
+- name: 重载 systemd
+  listen: 重载 systemd
   ansible.builtin.systemd:
     daemon_reload: true
-  tags: [deploy, services, docker_apps, hysteria2_client]
+  tags: [deploy, services, docker_apps, hy_memory]
+
+- name: 重启 hy-memory 服务
+  listen: 重启 hy-memory 服务
+  ansible.builtin.systemd:
+    name: hy-memory
+    state: restarted
+  tags: [deploy, services, docker_apps, hy_memory]
 
 - name: Restart hysteria2
   listen: restart hysteria2

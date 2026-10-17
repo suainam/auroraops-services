@@ -17,8 +17,12 @@ server {
 
     location / {
         {% if site_config.bearer_token_required | default(true) | bool %}
-        # Bearer token authentication check
-        if ($http_authorization = "") {
+        # Strict Bearer token validation (must start with 'Bearer ' and have non-empty token)
+        set $valid_auth 0;
+        if ($http_authorization ~* "^Bearer\s+[A-Za-z0-9\-\_\.\~\+\/]+=*$") {
+            set $valid_auth 1;
+        }
+        if ($valid_auth = 0) {
             return 401;
         }
         {% endif %}

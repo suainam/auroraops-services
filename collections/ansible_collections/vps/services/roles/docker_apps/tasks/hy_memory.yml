@@ -1,0 +1,96 @@
+---
+# Hy-Memory PRO Docker Service Tasks
+- name: 创建 Hy-Memory 目录
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user | default('root') }}"
+    group: "{{ ansible_group | default('root') }}"
+    mode: '0755'
+  loop:
+    - "/opt/dockers/hy_memory"
+    - "/opt/dockers/hy_memory/data"
+  tags: [deploy, services, docker_apps, hy_memory]
+
+- name: 渲染 Hy-Memory Server 脚本
+  ansible.builtin.copy:
+    dest: "/opt/dockers/hy_memory/server.py"
+    content: |
+      import os
+      import asyncio
+      from fastmcp import FastMCP
+      from hy_memory import HyMemoryClient
+
+      os.environ.setdefault("MEMORY_MODE", "pro")
+      os.environ.setdefault("MEMORY_EMBEDDER_BASE_URL", "https://openrouter.ai/api/v1")
+      os.environ.setdefault("MEMORY_LLM_BASE_URL", "https://openrouter.ai/api/v1")
+      os.environ.setdefault("MEMORY_EMBEDDER_MODEL", "qwen/qwen3-embedding-8b")
+      os.environ.setdefault("MEMORY_LLM_MODEL", "anthropic/claude-3.5-sonnet")
+      os.environ.setdefault("MEMORY_DATA_DIR", "/opt/dockers/hy_memory/data")
+      if "{{ vault_openrouter_api_key | default('') }}":
+          os.environ.setdefault("MEMORY_EMBEDDER_API_KEY", "{{ vault_openrouter_api_key }}")
+          os.environ.setdefault("MEMORY_LLM_API_KEY", "{{ vault_openrouter_api_key }}")
+
+      app = FastMCP("Hy-Memory PRO", host="127.0.0.1", port=30024)
+      client = HyMemoryClient(mode="pro")
+
+      @app.tool()
+      async def remember(content: str, repo: str = "default-repo", branch: str = "main") -> str:
+          """Store memory with deterministic repository namespace as user_id."""
+          user_id = f"repo_{repo.replace('/', '_').replace('-', '_')}"
+          res = client.add(content=content, user_id=user_id, metadata={"branch": branch})
+          return f"Stored successfully under namespace {user_id}. Result: {res}"
+
+      @app.tool()
+      async def recall(query: str, repo: str = "default-repo") -> str:
+          """Recall memories from the repository namespace."""
+          user_id = f"repo_{repo.replace('/', '_').replace('-', '_')}"
+          res = client.search(query=query, user_id=user_id)
+          return str(res)
+
+      if __name__ == "__main__":
+          app.run(transport="sse")
+    mode: '0644'
+  tags: [deploy, services, docker_apps, hy_memory]
+
+- name: 创建/更新 Hy-Memory 虚拟环境与依赖
+  ansible.builtin.shell: |
+    if [ ! -d "/opt/dockers/hy_memory/venv" ]; then
+      python3 -m venv /opt/dockers/hy_memory/venv
+    fi
+    /root/.local/bin/uv pip install --python /opt/dockers/hy_memory/venv/bin/python fastmcp hy-memory httpx
+  args:
+    executable: /bin/bash
+  tags: [deploy, services, docker_apps, hy_memory]
+
+- name: 创建 Hy-Memory Systemd Service
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/hy-memory.service"
+    content: |
+      [Unit]
+      Description=Hy-Memory PRO FastMCP Service
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=root
+      WorkingDirectory=/opt/dockers/hy_memory
+      ExecStart=/opt/dockers/hy_memory/venv/bin/python /opt/dockers/hy_memory/server.py
+      Restart=always
+      RestartSec=5
+      Environment=PYTHONUNBUFFERED=1
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: '0644'
+  notify:
+    - 重载 systemd
+    - 重启 hy-memory 服务
+  tags: [deploy, services, docker_apps, hy_memory]
+
+- name: 确保 Hy-Memory 服务开机自启并运行
+  ansible.builtin.systemd:
+    name: hy-memory
+    enabled: true
+    state: started
+  tags: [deploy, services, docker_apps, hy_memory]
