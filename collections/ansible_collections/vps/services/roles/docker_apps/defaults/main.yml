@@ -75,6 +75,7 @@ docker_apps_magpie_cpus: "{{ magpie_cpus | default('1.0') }}"
 docker_apps_magpie_web_key: "{{ vault_magpie_web_key | default(omit) }}"
 docker_apps_magpie_data_dir: "{{ backup_source_docker_dir | default('/opt/dockers') }}/magpie"
 
+
 # Vertex AI Proxy
 docker_apps_app_port_vertex: "{{ app_port_vertex | default(30020) }}"
 docker_apps_vertex_image: >-
