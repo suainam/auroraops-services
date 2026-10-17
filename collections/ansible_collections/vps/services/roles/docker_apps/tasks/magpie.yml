@@ -1,0 +1,52 @@
+---
+- name: Ensure magpie host directories
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "65532"
+    group: "65532"
+    mode: "0750"
+  loop:
+    - "{{ docker_apps_magpie_data_dir }}"
+    - "{{ docker_apps_magpie_data_dir }}/config"
+  tags: [deploy, services, docker_apps, magpie, phase5]
+
+- name: Deploy magpie container via container_deployer
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+    apply:
+      tags:
+        - magpie
+        - phase5
+  vars:
+    cdp_name: "magpie"
+    cdp_image: "{{ docker_apps_magpie_image }}"
+    cdp_pull: "{{ docker_apps_magpie_pull | default(false) | bool }}"
+    container_deployer_cdp_pull: "{{ docker_apps_magpie_pull | default(false) | bool }}"
+    cdp_dirs: ["config"]
+    cdp_dir_owner: "65532"
+    cdp_dir_group: "65532"
+    cdp_dir_mode: "0750"
+    cdp_memory: "{{ docker_apps_magpie_memory }}"
+    cdp_memory_reservation: "{{ docker_apps_magpie_memory_reservation }}"
+    cdp_cpus: "{{ docker_apps_magpie_cpus }}"
+    cdp_restart_policy: "unless-stopped"
+    cdp_networks: [{name: "sweb"}]
+    cdp_ports:
+      - "127.0.0.1:{{ docker_apps_app_port_magpie_api }}:3425"
+      - "127.0.0.1:{{ docker_apps_app_port_magpie_web }}:3430"
+    cdp_volumes:
+      - "{{ docker_apps_magpie_data_dir }}/config:/config"
+    cdp_env:
+      TZ: "Asia/Shanghai"
+      MAGPIE_ADDR: "0.0.0.0:3425"
+      MAGPIE_WEB_ADDR: "0.0.0.0:3430"
+      MAGPIE_WEB_KEY: "{{ docker_apps_magpie_web_key }}"
+    cdp_healthcheck:
+      test: ["CMD", "/magpie", "healthcheck"]
+      interval: 1800s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+  tags: [deploy, services, docker_apps, magpie, phase5]

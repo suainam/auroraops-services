@@ -55,6 +55,7 @@
       ds2api: ds2api
       vertex: vertex-proxy
       workbuddy2api: workbuddy2api
+      magpie: magpie
   tags:
     - verify
     - services
@@ -94,6 +95,7 @@
     - phase5
     - shellcrash
     - workbuddy2api
+    - magpie
 
 - name: Verify Sing-box native service is active and enabled on systemd
   become: true
@@ -168,6 +170,7 @@
       ds2api: true
       vertex: true
       workbuddy2api: true
+      magpie: true
   tags:
     - verify
     - services
@@ -343,6 +346,55 @@
     fail_msg: "workbuddy2api settings.json must exist as a regular file with mode 0600"
   when: verify_docker_app_name | default('') == 'workbuddy2api'
   tags: [verify, services, docker_apps, workbuddy2api, phase5]
+
+- name: Verify magpie is bound to loopback and uses pinned image
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.NetworkSettings.Ports['3425/tcp'][0].HostIp == '127.0.0.1'
+      - docker_apps_container_info.container.NetworkSettings.Ports['3425/tcp'][0].HostPort == (docker_apps_app_port_magpie_api | string)
+      - docker_apps_container_info.container.NetworkSettings.Ports['3430/tcp'][0].HostIp == '127.0.0.1'
+      - docker_apps_container_info.container.NetworkSettings.Ports['3430/tcp'][0].HostPort == (docker_apps_app_port_magpie_web | string)
+      - docker_apps_container_info.container.Config.Image == docker_apps_magpie_image
+    fail_msg: "magpie must use the pinned image and loopback-only port binding"
+  when: verify_docker_app_name | default('') == 'magpie'
+  tags: [verify, services, docker_apps, magpie, phase5]
+
+- name: Verify magpie container health status
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.State.Health.Status is defined
+      - docker_apps_container_info.container.State.Health.Status in ['healthy', 'starting']
+    fail_msg: "magpie container healthcheck must report healthy or starting"
+  when: verify_docker_app_name | default('') == 'magpie'
+  tags: [verify, services, docker_apps, magpie, phase5]
+
+- name: Verify magpie local web endpoint
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ docker_apps_app_port_magpie_web }}/"
+    method: GET
+    status_code: [200, 302, 401]
+    return_content: false
+  when: verify_docker_app_name | default('') == 'magpie'
+  tags: [verify, services, docker_apps, magpie, phase5]
+
+- name: Verify magpie config directory permissions
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_apps_magpie_data_dir }}/config"
+  register: docker_apps_magpie_config_stat
+  when: verify_docker_app_name | default('') == 'magpie'
+  tags: [verify, services, docker_apps, magpie, phase5]
+
+- name: Validate magpie config directory ownership
+  ansible.builtin.assert:
+    that:
+      - docker_apps_magpie_config_stat.stat.exists
+      - docker_apps_magpie_config_stat.stat.isdir
+      - docker_apps_magpie_config_stat.stat.uid == 65532
+      - docker_apps_magpie_config_stat.stat.gid == 65532
+    fail_msg: "magpie config directory must exist and be owned by 65532:65532"
+  when: verify_docker_app_name | default('') == 'magpie'
+  tags: [verify, services, docker_apps, magpie, phase5]
 
 - name: Verify vaultwarden is bound to loopback
   ansible.builtin.assert:

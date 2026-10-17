@@ -31,6 +31,7 @@
         - ds2api
         - vertex
         - workbuddy2api
+        - magpie
         - phase5
 
     - name: 加载 Docker Apps 公共准备任务
@@ -53,6 +54,7 @@
         - hysteria2_client
         - vertex
         - workbuddy2api
+        - magpie
         - phase5
 
     - name: 加载 Docker Apps 数据恢复任务
@@ -73,6 +75,11 @@
       ansible.builtin.import_tasks: workbuddy2api.yml
       when: "'workbuddy2api' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'workbuddy2api')"
       tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+    - name: 加载 Magpie 部署任务
+      ansible.builtin.import_tasks: magpie.yml
+      when: "'magpie' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'magpie')"
+      tags: [deploy, services, docker_apps, magpie, phase5]
 
     - name: 加载 Vertex AI Proxy 部署任务
       ansible.builtin.import_tasks: vertex.yml
