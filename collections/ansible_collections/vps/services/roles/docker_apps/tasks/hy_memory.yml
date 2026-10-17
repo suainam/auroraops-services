@@ -33,12 +33,12 @@
       logger = logging.getLogger("hy_memory_pro")
 
       os.environ.setdefault("MEMORY_MODE", "pro")
+      os.environ.setdefault("MEMORY_ENABLE_GRAPH", "false")
       os.environ.setdefault("MEMORY_EMBEDDER_BASE_URL", "https://openrouter.ai/api/v1")
       os.environ.setdefault("MEMORY_LLM_BASE_URL", "https://openrouter.ai/api/v1")
       os.environ.setdefault("MEMORY_EMBEDDER_MODEL", "qwen/qwen3-embedding-8b")
       os.environ.setdefault("MEMORY_LLM_MODEL", "anthropic/claude-3.5-sonnet")
       os.environ.setdefault("MEMORY_DATA_DIR", "/opt/dockers/hy_memory/data")
-      
       api_key = "{{ vault_openrouter_api_key | default('') }}"
       if api_key:
           os.environ["MEMORY_EMBEDDER_API_KEY"] = api_key
@@ -49,12 +49,11 @@
       client = None
       init_error = None
       try:
-          logger.info("Initializing HyMemoryClient(mode='pro', enable_graph=False)")
-          client = HyMemoryClient(mode="pro", enable_graph=False)
+          logger.info("Initializing HyMemoryClient(mode='pro') with MEMORY_ENABLE_GRAPH=false")
+          client = HyMemoryClient(mode="pro")
       except Exception as e:
           init_error = str(e)
           logger.warning(f"Failed to initialize HyMemoryClient: {e}")
-
       mcp = FastMCP("Hy-Memory PRO")
 
       @mcp.tool()
