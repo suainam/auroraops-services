@@ -17,10 +17,20 @@
     dest: "/opt/dockers/hy_memory/server.py"
     content: |
       import os
-      import asyncio
+      import sys
+      import logging
       import httpx
       from fastmcp import FastMCP
       from hy_memory import HyMemoryClient
+      from starlette.applications import Starlette
+      from starlette.responses import JSONResponse
+      from starlette.routing import Route
+      from starlette.middleware import Middleware
+      from starlette.middleware.base import BaseHTTPMiddleware
+      import uvicorn
+
+      logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+      logger = logging.getLogger("hy_memory_pro")
 
       os.environ.setdefault("MEMORY_MODE", "pro")
       os.environ.setdefault("MEMORY_EMBEDDER_BASE_URL", "https://openrouter.ai/api/v1")
@@ -28,39 +38,84 @@
       os.environ.setdefault("MEMORY_EMBEDDER_MODEL", "qwen/qwen3-embedding-8b")
       os.environ.setdefault("MEMORY_LLM_MODEL", "anthropic/claude-3.5-sonnet")
       os.environ.setdefault("MEMORY_DATA_DIR", "/opt/dockers/hy_memory/data")
+      
       api_key = "{{ vault_openrouter_api_key | default('') }}"
       if api_key:
           os.environ["MEMORY_EMBEDDER_API_KEY"] = api_key
           os.environ["MEMORY_LLM_API_KEY"] = api_key
 
-      app = FastMCP("Hy-Memory PRO")
-      # PRO mode, collision-safe namespace
-      client = HyMemoryClient(mode="pro")
+      bearer_token = api_key if api_key else "hy-memory-secret-token"
 
-      @app.tool()
-      async def remember(content: str, repo: str = "default-repo", branch: str = "main") -> str:
-          """Store memory with deterministic repository namespace mapped to SDK user_id."""
+      client = None
+      init_error = None
+      try:
+          logger.info("Initializing HyMemoryClient(mode='pro', enable_graph=False)")
+          client = HyMemoryClient(mode="pro", enable_graph=False)
+      except Exception as e:
+          init_error = str(e)
+          logger.warning(f"Failed to initialize HyMemoryClient: {e}")
+
+      mcp = FastMCP("Hy-Memory PRO")
+
+      @mcp.tool()
+      async def remember(content: str, repo: str, branch: str = "main") -> str:
+          """Store memory with collision-safe repository namespace mapped to SDK user_id."""
+          if not repo:
+              raise ValueError("repo parameter is mandatory and cannot be empty")
           sanitized_repo = repo.replace('/', '_').replace('-', '_')
           user_id = f"repo_{sanitized_repo}"
+          if not client:
+              raise RuntimeError(f"HyMemoryClient not initialized: {init_error}")
           try:
               res = client.add(content=content, user_id=user_id, metadata={"branch": branch})
           except Exception as e:
+              logger.error(f"HyMemory client add failed: {e}")
               raise RuntimeError(f"HyMemory client add failed: {e}") from e
           return f"Stored successfully under namespace {user_id}. Result: {res}"
 
-      @app.tool()
-      async def recall(query: str, repo: str = "default-repo") -> str:
+      @mcp.tool()
+      async def recall(query: str, repo: str) -> str:
           """Recall memories from the repository namespace mapped to SDK user_id."""
+          if not repo:
+              raise ValueError("repo parameter is mandatory and cannot be empty")
           sanitized_repo = repo.replace('/', '_').replace('-', '_')
           user_id = f"repo_{sanitized_repo}"
+          if not client:
+              raise RuntimeError(f"HyMemoryClient not initialized: {init_error}")
           try:
               res = client.search(query=query, user_id=user_id)
           except Exception as e:
+              logger.error(f"HyMemory client search failed: {e}")
               raise RuntimeError(f"HyMemory client search failed: {e}") from e
           return str(res)
 
+      class AuthMiddleware(BaseHTTPMiddleware):
+          async def dispatch(self, request, call_next):
+              if request.url.path in ["/healthz", "/docs", "/openapi.json"]:
+                  return await call_next(request)
+              auth = request.headers.get("Authorization", "")
+              expected = f"Bearer {bearer_token}"
+              if not auth or auth != expected:
+                  return JSONResponse({"error": "Unauthorized / Invalid Bearer Token"}, status_code=401)
+              return await call_next(request)
+
+      async def healthz(request):
+          if client is None:
+              return JSONResponse({"status": "error", "service": "hy-memory-pro", "error": init_error}, status_code=503)
+          return JSONResponse({"status": "ok", "service": "hy-memory-pro", "client_ready": True})
+
+      routes = [
+          Route("/healthz", healthz),
+      ]
+
+      app = Starlette(routes=routes, middleware=[Middleware(AuthMiddleware)])
+      if hasattr(mcp, "sse_app"):
+          app.mount("/mcp", mcp.sse_app())
+      elif hasattr(mcp, "_sse_app"):
+          app.mount("/mcp", mcp._sse_app())
+
       if __name__ == "__main__":
-          app.run(transport="sse", host="127.0.0.1", port=30024)
+          uvicorn.run(app, host="127.0.0.1", port=30024)
     mode: '0600'
   tags: [deploy, services, docker_apps, hy_memory]
 
