@@ -1366,6 +1366,7 @@
     url: "http://127.0.0.1:{{ docker_apps_hy_memory_port }}/mcp"
     method: POST
     status_code: 200
+    return_content: true
     # Streamable HTTP 以 text/event-stream 返回，body_format=json 无法解析，
     # 因此保持原始文本并在断言里做子串匹配。
     body:
