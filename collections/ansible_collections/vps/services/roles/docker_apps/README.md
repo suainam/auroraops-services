@@ -950,6 +950,36 @@ make verify-services.docker_apps.singbox
 
 > **注意**: `docker_apps` 属于 Phase 5 (应用服务)，需要精确触达角色，不允许扩大范围，也就是说不允许通过 `make deploy-phase5` 批量全量下发。
 
+### Hy-Memory PRO (systemd 服务，非容器)
+
+`hy_memory` 在 `docker_apps_containers` 中只是一枚开关，实际交付物是
+`hy-memory.service` + 独立 venv，不走 `container_deployer`。因此：
+
+- 容器校验路径必须排除它（`verify.yml` 已 `reject('equalto','hy_memory')`），
+  否则批量 verify 会以“容器不存在”失败。
+- rollback/rollback_verify 直接操作 systemd unit 与监听端口。
+
+| 变量 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| `docker_apps_hy_memory_port` | `app_port_hy_memory` (30024) | 仅监听 `127.0.0.1` |
+| `docker_apps_hy_memory_data_root` | `/opt/dockers/hy_memory` | venv、server.py、env 文件 |
+| `docker_apps_hy_memory_llm_model` | 空（角色默认） | 抽取阶段必需；留空会走 hy-memory 默认 `gpt-4.1-nano` 并导致写入失败 |
+| `docker_apps_hy_memory_embedder_model` | `qwen/qwen3-embedding-8b` | OpenRouter 嵌入模型 |
+| `docker_apps_hy_memory_bearer_token` | `vault_hy_memory_bearer_token` | MCP 鉴权，**不得**复用 OpenRouter key |
+| `docker_apps_hy_memory_allowed_hosts` | mesh 域名/IP/环回 | FastMCP host 校验白名单 |
+
+MCP 入口是 `/mcp`（Streamable HTTP）。FastMCP 4.x 已移除 `sse_app`/
+`_sse_app`，只能用 `FastMCP.http_app(transport="http")`；用 `hasattr` 探测旧
+API 会让服务静默只暴露 `/healthz`，MCP 端点全部 404。`/mcp` 必须带
+`Content-Type: application/json` 与 `Accept: application/json, text/event-stream`，
+响应是 SSE 流而不是纯 JSON。
+
+```bash
+make preflight-services.docker_apps.hy_memory
+make deploy-services.docker_apps.hy_memory
+make verify-services.docker_apps.hy_memory
+```
+
 ---
 ## 5. 故障修复历史 (Troubleshoot History)
 
