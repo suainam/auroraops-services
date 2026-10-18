@@ -36,3 +36,7 @@ Chromium 与同一只读邮箱能力。`rollback` 只移除容器，保留配置
 不得跟踪上游默认分支。APT 使用基础镜像自带且由 Debian 签名校验的软件源，不能通过
 关闭 TLS 验证来追求可复现性。秘密只来自 Vault 或受保护的远端配置文件，禁止写入镜像层、
 README、普通日志和 Ansible 输出。
+### 内部逻辑
+- 角色从固定 Git SHA `grok_register_source_revision` 检出上游源码，用 Buildx 构建固定镜像 `grok_register_image`，再经 `container_deployer` 启动一个空闲容器（Chromium + Xvfb/x11vnc 由镜像内部提供），不保持长驻注册进程。
+- 运行态配置渲染到 `grok_register_data_dir/app/config.json`（`0600`），源码溯源写入 `source-provenance.json`，持久目录 `/data`（含 browser-home、logs、screenshots）以 `0700` 创建并挂入容器。
+- 镜像与修订必须锁定：升级需同时更新 `grok_register_source_revision`、依赖约束与镜像构建版本并重跑完整生命周期；秘密只来自 Vault，禁止写入镜像层、README 或日志。

@@ -330,22 +330,3 @@
   # on rewriting the sing-box configuration every 30 minutes. Note also that the
   # old gate defaulted to `true` when the key was absent, so deleting the line
   # from host_vars would have kept the capability on.
-  - name: 部署 services.ip2free_gateway
-    include_role:
-      name: vps.services.ip2free_gateway
-      tasks_from: main
-      apply:
-        tags:
-        - deploy
-        - phase5
-        - services
-        - ip2free_gateway
-    tags:
-    - deploy
-    - phase5
-    - services
-    - ip2free_gateway
-    - ip2free_gateway_install
-    - ip2free_gateway_config
-  vars_files:
-  - ../../secrets/vault.yml

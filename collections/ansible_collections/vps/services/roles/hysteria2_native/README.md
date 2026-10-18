@@ -50,3 +50,13 @@
 - **Configure**: `tags: [deploy, services, hysteria2_native, hysteria2_native_config, phase3]`
 - **Verify**: `tags: [verify, services, hysteria2_native, hysteria2_native_verify, phase3]`
 - **Rollback**: `tags: [rollback, services, hysteria2_native, hysteria2_native_rollback, phase3]`
+
+## 依赖与边界
+- 角色自带 systemd unit `hysteria2-native.service`（模板 `hysteria2-native.service.j2`），不依赖 `application_service`/`application_timer`；原生二进制 `hysteria2-client` 由控制器 staging 下载固定 SHA256 后落盘到 `hysteria2_native_binary_path`。
+- TLS 凭据（SNI/混淆/认证）来自 `hysteria_auth_password`、`hysteria_obfs_password`、`singbox_domain` 等 vault / host_vars，没有 `hysteria2_acme_email`；监听 `127.0.0.1:10808`（SOCKS5+HTTP 单端口混合），端口在角色内定义而非 `ports.yml`。
+- 与 `mihomo_native` 同为本地回环代理但独立进程，互不依赖启动顺序；切流时会停止并禁用历史 `hysteria2.service`（保留其磁盘配置用于应急回滚）。
+
+## 维护与排查
+- 查看状态: `systemctl status hysteria2-native`；查看端口: `ss -lup | grep 10808`。
+- 验证连通: 确认 `hysteria2_native_auth_password` 与 `hysteria_obfs_password` 已注入，且上游 `singbox_domain`/`app_port_singbox_hysteria` 可达；日志 `journalctl -u hysteria2-native`。
+- 重新收敛: 在控制节点重跑 `make deploy-services.hysteria2_native`；失败多为二进制校验和/下载或权限问题。

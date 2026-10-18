@@ -37,7 +37,7 @@
   ],
   "outbounds": [
     {%- set raw_sub_nodes = (docker_apps_singbox_processed_nodes | default(singbox_nodes)) + (singbox_extra_nodes | default([])) -%}
-    {%- set all_sub_nodes = raw_sub_nodes | rejectattr('name', 'search', 'resi') | list if not (auroraops_roles['services']['ip2free_gateway'] | default(false) | bool) else raw_sub_nodes -%}
+    {%- set all_sub_nodes = raw_sub_nodes | rejectattr('name', 'search', 'resi') | list -%}
     {
       "type": "selector",
       "tag": "proxy",

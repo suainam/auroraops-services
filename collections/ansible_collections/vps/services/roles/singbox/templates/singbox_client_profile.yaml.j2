@@ -29,7 +29,7 @@ dns:
 # === 代理节点 ===
 proxies:
 {% set raw_sub_nodes = (docker_apps_singbox_processed_nodes | default(singbox_nodes)) + (singbox_extra_nodes | default([])) %}
-{% set all_sub_nodes = raw_sub_nodes | rejectattr('name', 'search', 'resi') | list if not (auroraops_roles['services']['ip2free_gateway'] | default(false) | bool) else raw_sub_nodes %}
+{% set all_sub_nodes = raw_sub_nodes | rejectattr('name', 'search', 'resi') | list %}
 {% for node in all_sub_nodes %}
 {% set has_flag = node.name is regex('^[^\\x00-\\x7f]') %}
 {% set current_flag = docker_apps_country_flags[docker_apps_singbox_host_country | default('UNKNOWN')] | default('🌍') %}
@@ -77,7 +77,7 @@ proxies:
     udp: true
 {% endif %}
 {% endif %}
-{% elif node.type == 'hysteria2' and (not ('resi' in node.name) or (auroraops_roles['services']['ip2free_gateway'] | default(false) | bool)) %}
+{% elif node.type == 'hysteria2' and not ('resi' in node.name) %}
   - name: "{{ display_name }}"
     type: hysteria2
     server: "{{ node.server | default(singbox_domain) }}"
