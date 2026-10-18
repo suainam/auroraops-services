@@ -327,22 +327,3 @@
   # what verify has to judge is whether the host matches it -- in both
   # directions. Gating here meant a retired host was never checked at all, so
   # the only way to learn the artifacts were still installed was to go and look.
-  - name: 验证 services.ip2free_gateway
-    include_role:
-      name: vps.services.ip2free_gateway
-      tasks_from: verify
-      apply:
-        tags:
-        - verify
-        - phase5
-        - services
-        - ip2free_gateway
-    tags:
-    - verify
-    - phase5
-    - services
-    - ip2free_gateway
-    - ip2free_gateway_install
-    - ip2free_gateway_config
-  vars_files:
-  - ../../secrets/vault.yml

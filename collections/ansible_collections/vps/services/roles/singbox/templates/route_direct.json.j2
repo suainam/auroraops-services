@@ -41,9 +41,6 @@
         ],
         "action": "reject"
       },
-      {% if auroraops_roles['services']['ip2free_gateway'] | default(false) %}
-      { "inbound": ["hy2-resi"], "outbound": "🏠 住宅代理" },
-      {% endif %}
       {% if not (docker_apps_singbox_zero_rules | default(false) | bool) %}
       { "rule_set": ["geosite-category-ads-all", "geoip-cn", "geosite-cn"], "action": "reject" },
       {% endif %}

@@ -32,7 +32,7 @@ The legacy `https://bws-vps-health.msuai.top/alive` endpoint belongs to cc15, no
 ### 内部逻辑
 - 部署 Cloudflare Tunnel 客户端：渲染 `config.yml` 到 `cloudflared_config_dir`，unit 由 `application_service`/`application_timer` 模板角色生成。
 - 隧道凭据来自 `cloudflared_credentials_path` 下的 tunnel credentials JSON（私有 inventory/Vault 注入，不落日志）；ingress 规则由 `cloudflared_config_path` 渲染生成。
-- 连接状态受 `cloudflared_tunnel_server_locations` 影响（跨洋漂移会引发 15s 客户端超时），探活走隧道健康端点。
+- 隧道边缘节点位置由 cloudflared 自身选择，跨洋漂移会引发客户端超时；可用 `cloudflared_tunnel_info` 只读命令核对当前边缘，探活走 `cloudflared_metrics_url`。
 
 ## 维护与排查
 - 查看隧道: `cloudflared tunnel info <name>`；查看单元: `systemctl status cloudflared`。
