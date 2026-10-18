@@ -30,11 +30,11 @@ DNS mutation is disabled by default. An explicitly configured `cloudflared_dns_h
 The legacy `https://bws-vps-health.msuai.top/alive` endpoint belongs to cc15, not the current qqg1299 primary. For current primary health checks and promotion eligibility, follow the [Docker retirement standby guard](../docker/README.md).
 
 ### 内部逻辑
-- 部署 Cloudflare Tunnel 客户端：渲染 `config.yml` 到 `cloudflared_config_dir`，unit 由 `application_service`/`application_timer` 模板角色生成。
-- 隧道凭据来自 `cloudflared_credentials_path` 下的 tunnel credentials JSON（私有 inventory/Vault 注入，不落日志）；ingress 规则由 `cloudflared_config_path` 渲染生成。
-- 隧道边缘节点位置由 cloudflared 自身选择，跨洋漂移会引发客户端超时；可用 `cloudflared_tunnel_info` 只读命令核对当前边缘，探活走 `cloudflared_metrics_url`。
+- 部署 Cloudflare Tunnel 连接器：下载固定版本 deb/二进制（按架构 SHA256 校验）安装，渲染 `cloudflared_config_path`（`/etc/cloudflared/config.yml`）与凭据 `cloudflared_credentials_path`（`/etc/cloudflared/{{ cloudflared_tunnel_id }}.json`，来自 `vault_cloudflared_tunnel_credentials`），由本角色自带模板生成 `cloudflared` systemd/OpenRC 单元（连接器单元不依赖 `application_service`）。
+- 就绪看门狗（watchdog）才通过 `vps.applications.application_service`/`application_timer` 生成：复用 `cloudflared_metrics_url`（`/ready`）探测，连续失败阈值 `cloudflared_watchdog_failure_threshold` 后在 `/var/lib/cloudflared-watchdog` 记录并重启 `cloudflared`；仅在 `cloudflared_enabled` 为真且看门狗启用时运行。
+- 探活走隧道健康端点；连接器就绪与应用健康相互独立，已连接隧道但后端宕机须返回非 200 而非被误判为健康应用。
 
 ## 维护与排查
-- 查看隧道: `cloudflared tunnel info <name>`；查看单元: `systemctl status cloudflared`。
-- 掉线排查: 确认 `cloudflared_credentials_path` 指向的凭据有效、边缘节点未跨洋漂移；日志 `journalctl -u cloudflared`。
-- 重新渲染: 在控制节点重跑 `make deploy-services.cloudflared`。
+- 查看隧道: `cloudflared tunnel info <name>`；查看单元: `systemctl status cloudflared`（OpenRC: `rc-service cloudflared status`）。
+- 掉线排查: 确认 `cloudflared_credentials_path` 指向的 tunnel credentials 有效且 `cloudflared_tunnel_id` 已配置；看门狗失败记于 `journalctl -u cloudflared` 与 `/var/lib/cloudflared-watchdog`。
+- 重新收敛: 在控制节点重跑 `make deploy-services.cloudflared`。
