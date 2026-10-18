@@ -1366,17 +1366,11 @@
     url: "http://127.0.0.1:{{ docker_apps_hy_memory_port }}/mcp"
     method: POST
     status_code: 200
-    body_format: json
+    # Streamable HTTP 以 text/event-stream 返回，body_format=json 无法解析，
+    # 因此保持原始文本并在断言里做子串匹配。
     body:
-      jsonrpc: "2.0"
-      id: 1
-      method: initialize
-      params:
-        protocolVersion: "2025-06-18"
-        capabilities: {}
-        clientInfo:
-          name: auroraops-verify
-          version: "1"
+      |-
+      {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"auroraops-verify","version":"1"}}}
     headers:
       Accept: "application/json, text/event-stream"
       Authorization: "Bearer {{ docker_apps_hy_memory_bearer_token }}"
@@ -1389,7 +1383,7 @@
 - name: Assert Hy-Memory MCP initialize advertises the expected server identity
   ansible.builtin.assert:
     that:
-      - (docker_apps_hy_memory_mcp_auth.json | default({})).result.serverInfo.name == 'Hy-Memory PRO'
+      - docker_apps_hy_memory_mcp_auth.content is search('"name":"Hy-Memory PRO"')
     fail_msg: "Hy-Memory MCP initialize did not return the expected server identity"
   when: verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == ''
   tags: [verify, services, docker_apps, hy_memory]
