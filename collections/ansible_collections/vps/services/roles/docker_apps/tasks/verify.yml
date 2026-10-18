@@ -56,7 +56,7 @@
       vertex: vertex-proxy
       workbuddy2api: workbuddy2api
       magpie: magpie
-      hy_memory: hy_memory
+      # hy_memory 是 systemd 服务，没有同名容器；docker_apps_containers 里的条目只作开关。
   tags:
     - verify
     - services
@@ -84,6 +84,7 @@
   when:
     - verify_docker_app_name is defined
     - verify_docker_app_name != 'opcotoai_toolkit'
+    - verify_docker_app_name != 'hy_memory'
     - not (verify_docker_app_name == 'singbox' and docker_apps_singbox_deploy_mode == 'native')
   tags:
     - verify
@@ -1309,20 +1310,87 @@
     - sub_store_capability_profiler_enabled | bool
   tags: [verify, services, docker_apps, sub_store, phase5]
 
-- name: 验证 Hy-Memory systemd 服务与端点状态
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:30024/healthz"
-    return_content: true
-  register: hy_memory_healthz
+- name: Verify Hy-Memory systemd unit is active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, hy-memory]
+  register: docker_apps_hy_memory_active
+  changed_when: false
+  failed_when: docker_apps_hy_memory_active.stdout | trim != 'active'
   when: verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == ''
   tags: [verify, services, docker_apps, hy_memory]
 
-- name: 断言 Hy-Memory 健康检查成功
+- name: Probe Hy-Memory health endpoint on the host
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ docker_apps_hy_memory_port }}/healthz"
+    return_content: true
+    status_code: 200
+  register: docker_apps_hy_memory_healthz
+  changed_when: false
+  when: verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == ''
+  tags: [verify, services, docker_apps, hy_memory]
+
+- name: Assert Hy-Memory health payload reports a ready client
   ansible.builtin.assert:
     that:
-      - hy_memory_healthz.status == 200
-      - (hy_memory_healthz.json | default({})).status == 'ok'
-    fail_msg: "Hy-Memory healthz check failed"
+      - (docker_apps_hy_memory_healthz.json | default({})).status == 'ok'
+      - (docker_apps_hy_memory_healthz.json | default({})).client_ready | default(false) | bool
+    fail_msg: "Hy-Memory /healthz did not report a ready HyMemoryClient"
+  when: verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == ''
+  tags: [verify, services, docker_apps, hy_memory]
+
+- name: Assert Hy-Memory MCP endpoint rejects a request without a bearer token
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ docker_apps_hy_memory_port }}/mcp"
+    method: POST
+    status_code: 401
+    body_format: json
+    body:
+      jsonrpc: "2.0"
+      id: 1
+      method: initialize
+      params:
+        protocolVersion: "2025-06-18"
+        capabilities: {}
+        clientInfo:
+          name: auroraops-verify
+          version: "1"
+    headers:
+      Accept: "application/json, text/event-stream"
+  register: docker_apps_hy_memory_mcp_noauth
+  changed_when: false
+  when: verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == ''
+  tags: [verify, services, docker_apps, hy_memory]
+
+- name: Assert Hy-Memory MCP endpoint completes initialize with the bearer token
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ docker_apps_hy_memory_port }}/mcp"
+    method: POST
+    status_code: 200
+    body_format: json
+    body:
+      jsonrpc: "2.0"
+      id: 1
+      method: initialize
+      params:
+        protocolVersion: "2025-06-18"
+        capabilities: {}
+        clientInfo:
+          name: auroraops-verify
+          version: "1"
+    headers:
+      Accept: "application/json, text/event-stream"
+      Authorization: "Bearer {{ docker_apps_hy_memory_bearer_token }}"
+  register: docker_apps_hy_memory_mcp_auth
+  changed_when: false
+  no_log: true
+  when: verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == ''
+  tags: [verify, services, docker_apps, hy_memory]
+
+- name: Assert Hy-Memory MCP initialize advertises the expected server identity
+  ansible.builtin.assert:
+    that:
+      - (docker_apps_hy_memory_mcp_auth.json | default({})).result.serverInfo.name == 'Hy-Memory PRO'
+    fail_msg: "Hy-Memory MCP initialize did not return the expected server identity"
   when: verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == ''
   tags: [verify, services, docker_apps, hy_memory]
 
@@ -1336,7 +1404,7 @@
     not docker_apps_container_info.exists
     or docker_apps_container_info.container.State.Running
        != (docker_apps_container_expected_running[item] | bool)
-  loop: "{{ docker_apps_containers }}"
+  loop: "{{ docker_apps_containers | reject('equalto', 'hy_memory') | list }}"
   when: verify_docker_app_name is not defined
   tags:
     - verify

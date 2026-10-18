@@ -1,149 +1,197 @@
 ---
-# Hy-Memory PRO Docker Service Tasks
+# Hy-Memory PRO FastMCP Service Tasks
+#
+# 该组件是 **systemd 服务**，不是 Docker 容器：`docker_apps_containers` 只作为
+# 开关（列表中有 `hy_memory` 即启用），容器校验路径必须显式排除它。
+#
+# 鉴权：Bearer token 使用独立的 `vault_hy_memory_bearer_token`，绝不复用
+# OpenRouter API key —— 否则每个 MCP 客户端都会拿到可计费的 LLM 凭证。
 - name: 创建 Hy-Memory 目录
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-    owner: "{{ ansible_user | default('root') }}"
-    group: "{{ ansible_group | default('root') }}"
+    owner: root
+    group: root
     mode: '0755'
   loop:
-    - "/opt/dockers/hy_memory"
-    - "/opt/dockers/hy_memory/data"
+    - "{{ docker_apps_hy_memory_data_root }}"
+    - "{{ docker_apps_hy_memory_data_dir }}"
   tags: [deploy, services, docker_apps, hy_memory]
 
 - name: 渲染 Hy-Memory Server 脚本
   ansible.builtin.copy:
-    dest: "/opt/dockers/hy_memory/server.py"
+    dest: "{{ docker_apps_hy_memory_data_root }}/server.py"
     content: |
+      import json
+      import logging
       import os
       import sys
-      import logging
-      import httpx
-      from fastmcp import FastMCP
-      from hy_memory import HyMemoryClient
-      from starlette.applications import Starlette
-      from starlette.responses import JSONResponse
-      from starlette.routing import Route
-      from starlette.middleware import Middleware
-      from starlette.middleware.base import BaseHTTPMiddleware
+
       import uvicorn
+      from fastmcp import FastMCP
+      from fastmcp.server.auth import AccessToken, TokenVerifier
+      from hy_memory import HyMemoryClient
+      from starlette.responses import JSONResponse
 
       logging.basicConfig(level=logging.INFO, stream=sys.stderr)
       logger = logging.getLogger("hy_memory_pro")
 
-      os.environ.setdefault("MEMORY_MODE", "pro")
-      os.environ.setdefault("MEMORY_ENABLE_GRAPH", "false")
-      os.environ.setdefault("MEMORY_EMBEDDER_BASE_URL", "https://openrouter.ai/api/v1")
-      os.environ.setdefault("MEMORY_LLM_BASE_URL", "https://openrouter.ai/api/v1")
-      os.environ.setdefault("MEMORY_EMBEDDER_MODEL", "qwen/qwen3-embedding-8b")
-      os.environ.setdefault("MEMORY_LLM_MODEL", "anthropic/claude-3.5-sonnet")
-      os.environ.setdefault("MEMORY_DATA_DIR", "/opt/dockers/hy_memory/data")
-      api_key = "{{ vault_openrouter_api_key | default('') }}"
-      if api_key:
-          os.environ["MEMORY_EMBEDDER_API_KEY"] = api_key
-          os.environ["MEMORY_LLM_API_KEY"] = api_key
+      os.environ.setdefault("MEMORY_MODE", "{{ docker_apps_hy_memory_mode }}")
+      os.environ.setdefault("MEMORY_ENABLE_GRAPH", "{{ docker_apps_hy_memory_enable_graph }}")
+      os.environ.setdefault("MEMORY_DATA_DIR", "{{ docker_apps_hy_memory_data_dir }}")
 
-      bearer_token = api_key if api_key else "hy-memory-secret-token"
+      if not os.environ.get("MEMORY_EMBEDDER_API_KEY"):
+          logger.error("MEMORY_EMBEDDER_API_KEY is not set; refusing to start")
+          raise SystemExit(1)
 
       client = None
       init_error = None
       try:
-          logger.info("Initializing HyMemoryClient(mode='pro') with MEMORY_ENABLE_GRAPH=false")
-          client = HyMemoryClient(mode="pro")
-      except Exception as e:
-          init_error = str(e)
-          logger.warning(f"Failed to initialize HyMemoryClient: {e}")
-      mcp = FastMCP("Hy-Memory PRO")
+          client = HyMemoryClient(mode=os.environ["MEMORY_MODE"])
+      except Exception as exc:  # noqa: BLE001 - reason is surfaced on /healthz
+          init_error = str(exc)
+          logger.warning("HyMemoryClient initialization failed: %s", exc)
+
+
+      class BearerTokenVerifier(TokenVerifier):
+          """Static bearer token verification for the private mesh endpoint."""
+
+          def __init__(self, token: str) -> None:
+              super().__init__(base_url="http://hy-memory.mesh/")
+              self._token = token
+
+          async def verify_token(self, token: str):
+              if token != self._token:
+                  return None
+              return AccessToken(token=token, client_id="ops", scopes=[])
+
+
+      mcp = FastMCP(
+          "Hy-Memory PRO",
+          auth=BearerTokenVerifier(os.environ["HY_MEMORY_BEARER_TOKEN"]),
+      )
+
+
+      def _namespace(repo: str) -> str:
+          return "repo_" + repo.replace("/", "_").replace("-", "_")
+
 
       @mcp.tool()
       async def remember(content: str, repo: str, branch: str = "main") -> str:
-          """Store memory with collision-safe repository namespace mapped to SDK user_id."""
+          """Store a memory under the repository namespace."""
           if not repo:
               raise ValueError("repo parameter is mandatory and cannot be empty")
-          sanitized_repo = repo.replace('/', '_').replace('-', '_')
-          user_id = f"repo_{sanitized_repo}"
-          if not client:
+          if client is None:
               raise RuntimeError(f"HyMemoryClient not initialized: {init_error}")
-          try:
-              res = client.add(content=content, user_id=user_id, metadata={"branch": branch})
-          except Exception as e:
-              logger.error(f"HyMemory client add failed: {e}")
-              raise RuntimeError(f"HyMemory client add failed: {e}") from e
-          return f"Stored successfully under namespace {user_id}. Result: {res}"
+          result = client.add(data=content, user_id=_namespace(repo), branch=branch)
+          return json.dumps(result, ensure_ascii=False)[:4000]
+
 
       @mcp.tool()
       async def recall(query: str, repo: str) -> str:
-          """Recall memories from the repository namespace mapped to SDK user_id."""
+          """Recall memories from the repository namespace."""
           if not repo:
               raise ValueError("repo parameter is mandatory and cannot be empty")
-          sanitized_repo = repo.replace('/', '_').replace('-', '_')
-          user_id = f"repo_{sanitized_repo}"
-          if not client:
+          if client is None:
               raise RuntimeError(f"HyMemoryClient not initialized: {init_error}")
-          try:
-              res = client.search(query=query, user_id=user_id)
-          except Exception as e:
-              logger.error(f"HyMemory client search failed: {e}")
-              raise RuntimeError(f"HyMemory client search failed: {e}") from e
-          return str(res)
+          result = client.search(query=query, user_ids=[_namespace(repo)], limit=5)
+          return json.dumps(result, ensure_ascii=False)[:8000]
 
-      class AuthMiddleware(BaseHTTPMiddleware):
-          async def dispatch(self, request, call_next):
-              if request.url.path in ["/healthz", "/docs", "/openapi.json"]:
-                  return await call_next(request)
-              auth = request.headers.get("Authorization", "")
-              expected = f"Bearer {bearer_token}"
-              if not auth or auth != expected:
-                  return JSONResponse({"error": "Unauthorized / Invalid Bearer Token"}, status_code=401)
-              return await call_next(request)
 
+      @mcp.custom_route("/healthz", methods=["GET"])
       async def healthz(request):
           if client is None:
-              return JSONResponse({"status": "error", "service": "hy-memory-pro", "error": init_error}, status_code=503)
-          return JSONResponse({"status": "ok", "service": "hy-memory-pro", "client_ready": True})
+              return JSONResponse(
+                  {"status": "error", "service": "hy-memory-pro", "error": init_error},
+                  status_code=503,
+              )
+          return JSONResponse(
+              {"status": "ok", "service": "hy-memory-pro", "client_ready": True}
+          )
 
-      routes = [
-          Route("/healthz", healthz),
-      ]
 
-      app = Starlette(routes=routes, middleware=[Middleware(AuthMiddleware)])
-      if hasattr(mcp, "sse_app"):
-          app.mount("/mcp", mcp.sse_app())
-      elif hasattr(mcp, "_sse_app"):
-          app.mount("/mcp", mcp._sse_app())
+      # FastMCP 4.x 只提供 http_app()；旧版 sse_app/_sse_app 已移除，用 hasattr
+      # 探测会让服务静默只暴露 /healthz（MCP 端点全部 404）。
+      app = mcp.http_app(
+          transport="http",
+          host_origin_protection=True,
+          allowed_hosts={{ docker_apps_hy_memory_allowed_hosts | to_json }},
+      )
 
       if __name__ == "__main__":
-          uvicorn.run(app, host="127.0.0.1", port=30024)
+          uvicorn.run(
+              app,
+              host="127.0.0.1",
+              port=int(os.environ.get("HY_MEMORY_PORT", "{{ docker_apps_hy_memory_port }}")),
+              log_level="info",
+          )
     mode: '0600'
+  notify: 重启 hy-memory 服务
+  tags: [deploy, services, docker_apps, hy_memory]
+
+- name: 渲染 Hy-Memory 环境文件
+  ansible.builtin.copy:
+    dest: "{{ docker_apps_hy_memory_data_root }}/hy-memory.env"
+    content: |
+      HY_MEMORY_BEARER_TOKEN={{ docker_apps_hy_memory_bearer_token }}
+      HY_MEMORY_PORT={{ docker_apps_hy_memory_port }}
+      MEMORY_MODE={{ docker_apps_hy_memory_mode }}
+      MEMORY_ENABLE_GRAPH={{ docker_apps_hy_memory_enable_graph }}
+      MEMORY_DATA_DIR={{ docker_apps_hy_memory_data_dir }}
+      MEMORY_EMBEDDER_BASE_URL={{ docker_apps_hy_memory_api_base_url }}
+      MEMORY_LLM_BASE_URL={{ docker_apps_hy_memory_api_base_url }}
+      MEMORY_EMBEDDER_MODEL={{ docker_apps_hy_memory_embedder_model }}
+      MEMORY_EMBEDDER_API_KEY={{ docker_apps_hy_memory_api_key }}
+      {% if docker_apps_hy_memory_llm_model | length > 0 %}
+      MEMORY_LLM_MODEL={{ docker_apps_hy_memory_llm_model }}
+      MEMORY_LLM_API_KEY={{ docker_apps_hy_memory_api_key }}
+      {% endif %}
+    mode: '0600'
+  no_log: true
+  notify: 重启 hy-memory 服务
   tags: [deploy, services, docker_apps, hy_memory]
 
 - name: 创建/更新 Hy-Memory 虚拟环境与锁定的 UV 依赖
   ansible.builtin.shell: |
-    if [ ! -d "/opt/dockers/hy_memory/venv" ]; then
-      python3 -m venv /opt/dockers/hy_memory/venv
+    set -euo pipefail
+    if [ ! -x "{{ docker_apps_hy_memory_data_root }}/venv/bin/python" ]; then
+      python3 -m venv "{{ docker_apps_hy_memory_data_root }}/venv"
     fi
-    /root/.local/bin/uv pip install --python /opt/dockers/hy_memory/venv/bin/python "fastmcp>=2.1.0" "hy-memory>=2.0.4" "httpx>=0.27.0"
+    {{ docker_apps_hy_memory_uv_bin }} pip install \
+      --python "{{ docker_apps_hy_memory_data_root }}/venv/bin/python" \
+      {% for package in docker_apps_hy_memory_packages %}"{{ package }}" {% endfor %}
   args:
     executable: /bin/bash
+  register: docker_apps_hy_memory_uv_install
+  # uv 仅在真正写入时输出 " + pkg==ver" / "Installed N packages"；空跑只打印
+  # "Checked N packages"，因此可用它判定幂等（避免 shell 任务恒为 changed）。
+  changed_when: >-
+    (' + ' in (docker_apps_hy_memory_uv_install.stdout ~ docker_apps_hy_memory_uv_install.stderr))
+    or ('Installed' in (docker_apps_hy_memory_uv_install.stdout ~ docker_apps_hy_memory_uv_install.stderr))
   tags: [deploy, services, docker_apps, hy_memory]
 
 - name: 创建 Hy-Memory Systemd Service
   ansible.builtin.copy:
-    dest: "/etc/systemd/system/hy-memory.service"
+    dest: /etc/systemd/system/hy-memory.service
     content: |
       [Unit]
       Description=Hy-Memory PRO FastMCP Service
-      After=network.target
+      After=network-online.target
+      Wants=network-online.target
 
       [Service]
       Type=simple
       User=root
-      WorkingDirectory=/opt/dockers/hy_memory
-      ExecStart=/opt/dockers/hy_memory/venv/bin/python /opt/dockers/hy_memory/server.py
+      WorkingDirectory={{ docker_apps_hy_memory_data_root }}
+      EnvironmentFile={{ docker_apps_hy_memory_data_root }}/hy-memory.env
+      ExecStart={{ docker_apps_hy_memory_data_root }}/venv/bin/python {{ docker_apps_hy_memory_data_root }}/server.py
       Restart=always
       RestartSec=5
       Environment=PYTHONUNBUFFERED=1
+      # 小规格节点（qqg1299 = 1GB）保护：限制该服务的内存占用
+      MemoryMax={{ docker_apps_hy_memory_memory_max }}
+      NoNewPrivileges=true
+      PrivateTmp=true
 
       [Install]
       WantedBy=multi-user.target
@@ -156,7 +204,7 @@
 - name: 确保 Hy-Memory 服务开机自启并运行
   ansible.builtin.systemd:
     name: hy-memory
+    daemon_reload: true
     enabled: true
     state: started
   tags: [deploy, services, docker_apps, hy_memory]
-

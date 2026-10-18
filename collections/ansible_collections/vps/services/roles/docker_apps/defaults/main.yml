@@ -75,6 +75,36 @@ docker_apps_magpie_cpus: "{{ magpie_cpus | default('1.0') }}"
 docker_apps_magpie_web_key: "{{ vault_magpie_web_key | default(omit) }}"
 docker_apps_magpie_data_dir: "{{ backup_source_docker_dir | default('/opt/dockers') }}/magpie"
 
+# Hy-Memory PRO (systemd 服务，非容器；`docker_apps_containers` 中的 hy_memory 仅作开关)
+docker_apps_hy_memory_data_root: >-
+  {{ backup_source_docker_dir | default('/opt/dockers') }}/hy_memory
+docker_apps_hy_memory_data_dir: >-
+  {{ docker_apps_hy_memory_data_root }}/data
+docker_apps_hy_memory_port: "{{ app_port_hy_memory | default(30024) }}"
+docker_apps_hy_memory_uv_bin: "{{ hy_memory_uv_bin | default('/root/.local/bin/uv') }}"
+docker_apps_hy_memory_packages:
+  - "fastmcp>=4.1.0"
+  - "hy-memory>=2.0.4"
+  - "httpx>=0.27.0"
+  - "uvicorn>=0.30.0"
+docker_apps_hy_memory_mode: "{{ hy_memory_mode | default('pro') }}"
+docker_apps_hy_memory_enable_graph: "{{ hy_memory_enable_graph | default('false') }}"
+# extraction 需要真实可用的 LLM 模型；留空表示只做向量写入（不跑 LLM 抽取），
+# 由 inventory 显式指定。OpenRouter 上 claude-3.5-sonnet 已下线。
+docker_apps_hy_memory_llm_model: "{{ hy_memory_llm_model | default('') }}"
+docker_apps_hy_memory_embedder_model: >-
+  {{ hy_memory_embedder_model | default('qwen/qwen3-embedding-8b') }}
+docker_apps_hy_memory_api_base_url: >-
+  {{ hy_memory_api_base_url | default('https://openrouter.ai/api/v1') }}
+docker_apps_hy_memory_api_key: "{{ vault_openrouter_api_key | default('') }}"
+docker_apps_hy_memory_bearer_token: >-
+  {{ vault_hy_memory_bearer_token | default('') }}
+# FastMCP host/origin 校验白名单：mesh 域名 + 节点 IP + 环回
+docker_apps_hy_memory_allowed_hosts: >-
+  {{ hy_memory_allowed_hosts
+     | default(['hy-memory.mesh', '10.144.10.11', '127.0.0.1']) }}
+docker_apps_hy_memory_memory_max: "{{ hy_memory_memory_max | default('384M') }}"
+
 
 # Vertex AI Proxy
 docker_apps_app_port_vertex: "{{ app_port_vertex | default(30020) }}"

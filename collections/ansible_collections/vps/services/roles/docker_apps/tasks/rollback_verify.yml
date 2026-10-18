@@ -37,3 +37,30 @@
   when: rollback_docker_app_name | default('') == 'magpie'
   no_log: true
   tags: [rollback_verify, services, docker_apps, magpie, phase5]
+
+- name: Verify Hy-Memory systemd unit is inactive after rollback
+  ansible.builtin.command:
+    argv: [systemctl, is-active, hy-memory]
+  register: docker_apps_rollback_hy_memory_active
+  changed_when: false
+  failed_when: docker_apps_rollback_hy_memory_active.stdout | trim == 'active'
+  when: rollback_docker_app_name | default('') == 'hy_memory'
+  tags: [rollback_verify, services, docker_apps, docker_apps_manifest, hy_memory, phase5]
+
+- name: Verify Hy-Memory systemd unit is disabled after rollback
+  ansible.builtin.command:
+    argv: [systemctl, is-enabled, hy-memory]
+  register: docker_apps_rollback_hy_memory_enabled
+  changed_when: false
+  failed_when: docker_apps_rollback_hy_memory_enabled.stdout | trim == 'enabled'
+  when: rollback_docker_app_name | default('') == 'hy_memory'
+  tags: [rollback_verify, services, docker_apps, docker_apps_manifest, hy_memory, phase5]
+
+- name: Verify Hy-Memory port is no longer listening after rollback
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ docker_apps_hy_memory_port }}"
+    state: stopped
+    timeout: 20
+  when: rollback_docker_app_name | default('') == 'hy_memory'
+  tags: [rollback_verify, services, docker_apps, docker_apps_manifest, hy_memory, phase5]
