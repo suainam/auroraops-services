@@ -158,25 +158,6 @@
       ]
     }
     {%- endif -%}
-          "tag": "hy2-resi",
-      "listen": "::",
-      "listen_port": {{ app_port_singbox_hy2_resi }},
-      "users": [
-        {
-          "password": "{{ hysteria_auth_password }}"
-        }
-      ],
-      "obfs": {
-        "type": "salamander",
-        "password": "{{ hysteria_obfs_password }}"
-      },
-      "tls": {
-        "enabled": true,
-        "certificate_path": "/etc/letsencrypt/live/{{ docker_apps_singbox_certificate_domain }}/fullchain.pem",
-        "key_path": "/etc/letsencrypt/live/{{ docker_apps_singbox_certificate_domain }}/privkey.pem"
-      }
-    }
-    {%- endif -%}
     {%- if singbox_mesh_socks_enabled | default(false) | bool -%}
     {%- if not ns.first_inbound -%},{%- endif -%}
     {%- set ns.first_inbound = false -%}
