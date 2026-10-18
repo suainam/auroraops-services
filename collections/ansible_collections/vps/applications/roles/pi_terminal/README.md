@@ -84,3 +84,12 @@ make rollback-applications.pi_terminal
 ```
 
 彻底下线时，还应从 `inventories/host_vars/cc15.yml` 删除 `pi.suai.eu.org` 并重新部署 Nginx。
+### 内部逻辑
+- 角色在目标节点以 Docker 容器方式运行 `pi-terminal`（镜像 `oven/bun` + 内置 OMP，经 ttyd 暴露受限终端），不直接在被管主机安装可执行文件。
+- 容器仅监听宿主机 `127.0.0.1:{{ pi_terminal_port 默认 30014 }}`，前面由 Nginx + Cloudflare 入站；ttyd 强制 Basic Auth、Origin 校验与单客户端，不暴露 Docker Socket 或宿主 home。
+- 配置、凭据与 OMP home 经命名卷 `pi_terminal_omp_home` 持久化，首次部署随机生成访问密码写入 `pi_terminal_password_file`，容器重建不丢会话。
+
+## 维护与排查
+- 查看容器: `docker ps --filter name=pi-terminal`；查看日志: `docker logs pi-terminal --tail 200`。
+- 取回浏览器密码: `ssh cc15 'sudo cat /opt/pi-terminal/secrets/password'`。
+- 重新部署: 在控制节点重跑 `make deploy-applications.pi_terminal`；失败多为镜像拉取、端口冲突或 Nginx 站点未就绪。

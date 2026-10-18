@@ -46,3 +46,7 @@ Profile 显式启用 `mihomo_native`，其他主机默认关闭。profile 下载
 `mihomo_native_profile_download_proxy` 显式指定；如果启用定时刷新，应设置为可达的
 出站代理。真实目标调通还需要完整 profile URL 可达，以及目标具备 `curl`、`gzip`、
 `systemd`。
+### 内部逻辑
+- 原生部署 mihomo（Clash.Meta）核心：下载 `mihomo_native_binary_url` 固定版本二进制到 `mihomo_native_install_dir`，由其自带的 systemd unit `mihomo-native` 与 `mihomo-native-refresh` timer 驱动（模板在 `templates/`，不依赖 `application_service`）。
+- 完整 profile 由 Sub-Store 生成，角色消费但不解析；首次部署在控制端 staging 完整 profile 以规避 bootstrap 循环，经 `-t` 校验后原子 `mv` 到 `mihomo_native_profile_path`，内容未变则不重启。
+- 默认监听 `127.0.0.1:7890` 不向 LAN 暴露；端口/入站由 profile 本身定义，不在角色内二次分配。配置变更后由 refresh timer 周期性重载，不直接重启进程。

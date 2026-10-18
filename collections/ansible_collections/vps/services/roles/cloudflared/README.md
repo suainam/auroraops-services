@@ -28,3 +28,13 @@ Rollback removes only the managed package/binary, connector and watchdog units, 
 DNS mutation is disabled by default. An explicitly configured `cloudflared_dns_hostname` and `cloudflared_dns_zone` enroll one proxied CNAME for an existing custom ingress through the normal Make lifecycle. Preflight refuses unrelated existing records, and a separate ownership baseline lets rollback remove only a record originally created by the role. Credentials remain in Vault and API operations use `no_log`. The separate Vaultwarden test-domain drill remains restricted to `bws-dr-test.msuai.top` and retains its explicit authorization and backup guards.
 
 The legacy `https://bws-vps-health.msuai.top/alive` endpoint belongs to cc15, not the current qqg1299 primary. For current primary health checks and promotion eligibility, follow the [Docker retirement standby guard](../docker/README.md).
+
+### 内部逻辑
+- 部署 Cloudflare Tunnel 客户端：渲染 `config.yml` 到 `cloudflared_config_dir`，unit 由 `application_service`/`application_timer` 模板角色生成。
+- 隧道凭据来自 `cloudflared_credentials_path` 下的 tunnel credentials JSON（私有 inventory/Vault 注入，不落日志）；ingress 规则由 `cloudflared_config_path` 渲染生成。
+- 连接状态受 `cloudflared_tunnel_server_locations` 影响（跨洋漂移会引发 15s 客户端超时），探活走隧道健康端点。
+
+## 维护与排查
+- 查看隧道: `cloudflared tunnel info <name>`；查看单元: `systemctl status cloudflared`。
+- 掉线排查: 确认 `cloudflared_credentials_path` 指向的凭据有效、边缘节点未跨洋漂移；日志 `journalctl -u cloudflared`。
+- 重新渲染: 在控制节点重跑 `make deploy-services.cloudflared`。
