@@ -82,10 +82,11 @@ make deploy-services.docker_apps.singbox
 Note: The SOCKS5 backend nodes are NOT included in subscription (internal only).
 
 ## 变量与边界
-- 关键变量: `ip2free_enabled`（总开关）、`ip2free_gateway_endpoint`（上游出口网关地址）、`ip2free_listen_port`（本地监听端口）。
-- 端口与上游由 `ports.yml` 与 group_vars 统一维护；本角色只渲染转发规则。
+- 关键变量: `auroraops_roles['services']['ip2free_gateway']`（总开关，须经 singbox 在 `direct` 模式且 `singbox` 在容器列表内才部署）、`ip2free_gateway_ip2free_config_file`（ip2free 配置文件）、`ip2free_gateway_ip2free_proxy_source`（上游代理源）、`ip2free_gateway_ip2free_schedule` / `ip2free_gateway_ip2free_health_schedule`（抓取/探活定时器）。
+- 部署通过 `include_role` 依赖 `vps.system.base`（pip / aurora venv）、`vps.personalization.user_management`（systemd 家目录），以及 `services.docker_apps.singbox` 提供配置模板与路由；角色不在 `ports.yml` 内分配端口。
+- 开关关闭时本角色的幂等清理块会停止并移除四个 systemd 单元与 `06_ip2free.json` 分片，避免残留定时器改写 sing-box 配置。
 
 ## 维护与排查
-- 查看状态: `systemctl status ip2free-gateway`；查看监听: `ss -ltnp | grep ip2free`。
-- 出口排查: 确认 `ip2free_gateway_endpoint` 可达且凭据来自 vault；日志 `journalctl -u ip2free-gateway`。
-- 重新渲染: 在控制节点重跑 `make deploy-services.ip2free_gateway`。
+- 查看状态: `systemctl status ip2free-agent ip2free-health`；查看监听: `ss -ltnp | grep ip2free`。
+- 出口排查: 确认 `ip2free_gateway_ip2free_config_file` 中配置的上游代理源可达且凭据来自 vault；日志 `journalctl -u ip2free-agent -u ip2free-health`。
+- 重新收敛: 在控制节点重跑 `make deploy-services.ip2free_gateway`；失败多为 pip 依赖缺失或 singbox 未处于 direct 模式。
