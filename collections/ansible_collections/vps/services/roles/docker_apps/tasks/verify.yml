@@ -1372,6 +1372,7 @@
       |-
       {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"auroraops-verify","version":"1"}}}
     headers:
+      Content-Type: "application/json"
       Accept: "application/json, text/event-stream"
       Authorization: "Bearer {{ docker_apps_hy_memory_bearer_token }}"
   register: docker_apps_hy_memory_mcp_auth
