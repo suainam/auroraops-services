@@ -61,19 +61,6 @@
     - docker_verify_logrotate_config
     - phase3
 
-- name: 验证 Docker 备份日志轮转配置是否存在
-  become: true
-  ansible.builtin.stat:
-    path: /etc/logrotate.d/docker_backup_logs
-  register: docker_backup_logrotate_check
-  failed_when: not docker_backup_logrotate_check.stat.exists
-  when: docker_state | default('present') == 'present'
-  tags:
-    - verify
-    - services
-    - docker
-    - docker_verify_logrotate_config
-    - phase3
 
 # ----------------------------------------------------------------------------
 # 2. Retirement Verification (docker_state == 'absent')

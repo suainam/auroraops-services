@@ -8,7 +8,7 @@
 | `docker__users` | `[admin, ansible_user]` | 需要加入 `docker` 用户组的用户列表。默认包含 admin 用户和当前 Ansible 执行用户。 |
 | `docker__install_compose_plugin` | `true` | 是否安装 Docker Compose 插件。 |
 | `docker__daemon_options` | `{...}` | `daemon.json` 配置字典。默认启用 `live-restore` 和 `no-new-privileges`。 |
-| `docker_logrotate_configs` | Docker/backup 四个 fragment | Docker 容器日志与备份文件的权威 logrotate 声明；普通部署与受控 fragment recovery 共用同一来源。 |
+| `docker_logrotate_configs` | `[]` | Docker 容器的日志轮转由 `daemon.json` 的 `json-file` `max-size`/`max-file` 负责；legacy 备份产物轮转已随 `unified-backup` 退役，故默认不再声明 fragment。 |
 | `docker_state` | `present` | 角色终态声明。`present` 安装并配置 Docker；`absent` 执行安全退役卸载。 |
 | `docker_retirement_require_no_running_containers` | `true` | 退役前置条件：若存在运行中的容器则阻断卸载。 |
 | `docker_retirement_required_active_services` | `[]` | 退役前置条件：必须处于 active 状态的原生系统服务列表（如 `['hysteria2', 'cliproxyapi']`）。 |
@@ -28,7 +28,7 @@
     - **No New Privileges**: 禁止容器进程获取额外权限（提权防护）。
     - **日志限制**: 限制容器日志大小，防止磁盘耗尽。
 - **权限管理**: 自动将 `docker__users` 列表中的用户加入 `docker` 组。自动排除 root 用户（避免安全风险）。
-- **日志轮转**: `tasks/logrotate.yml` 通过完整 `system.logrotate` 合同部署；`tasks/logrotate_repair.yml` 只重建 fragment，不触碰 Docker daemon、容器或 baseline。
+- **日志轮转**: `tasks/logrotate.yml` 通过完整 `system.logrotate` 合同部署（当前 `docker_logrotate_configs` 为空列表），并幂等删除 `docker_backups_fast`、`docker_backups_full`、`docker_backup_logs` 三个已退役备份栈遗留 fragment。
 - **安全退役与卸载 (Docker Retirement, `docker_state: absent`)**:
     - **显式 Opt-in 契约**: 通过主机变量指定 `docker_state: absent`。注意：`auroraops_roles.services.docker` **必须保持为 true（或默认缺省）**，不能设为 false。若设为 false，Ansible 将直接跳过整个角色，导致 Docker 保持安装运行而无法执行卸载；保持角色启用并设置 `docker_state: absent` 方可走完 Make check/deploy/verify 生命周期。
     - **前置硬阻断 (Check/Preflight)**:

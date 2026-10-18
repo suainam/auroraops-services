@@ -1,9 +1,20 @@
 ---
-- name: Configure Docker and Backup logrotate
+- name: Configure Docker logrotate fragments
   ansible.builtin.include_role:
     name: vps.system.logrotate
   vars:
     logrotate_configs_to_deploy: "{{ docker_logrotate_configs }}"
+  tags: [deploy, services, docker, logrotate, phase3]
+
+- name: Remove logrotate fragments of the retired legacy backup stack
+  become: true
+  ansible.builtin.file:
+    path: "/etc/logrotate.d/{{ item }}"
+    state: absent
+  loop:
+    - docker_backups_fast
+    - docker_backups_full
+    - docker_backup_logs
   tags: [deploy, services, docker, logrotate, phase3]
 
 - name: Remove conflicting external container logrotate configuration
