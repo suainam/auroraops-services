@@ -79,7 +79,7 @@ def test_profile_template_generates_bounded_clean_10_visible_groups():
         {"name": "cc15", "provider-id": "cc15", "enabled": True, "display-group": "VPS"},
         {"name": "qqg1299", "provider-id": "qqg1299", "enabled": True, "display-group": "VPS"},
         {"name": "nat-hk084", "provider-id": "nat-hk084", "enabled": True, "display-group": "NAT"},
-        {"name": "nat-hk216", "provider-id": "nat-hk216", "enabled": True, "display-group": "NAT"},
+        {"name": "nat-hk24", "provider-id": "nat-hk24", "enabled": True, "display-group": "NAT"},
         {"name": "nat-jp3", "provider-id": "nat-jp3", "enabled": True, "display-group": "NAT"},
         {"name": "yfjc", "provider-id": "yfjc", "enabled": True, "display-group": "AIRPORT"},
         {"name": "sakura", "provider-id": "sakura", "enabled": True, "display-group": "SK", "metered": True},
@@ -175,7 +175,7 @@ def test_mihomo_syntax_validation():
         {"name": "cc15", "provider-id": "cc15", "enabled": True, "display-group": "VPS"},
         {"name": "qqg1299", "provider-id": "qqg1299", "enabled": True, "display-group": "VPS"},
         {"name": "nat-hk084", "provider-id": "nat-hk084", "enabled": True, "display-group": "NAT"},
-        {"name": "nat-hk216", "provider-id": "nat-hk216", "enabled": True, "display-group": "NAT"},
+        {"name": "nat-hk24", "provider-id": "nat-hk24", "enabled": True, "display-group": "NAT"},
         {"name": "nat-jp3", "provider-id": "nat-jp3", "enabled": True, "display-group": "NAT"},
         {"name": "sakura", "provider-id": "sakura", "enabled": True, "display-group": "SK", "metered": True},
     ]
