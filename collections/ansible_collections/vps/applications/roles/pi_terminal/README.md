@@ -84,3 +84,13 @@ make rollback-applications.pi_terminal
 ```
 
 彻底下线时，还应从 `inventories/host_vars/cc15.yml` 删除 `pi.suai.eu.org` 并重新部署 Nginx。
+
+### 内部逻辑
+- 角色在控制节点（macOS / Linux 中台）部署 `pi` CLI 的封装脚本与 shell 补全，仅面向本地运维终端，不在被管主机落盘。
+- 通过 `pi_terminal_brew_formula` 安装（macOS 走 Homebrew，Linux 走对应包管理），并渲染 `pi` 的 profile 配置到用户 shell 启动文件。
+- 命令模板来自 `pi_terminal_command_spec`，经模板渲染为本地可执行别名。
+
+## 维护与排查
+- 查看状态: `pi --version` 与 `which pi`。
+- 检查补全: `pi completion bash` 是否已注入当前 shell rc。
+- 重新渲染: 在控制节点重跑 `make deploy-applications.pi_terminal`；失败多为 brew 未登录或 formula 名变更。

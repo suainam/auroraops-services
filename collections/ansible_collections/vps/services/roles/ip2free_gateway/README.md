@@ -80,3 +80,12 @@ make deploy-services.docker_apps.singbox
 | `🏠 resi-hy2` | hysteria2 | 30059 | External proxy → residential SOCKS5 pool |
 
 Note: The SOCKS5 backend nodes are NOT included in subscription (internal only).
+
+## 变量与边界
+- 关键变量: `ip2free_enabled`（总开关）、`ip2free_gateway_endpoint`（上游出口网关地址）、`ip2free_listen_port`（本地监听端口）。
+- 端口与上游由 `ports.yml` 与 group_vars 统一维护；本角色只渲染转发规则。
+
+## 维护与排查
+- 查看状态: `systemctl status ip2free-gateway`；查看监听: `ss -ltnp | grep ip2free`。
+- 出口排查: 确认 `ip2free_gateway_endpoint` 可达且凭据来自 vault；日志 `journalctl -u ip2free-gateway`。
+- 重新渲染: 在控制节点重跑 `make deploy-services.ip2free_gateway`。

@@ -50,3 +50,13 @@
 - **Configure**: `tags: [deploy, services, hysteria2_native, hysteria2_native_config, phase3]`
 - **Verify**: `tags: [verify, services, hysteria2_native, hysteria2_native_verify, phase3]`
 - **Rollback**: `tags: [rollback, services, hysteria2_native, hysteria2_native_rollback, phase3]`
+
+## 依赖与边界
+- 依赖 `application_service`/`application_timer` 模板角色生成 unit，与 `python_executor` 解释器。
+- 依赖 `hysteria2_acme_email` / 证书（来自 vault）做 TLS；端口由 `ports.yml` 统一分配。
+- 与 `mihomo_native` 共享出站链路，但独立进程，互不依赖启动顺序。
+
+## 维护与排查
+- 查看状态: `systemctl status hysteria2`；查看端口: `ss -lup | grep hysteria2`。
+- 证书排查: 确认 ACME 邮箱与目录可写；日志 `journalctl -u hysteria2`。
+- 重新渲染: 在控制节点重跑 `make deploy-services.hysteria2_native`。

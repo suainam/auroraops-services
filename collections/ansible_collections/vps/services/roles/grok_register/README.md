@@ -36,3 +36,8 @@ Chromium 与同一只读邮箱能力。`rollback` 只移除容器，保留配置
 不得跟踪上游默认分支。APT 使用基础镜像自带且由 Debian 签名校验的软件源，不能通过
 关闭 TLS 验证来追求可复现性。秘密只来自 Vault 或受保护的远端配置文件，禁止写入镜像层、
 README、普通日志和 Ansible 输出。
+
+### 内部逻辑
+- 角色仅做一次性注册：调用 Grok/xAI 注册接口写入 `grok_register_token` 到 vault，单元本身为 oneshot，不保持长驻进程。
+- 注册结果持久化到 `grok_register_state_file`；重复运行幂等，已注册则跳过。
+- 依赖 `grok_register_api_key`（来自 vault）与目标账号可访问；失败复用 health_checks notifier。

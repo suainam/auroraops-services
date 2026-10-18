@@ -46,3 +46,8 @@ Profile 显式启用 `mihomo_native`，其他主机默认关闭。profile 下载
 `mihomo_native_profile_download_proxy` 显式指定；如果启用定时刷新，应设置为可达的
 出站代理。真实目标调通还需要完整 profile URL 可达，以及目标具备 `curl`、`gzip`、
 `systemd`。
+
+### 内部逻辑
+- 原生部署 mihomo（Clash.Meta）核心：渲染 `config.yaml` 到 `mihomo_config_dir`，写入 systemd/OpenRC unit 由 `application_service` 模板角色生成。
+- 端口与入站由 `ports.yml` 作为唯一事实源；TUN 模式依赖内核模块与 `mihomo_tun_enabled` 开关。
+- 配置变更后 reload 而非重启，避免已建立连接中断；验证探活走 `mihomo_health_url`。
