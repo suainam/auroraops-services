@@ -114,17 +114,18 @@
 
 - name: "[Sing-box] Check the published client profile with the deployed image"
   become: true
-  ansible.builtin.command:
+  # Verify stays read-only: the deploy already mounts the published web
+  # directory into the running container (tasks/docker.yml), so the profile is
+  # checked in place. Spawning a throwaway container would create and delete
+  # one -- and pull an image on a host that lost it -- from a stage that must
+  # not mutate anything. The path below is that mount's in-container side.
+  community.docker.docker_container_exec:
+    container: singbox
     argv:
-      - docker
-      - run
-      - --rm
-      - -v
-      - "{{ singbox_data_dir }}/web/{{ singbox_sub_token }}.json:/profile.json:ro"
-      - "{{ singbox_image }}"
+      - sing-box
       - check
       - -c
-      - /profile.json
+      - /opt/dockers/singbox/web/{{ singbox_sub_token }}.json
   register: singbox_client_profile_check_docker
   changed_when: false
   no_log: true

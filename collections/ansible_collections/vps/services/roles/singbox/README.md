@@ -41,7 +41,11 @@ the client format:
 
 1. **Destination port follows the listener.** Only a `behind_nginx` inbound
    (loopback listen, TLS terminated by nginx) is published on 443; every other
-   node is published on the port its inbound actually binds.
+  node is published on the port its inbound actually binds. Trojan obeyed this
+  in none of the formats (a literal 443 in the Mihomo, sing-box JSON and share
+  link templates) while the compact provider already derived it, so a Trojan
+  node on a non-443 port was published to a dead address. All three now derive
+  the port the same way.
 2. **Auxiliary outbounds are not nodes.** `selector` / `urltest` / `direct`
    exist to choose a node; only `vless` / `trojan` / `hysteria2` / `anytls` /
    `tuic` outbounds count as published nodes when formats are compared.
@@ -52,10 +56,13 @@ the client format:
 
 `verify_subscription_profile.yml` (included from both verify branches) reads the
 published `<token>.json` back, asserts unique tags, resolvable group members and
-non-empty Reality `public_key`/`short_id`, then runs the host's own binary or
-image against that file. Server-side fragments can be correct while the
-subscription a user downloads is not, so the subscription file is what gets
-checked. `singbox_verify_client_profile: false` opts a host out.
+non-empty Reality `public_key`/`short_id`, then runs `sing-box check` against
+that file -- with the host binary in native mode, and inside the already running
+container in docker mode. The deploy mounts `{{ singbox_data_dir }}/web` at
+`/opt/dockers/singbox/web:ro`, so the check needs no container of its own: verify
+stays read-only and never pulls an image. Server-side fragments can be correct
+while the subscription a user downloads is not, so the subscription file is what
+gets checked. `singbox_verify_client_profile: false` opts a host out.
 
 `singbox_client_profile_backup.json.j2` is a historical snapshot with no
 consumer; do not wire it up — it predates extra relay nodes and the shared

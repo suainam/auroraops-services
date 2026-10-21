@@ -138,7 +138,10 @@
       "type": "trojan",
       "tag": "{{ display_name }}",
       "server": "{{ node.server | default(singbox_domain) }}",
-      "server_port": 443,
+      {# The listener binds node.port, and behind nginx it binds loopback while
+         nginx serves TLS on 443 -- the client destination follows the listener,
+         not a literal. #}
+      "server_port": {{ 443 if node.behind_nginx | default(false) | bool else node.port }},
       "password": "{{ node.password }}",
       "tls": {
         "enabled": true,

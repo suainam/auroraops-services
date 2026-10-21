@@ -22,7 +22,7 @@ vless://{{ node.uuid }}@{{ node.server | default(singbox_domain) }}:{{ use_port 
 {% elif node.type == 'hysteria2' -%}
 hysteria2://{{ node.password | urlencode }}@{{ node.server | default(singbox_domain) }}:{{ node.port }}?insecure={% if node.insecure | default(false) %}1{% else %}0{% endif %}{% if node.sni is defined %}&sni={{ node.sni }}{% endif %}{% if node.alpn is defined %}&alpn={{ node.alpn }}{% else %}&alpn=h3{% endif %}{% if node.obfs is defined %}&obfs={{ node.obfs }}&obfs-password={{ node.obfs_password | urlencode }}{% endif %}#{{ display_name | urlencode }}
 {% elif node.type == 'trojan' -%}
-trojan://{{ node.password | urlencode }}@{{ node.server | default(singbox_domain) }}:443?security=tls{% if node.sni is defined %}&sni={{ node.sni }}{% endif %}&type={{ node.transport | default('tcp') }}{% if node.path is defined %}&path={{ node.path | urlencode }}{% endif %}{% if node.host is defined %}&host={{ node.host }}{% endif %}#{{ display_name | urlencode }}
+trojan://{{ node.password | urlencode }}@{{ node.server | default(singbox_domain) }}:{{ 443 if node.behind_nginx | default(false) | bool else node.port }}?security=tls{% if node.sni is defined %}&sni={{ node.sni }}{% endif %}&type={{ node.transport | default('tcp') }}{% if node.path is defined %}&path={{ node.path | urlencode }}{% endif %}{% if node.host is defined %}&host={{ node.host }}{% endif %}#{{ display_name | urlencode }}
 {% elif node.type == 'anytls' -%}
 anytls://{{ node.password | urlencode }}@{{ node.server | default(singbox_domain) }}:{{ node.port }}?security=tls{% if node.sni is defined %}&sni={{ node.sni }}{% endif %}#{{ display_name | urlencode }}
 {% elif node.type == 'tuic' -%}
