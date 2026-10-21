@@ -46,7 +46,7 @@
       { "rule_set": ["geosite-category-ads-all", "geoip-cn", "geosite-cn"], "action": "reject" },
       {% endif %}
       {# Domain-routed relay rules: nodes with relay_outbound + relay_ai_domains forward AI/YouTube to relay_outbound; rest direct. #}
-      {%- set all_in_nodes = (docker_apps_singbox_processed_nodes | default(singbox_nodes)) + (singbox_extra_nodes | default([])) -%}
+      {%- set all_in_nodes = (docker_apps_singbox_processed_nodes | default(singbox_nodes | default([]))) + (singbox_extra_nodes | default([])) -%}
       {% for node in all_in_nodes if node.relay_outbound is defined and (node.relay_ai_domains | default(false) | bool) %}
       {%- set node_tag = 'in-' ~ (node.name | regex_replace('[^a-zA-Z0-9-]', '') | lower) %}
       { "inbound": [{{ node_tag | to_json }}], "domain_suffix": ["openai.com", "chatgpt.com", "sora.com", "oaistatic.com", "oaiusercontent.com", "claude.ai", "anthropic.com", "gemini.google.com", "generativelanguage.googleapis.com", "aistudio.google.com", "cloudcode-pa.googleapis.com", "youtube.com", "youtube-nocookie.com", "googlevideo.com", "ytimg.com", "ggpht.com"], "outbound": {{ node.relay_outbound | to_json }} },
