@@ -2,21 +2,68 @@ proxies:
 {% set raw_sub_nodes = (docker_apps_singbox_processed_nodes | default(singbox_nodes)) + (singbox_extra_nodes | default([])) %}
 {% set all_sub_nodes = raw_sub_nodes | rejectattr('name', 'search', 'resi') | list %}
 {% for node in all_sub_nodes %}
+{#- This provider is the third consumer of the same node facts as the Mihomo
+    profile and the sing-box JSON profile. It therefore has to publish every
+    protocol those two publish, or a Sub-Store consumer silently loses nodes:
+    the hubs publish gRPC and TUIC alongside TCP VLESS, Hy2 and AnyTLS. -#}
+{% set is_reality = node.reality | default(true) | bool %}
+{% set client_port = 443 if node.behind_nginx | default(false) | bool else node.port %}
 {% if node.type == 'vless' and (not node.transport is defined or node.transport == 'tcp') %}
   - name: "{{ node.name }}"
     type: vless
     server: "{{ node.server | default(singbox_domain) }}"
-    port: {{ 443 if node.behind_nginx | default(false) | bool else node.port }}
+    port: {{ client_port }}
     uuid: "{{ node.uuid }}"
     network: tcp
     tls: true
     servername: "{{ node.sni }}"
+{% if is_reality %}
     flow: xtls-rprx-vision
+{% endif %}
     udp: true
+{% if is_reality %}
     client-fingerprint: chrome
     reality-opts:
       public-key: "{{ singbox_reality_public_key | default('') or docker_apps_singbox_reality_public_key | default('') or singbox_reality_public_key_generated | default('') }}"
       short-id: "{{ (singbox_reality_short_ids | default(['']))[0] }}"
+{% endif %}
+{% elif node.type == 'vless' and node.transport | default('') == 'grpc' %}
+  - name: "{{ node.name }}"
+    type: vless
+    server: "{{ node.server | default(singbox_domain) }}"
+    port: {{ client_port }}
+    uuid: "{{ node.uuid }}"
+    network: grpc
+    tls: true
+    servername: "{{ node.sni }}"
+    alpn:
+      - h2
+    grpc-opts:
+      grpc-service-name: "{{ node.service_name }}"
+    udp: true
+{% if is_reality %}
+    client-fingerprint: chrome
+    reality-opts:
+      public-key: "{{ singbox_reality_public_key | default('') or docker_apps_singbox_reality_public_key | default('') or singbox_reality_public_key_generated | default('') }}"
+      short-id: "{{ (singbox_reality_short_ids | default(['']))[0] }}"
+{% endif %}
+{% elif node.type == 'trojan' %}
+  - name: "{{ node.name }}"
+    type: trojan
+    server: "{{ node.server | default(singbox_domain) }}"
+    port: {{ client_port }}
+    password: "{{ node.password }}"
+    network: "{{ node.transport | default('tcp') }}"
+    sni: "{{ node.sni | default('') }}"
+    skip-cert-verify: false
+{% if node.transport | default('') == 'ws' %}
+    ws-opts:
+      path: "{{ node.path | default('/') }}"
+{% if node.host is defined %}
+      headers:
+        Host: "{{ node.host }}"
+{% endif %}
+{% endif %}
 {% elif node.type == 'hysteria2' %}
   - name: "{{ node.name }}"
     type: hysteria2
@@ -39,5 +86,20 @@ proxies:
     server: "{{ node.server | default(singbox_domain) }}"
     port: {{ node.port }}
     password: "{{ node.password }}"
+    sni: "{{ node.sni | default('') }}"
+    skip-cert-verify: {{ node.insecure | default(false) | lower }}
+{% elif node.type == 'tuic' %}
+  - name: "{{ node.name }}"
+    type: tuic
+    server: "{{ node.server | default(singbox_domain) }}"
+    port: {{ node.port }}
+    uuid: "{{ node.uuid }}"
+    password: "{{ node.password }}"
+    alpn:
+      - "{{ node.alpn | default('h3') }}"
+    sni: "{{ node.sni | default('') }}"
+    skip-cert-verify: {{ node.insecure | default(false) | lower }}
+    udp-relay-mode: native
+    congestion-controller: bbr
 {% endif %}
 {% endfor %}

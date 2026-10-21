@@ -32,8 +32,15 @@ def _env() -> Environment:
 
 
 def _values() -> dict:
+    # The fixture mirrors the protocol set the hubs actually publish: TCP VLESS
+    # (Reality), gRPC VLESS, Hysteria2, AnyTLS and TUIC, plus an extra relay
+    # node. A fixture that omits gRPC/TUIC would let the compact provider drop
+    # those nodes without any test noticing.
     direct = dict(name="HK Reality", type="vless", port=443, sni="www.example.com",
                   uuid="00000000-0000-4000-8000-000000000001")
+    grpc = dict(name="HK gRPC", type="vless", port=30054, sni="www.example.com",
+                transport="grpc", service_name="grpc-vless",
+                uuid="00000000-0000-4000-8000-000000000002")
     # An nginx-terminated node listens on node.port with TLS disabled
     # (inbounds_direct.json.j2), so its client-facing destination is 443. The
     # JSON profile already published 443; the Mihomo profiles published
@@ -41,10 +48,16 @@ def _values() -> dict:
     nginx = dict(name="HK Nginx", type="vless", port=8443, sni="www.example.com",
                  uuid="00000000-0000-4000-8000-000000000009", behind_nginx=True)
     udp = dict(name="HK UDP", type="hysteria2", port=8443, password="test", sni="www.example.com")
+    anytls = dict(name="HK AnyTLS", type="anytls", port=30057, password="test",
+                  sni="www.example.com", insecure=True)
+    tuic = dict(name="HK TUIC", type="tuic", port=30058, password="test",
+                uuid="00000000-0000-4000-8000-000000000003", sni="www.example.com",
+                alpn="h3", insecure=True)
     extras = [dict(direct, name=country, uuid=f"00000000-0000-4000-8000-00000000000{index}",
                    shared_inbound="HK Reality", relay_outbound=f"exit-{country}")
-              for index, country in enumerate(("TW", "SG", "JP"), 2)]
-    return dict(singbox_nodes=[direct, nginx, udp], singbox_extra_nodes=extras,
+              for index, country in enumerate(("TW", "SG", "JP"), 4)]
+    return dict(singbox_nodes=[direct, grpc, nginx, udp, anytls, tuic],
+                singbox_extra_nodes=extras,
                 docker_apps_singbox_reality_public_key="test-key",
                 docker_apps_singbox_inbound_listen="0.0.0.0",
                 docker_apps_singbox_certificate_domain="example.com",
@@ -128,9 +141,9 @@ def _display_name(name: str) -> str:
 def test_compact_provider_publishes_the_same_nodes_on_the_same_ports():
     compact = yaml.safe_load(_render("singbox_provider_profile.yaml.j2"))["proxies"]
     json_nodes = _singbox_nodes()
-    # The compact provider is a strict subset by protocol support, not by node
-    # set: it omits tuic/trojan, which this fixture does not use, so every
-    # published node must appear on both sides with identical semantics.
+    # Not a subset check: the compact provider publishes the same node set as
+    # the other two formats, including gRPC, AnyTLS and TUIC. An equality check
+    # is what catches a protocol branch going missing from one template.
     assert [(_display_name(node["name"]), _mihomo_semantics(node)) for node in compact] == [
         (node["tag"], _singbox_semantics(node)) for node in json_nodes
     ]

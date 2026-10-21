@@ -45,6 +45,10 @@ the client format:
 2. **Auxiliary outbounds are not nodes.** `selector` / `urltest` / `direct`
    exist to choose a node; only `vless` / `trojan` / `hysteria2` / `anytls` /
    `tuic` outbounds count as published nodes when formats are compared.
+3. **The compact provider publishes the same node set.** It covers TCP VLESS,
+   gRPC VLESS, Trojan, Hysteria2, AnyTLS and TUIC. It previously had only TCP
+   VLESS / Hysteria2 / AnyTLS, so a Sub-Store consumer silently lost the hub
+   gRPC and TUIC nodes that the other two formats published.
 
 `verify_subscription_profile.yml` (included from both verify branches) reads the
 published `<token>.json` back, asserts unique tags, resolvable group members and

@@ -40,30 +40,38 @@
   when: singbox_client_profile_expected
   tags: [verify, services, singbox, phase5]
 
-- name: "[Sing-box] Collect Reality peers with unusable client material"
+- name: "[Sing-box] Collect Reality outbounds from the published profile"
   ansible.builtin.set_fact:
-    # A client profile is the only place a user learns the public half of the
-    # handshake. An empty public_key or short_id still parses, still passes
-    # `sing-box check`, and still appears in every selector -- it just never
-    # completes a handshake, which reads to the user as a dead node.
-    singbox_client_profile_incomplete_reality: >-
+    singbox_client_profile_reality_peers: >-
       {{ singbox_client_profile.outbounds
          | selectattr('type', 'equalto', 'vless')
          | selectattr('tls.reality.enabled', 'defined')
          | selectattr('tls.reality.enabled')
+         | list }}
+  no_log: true
+  when: singbox_client_profile_expected
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Flag Reality outbounds with missing or empty client material"
+  ansible.builtin.set_fact:
+    # A client profile is the only place a user learns the public half of the
+    # handshake. An absent or empty public_key / short_id still parses, still
+    # passes `sing-box check`, and still appears in every selector -- it just
+    # never completes a handshake, which reads to the user as a dead node. Both
+    # the absent and the empty case are collected, because `selectattr(...,
+    # 'defined')` alone would silently skip the missing field.
+    singbox_client_profile_incomplete_reality: >-
+      {{ singbox_client_profile_reality_peers
          | rejectattr('tls.reality.public_key', 'defined')
          | map(attribute='tag') | list
-         + (singbox_client_profile.outbounds
-            | selectattr('type', 'equalto', 'vless')
-            | selectattr('tls.reality.enabled', 'defined')
-            | selectattr('tls.reality.enabled')
+         + (singbox_client_profile_reality_peers
             | selectattr('tls.reality.public_key', 'defined')
             | selectattr('tls.reality.public_key', 'equalto', '')
             | map(attribute='tag') | list)
-         + (singbox_client_profile.outbounds
-            | selectattr('type', 'equalto', 'vless')
-            | selectattr('tls.reality.enabled', 'defined')
-            | selectattr('tls.reality.enabled')
+         + (singbox_client_profile_reality_peers
+            | rejectattr('tls.reality.short_id', 'defined')
+            | map(attribute='tag') | list)
+         + (singbox_client_profile_reality_peers
             | selectattr('tls.reality.short_id', 'defined')
             | selectattr('tls.reality.short_id', 'equalto', '')
             | map(attribute='tag') | list) }}
@@ -93,7 +101,10 @@
       - check
       - -c
       - "{{ singbox_data_dir }}/web/{{ singbox_sub_token }}.json"
-  register: singbox_client_profile_check
+  # Distinct registers on purpose: Ansible still writes a result for a task it
+  # skipped, so one shared name would leave the docker branch overwriting a
+  # successful native check with `skipped: true`.
+  register: singbox_client_profile_check_native
   changed_when: false
   no_log: true
   when:
@@ -114,9 +125,35 @@
       - check
       - -c
       - /profile.json
-  register: singbox_client_profile_check
+  register: singbox_client_profile_check_docker
   changed_when: false
   no_log: true
+  when:
+    - singbox_client_profile_expected
+    - singbox_effective_mode == 'docker'
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Assert the native binary accepted the published profile"
+  ansible.builtin.assert:
+    that:
+      - singbox_client_profile_check_native.rc | default(-1) == 0
+    fail_msg: >-
+      The native sing-box rejected the published JSON client profile. A profile
+      that renders but does not load is a broken subscription, so this fails
+      rather than reporting success from the render alone.
+  when:
+    - singbox_client_profile_expected
+    - singbox_effective_mode == 'native'
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Assert the deployed image accepted the published profile"
+  ansible.builtin.assert:
+    that:
+      - singbox_client_profile_check_docker.rc | default(-1) == 0
+    fail_msg: >-
+      The deployed sing-box image rejected the published JSON client profile. A
+      profile that renders but does not load is a broken subscription, so this
+      fails rather than reporting success from the render alone.
   when:
     - singbox_client_profile_expected
     - singbox_effective_mode == 'docker'
