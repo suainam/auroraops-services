@@ -73,17 +73,17 @@
       "type": "vless",
       "tag": "out-cc15",
       "server": "{{ hostvars['cc15'].ansible_host }}",
-      "server_port": {{ app_port_singbox_reality_cf }},
-      "uuid": "{{ singbox_uuid_cf }}",
+      "server_port": {{ app_port_singbox_reality_aws }},
+      "uuid": "{{ singbox_uuid_aws }}",
       "flow": "xtls-rprx-vision",
       "tls": {
         "enabled": true,
-        "server_name": "www.cloudflare.com",
+        "server_name": "aws.amazon.com",
         "utls": { "enabled": true, "fingerprint": "chrome" },
         "reality": {
           "enabled": true,
-          "public_key": "S0AeND9nX6Bvm9spiOhoQm64UJCysYSAvjLOMCxU6xs",
-          "short_id": "15d9565cee5e6844"
+          "public_key": "{{ hostvars['cc15'].singbox_reality_public_key | default('') }}",
+          "short_id": "{{ hostvars['cc15'].singbox_reality_short_ids | default([''], true) | first }}"
         }
       }
     }

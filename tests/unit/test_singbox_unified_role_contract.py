@@ -129,16 +129,32 @@ def test_jp3_outbound_resolves_reality_material_from_hostvars() -> None:
     assert short and "{{" in short.group(1), "out-nat-jp3 must resolve short_id via Jinja"
     assert "hostvars['nat-jp3'].singbox_reality_public_key" in key.group(1)
 
+def test_cc15_outbound_resolves_reality_material_from_hostvars() -> None:
+    """Regression (#340): out-cc15 peer key and short_id must resolve via hostvars.
+
+    Previously out-cc15 carried literal Reality material. It now dynamically
+    resolves public_key and short_id from hostvars['cc15'] and targets the AWS
+    reality listener (app_port_singbox_reality_aws: 30052).
+    """
+    blocks = outbound_blocks(read("templates/outbounds_direct.json.j2"))
+    assert "out-cc15" in blocks
+    cc15_block = blocks["out-cc15"]
+    key = re.search(r'"public_key":\s*"([^"]*)"', cc15_block)
+    short = re.search(r'"short_id":\s*"([^"]*)"', cc15_block)
+    port = re.search(r'"server_port":\s*([^\n,]+)', cc15_block)
+    assert key and "{{" in key.group(1), "out-cc15 must resolve public_key via Jinja"
+    assert short and "{{" in short.group(1), "out-cc15 must resolve short_id via Jinja"
+    assert "hostvars['cc15'].singbox_reality_public_key" in key.group(1)
+    assert "hostvars['cc15'].singbox_reality_short_ids" in short.group(1)
+    assert port and "app_port_singbox_reality_aws" in port.group(1)
+
 
 # Known pre-existing debt: these peers still carry literal Reality material and
 # address fallbacks. Tracked in auroraops-control issue #18. The allowlist makes
 # the debt explicit and fails if a NEW hardcoded peer is introduced.
 KNOWN_HARDCODED_PEER_DEBT = {
-    ("outbounds_direct.json.j2", "out-cc15"),
     ("outbounds_relay.json.j2", "public-relay-fallback"),
 }
-
-
 def test_no_new_hardcoded_peer_reality_material_is_introduced() -> None:
     """Every remaining literal peer must be on the known-debt allowlist."""
     offenders: set[tuple[str, str]] = set()
