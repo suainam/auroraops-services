@@ -47,13 +47,18 @@ def _values() -> dict:
     # node.port, an address no client can complete a handshake against.
     nginx = dict(name="HK Nginx", type="vless", port=8443, sni="www.example.com",
                  uuid="00000000-0000-4000-8000-000000000009", behind_nginx=True)
-    # Trojan is the protocol that exposed a hardcoded 443 in two of the three
-    # published formats, so both the direct and the nginx-terminated case are in
-    # the fixture: only the second one can tell 443 apart from node.port.
+    # Trojan is the protocol that exposed a hardcoded 443 in three of the four
+    # published consumers, so both the direct and the nginx-terminated case are
+    # in the fixture: only the second one can tell 443 apart from node.port.
+    # nginx terminates Trojan over a WebSocket location only
+    # (nginx/templates/*.conf.j2 "Trojan WebSocket Proxy" -> proxy_pass to the
+    # loopback port), so the nginx case carries the ws transport a real client
+    # needs; a raw TCP Trojan through that location could not work.
     trojan_direct = dict(name="HK Trojan", type="trojan", port=30059,
                          password="test", sni="www.example.com")
     trojan_nginx = dict(name="HK Trojan Nginx", type="trojan", port=8444,
-                        password="test", sni="www.example.com", behind_nginx=True)
+                        password="test", sni="www.example.com", behind_nginx=True,
+                        transport="ws", path="/trojan-ws")
     udp = dict(name="HK UDP", type="hysteria2", port=8443, password="test", sni="www.example.com")
     anytls = dict(name="HK AnyTLS", type="anytls", port=30057, password="test",
                   sni="www.example.com", insecure=True)
@@ -186,3 +191,23 @@ def test_trojan_share_links_use_the_same_client_port():
         assert re.search(rf"^trojan://[^@]+@[^:]+:{port}\?", links, re.M), (
             f"{name} must be published on its client port {port}; links:\n{links}"
         )
+
+
+def test_nginx_trojan_is_published_as_websocket_on_443():
+    """nginx proxies Trojan only through a WebSocket location, so the nginx case
+    has to reach clients as ws on 443. A raw-TCP node on 443 would be published
+    to a listener nginx cannot carry."""
+    json_node = next(node for node in _singbox_nodes()
+                     if node["type"] == "trojan" and "Nginx" in node["tag"])
+    assert json_node["transport"] == {"type": "ws", "path": "/trojan-ws"}
+
+    mihomo_node = next(node for node in _mihomo_nodes()
+                       if node["type"] == "trojan" and "Nginx" in node["name"])
+    assert mihomo_node["network"] == "ws"
+    assert mihomo_node["ws-opts"]["path"] == "/trojan-ws"
+
+    compact_node = next(node for node in yaml.safe_load(
+        _render("singbox_provider_profile.yaml.j2"))["proxies"]
+        if node["type"] == "trojan" and "Nginx" in node["name"])
+    assert compact_node["network"] == "ws"
+    assert compact_node["ws-opts"]["path"] == "/trojan-ws"

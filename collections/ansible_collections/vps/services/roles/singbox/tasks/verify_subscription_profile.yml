@@ -112,7 +112,7 @@
     - singbox_effective_mode == 'native'
   tags: [verify, services, singbox, phase5]
 
-- name: "[Sing-box] Check the published client profile with the deployed image"
+- name: "[Sing-box] Check the published client profile inside the running container"
   become: true
   # Verify stays read-only: the deploy already mounts the published web
   # directory into the running container (tasks/docker.yml), so the profile is
@@ -147,14 +147,15 @@
     - singbox_effective_mode == 'native'
   tags: [verify, services, singbox, phase5]
 
-- name: "[Sing-box] Assert the deployed image accepted the published profile"
+- name: "[Sing-box] Assert the running container accepted the published profile"
   ansible.builtin.assert:
     that:
       - singbox_client_profile_check_docker.rc | default(-1) == 0
     fail_msg: >-
-      The deployed sing-box image rejected the published JSON client profile. A
-      profile that renders but does not load is a broken subscription, so this
-      fails rather than reporting success from the render alone.
+      The sing-box binary in the running container rejected the published JSON
+      client profile. A profile that renders but does not load is a broken
+      subscription, so this fails rather than reporting success from the render
+      alone.
   when:
     - singbox_client_profile_expected
     - singbox_effective_mode == 'docker'
