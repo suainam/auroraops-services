@@ -183,6 +183,31 @@ def test_verify_config_contract_never_logs_raw_config_bytes() -> None:
             )
 
 
+def test_subscription_profile_verify_reuses_the_running_container() -> None:
+    """Regression: verify created a throwaway container to run `sing-box check`.
+
+    A verify stage must not mutate the host. `docker run --rm` creates and
+    deletes a container, and pulls an image when the host lost it, so a read-only
+    check could fail the stage for reasons unrelated to the profile. The deploy
+    already mounts the published web directory into the running container, so
+    the profile is checked in place.
+    """
+    verify = read("tasks/verify_subscription_profile.yml")
+    assert "community.docker.docker_container_exec:" in verify
+    assert re.search(r"^\s*container:\s*singbox\s*$", verify, re.M), (
+        "the docker branch must exec into the deployed singbox container"
+    )
+    for forbidden in ("docker run", "--rm", "singbox_image"):
+        assert forbidden not in verify, f"verify must stay read-only, found {forbidden}"
+
+    # The in-container path is only valid because deploy mounts that directory.
+    docker = read("tasks/docker.yml")
+    assert re.search(r'"\{\{ singbox_data_dir \}\}/web:/opt/dockers/singbox/web:ro"', docker), (
+        "the published web directory must be mounted read-only for the exec check"
+    )
+    assert "/opt/dockers/singbox/web/{{ singbox_sub_token }}.json" in verify
+
+
 def _ansible_env():
     """Jinja environment mirroring Ansible: native types, ChainableUndefined,
     an Ansible-style `flatten`, so guard expressions evaluate as they do in play."""

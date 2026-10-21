@@ -39,7 +39,10 @@ proxies:
   - name: "{{ display_name }}"
     type: vless
     server: "{{ node.server | default(singbox_domain) }}"
-    port: {{ (443 if not node.reality | default(true) else node.port) }}
+    # Client destination follows the listener, not the TLS mode: an nginx-
+    # terminated inbound binds loopback on node.port and is only reachable on
+    # 443, everything else is dialled on the port it actually listens on.
+    port: {{ 443 if node.behind_nginx | default(false) | bool else node.port }}
     uuid: "{{ node.uuid }}"
     network: tcp
     tls: true
@@ -58,7 +61,7 @@ proxies:
   - name: "{{ display_name }}"
     type: vless
     server: "{{ node.server | default(singbox_domain) }}"
-    port: {{ (443 if not node.reality | default(true) else node.port) }}
+    port: {{ 443 if node.behind_nginx | default(false) | bool else node.port }}
     uuid: "{{ node.uuid }}"
     network: grpc
     tls: true
@@ -111,7 +114,7 @@ proxies:
   - name: "{{ display_name }}"
     type: trojan
     server: "{{ node.server | default(singbox_domain) }}"
-    port: 443
+    port: {{ 443 if node.behind_nginx | default(false) | bool else node.port }}
     password: "{{ node.password }}"
     network: {{ node.transport | default('tcp') }}
     sni: "{{ node.sni | default('') }}"

@@ -119,6 +119,19 @@
   no_log: true
   tags: [deploy, services, singbox, phase5]
 
+- name: Sing-box - Generate Client Profile (JSON)
+  become: true
+  diff: false
+  ansible.builtin.template:
+    src: singbox_client_profile.json.j2
+    dest: "{{ singbox_data_dir }}/web/{{ singbox_sub_token }}.json"
+    mode: "0644"
+  when:
+    - singbox_role | default('direct') == 'direct'
+    - (singbox_sub_token | default('')) | length > 0
+  no_log: true
+  tags: [deploy, services, singbox, phase5]
+
 - name: Sing-box - Generate Client Compact Profile (YAML)
   become: true
   diff: false

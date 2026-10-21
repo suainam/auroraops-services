@@ -5,6 +5,10 @@
     singbox_verify_config_dir: "{{ singbox_config_dir }}"
   tags: [verify, services, singbox, phase5]
 
+- name: Verify the published subscription profile
+  ansible.builtin.include_tasks: verify_subscription_profile.yml
+  tags: [verify, services, singbox, phase5]
+
 - name: Verify Sing-box container is running
   become: true
   community.docker.docker_container_info:

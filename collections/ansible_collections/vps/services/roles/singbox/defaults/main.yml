@@ -65,6 +65,11 @@ singbox_relay_reality_port: 30054
 singbox_relay_hysteria_port: 30053
 singbox_web_port: 10080
 
+# Verify the published client profile (the file users download) rather than
+# only the server-side fragments. The profile is generated for direct-role
+# hosts with a subscription token; elsewhere the check has nothing to read.
+singbox_verify_client_profile: true
+
 # Role and Domain
 singbox_role: "direct"
 singbox_domain: ""

@@ -31,8 +31,7 @@
       "address": ["172.19.0.1/30"],
       "auto_route": true,
       "strict_route": true,
-      "stack": "system",
-      "sniff": true
+      "stack": "system"
     }
   ],
   "outbounds": [
@@ -49,9 +48,8 @@
 {%- set has_flag = node.name is regex('^[^\\x00-\\x7f]') -%}
 {%- set current_flag = docker_apps_country_flags[docker_apps_singbox_host_country | default('UNKNOWN')] | default('🌍') -%}
 {%- set display_name = node.name if has_flag else (current_flag + ' ' + node.name) -%}
-        "{{ display_name }}",
+        "{{ display_name }}"{%- if not loop.last %},{% endif %}
 {%- endfor %}
-        "auto-latency"
       ],
       "default": "auto-latency"
     },
@@ -140,7 +138,10 @@
       "type": "trojan",
       "tag": "{{ display_name }}",
       "server": "{{ node.server | default(singbox_domain) }}",
-      "server_port": 443,
+      {# The listener binds node.port, and behind nginx it binds loopback while
+         nginx serves TLS on 443 -- the client destination follows the listener,
+         not a literal. #}
+      "server_port": {{ 443 if node.behind_nginx | default(false) | bool else node.port }},
       "password": "{{ node.password }}",
       "tls": {
         "enabled": true,
@@ -223,6 +224,12 @@
   ],
   "route": {
     "auto_detect_interface": true,
+    {# `sniff` was an inbound field until sing-box 1.12 and is a hard error from
+       1.13 on; the replacement is a route action. Without it the TUN inbound
+       cannot see SNI/host and domain routing degrades to the IP layer. #}
+    "rules": [
+      { "action": "sniff" }
+    ],
     "final": "proxy",
     "default_domain_resolver": {
       "server": "remote",
