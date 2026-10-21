@@ -1,0 +1,123 @@
+---
+- name: "[Sing-box] Resolve whether a client profile is published here"
+  ansible.builtin.set_fact:
+    singbox_client_profile_expected: >-
+      {{ (singbox_verify_client_profile | default(true) | bool)
+         and singbox_role | default('direct') == 'direct'
+         and (singbox_sub_token | default('')) | length > 0 }}
+  tags: [verify, services, singbox, phase5]
+
+# The published client profile is the artifact users actually download. A
+# template that renders is not the same claim as a profile that the target
+# sing-box version accepts, so the deployed file itself is what gets checked
+# here -- not the template, and not the server-side fragments it was derived
+# from.
+- name: "[Sing-box] Read the published JSON client profile"
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ singbox_data_dir }}/web/{{ singbox_sub_token }}.json"
+  register: singbox_client_profile_raw
+  no_log: true
+  when: singbox_client_profile_expected
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Parse the published JSON client profile"
+  ansible.builtin.set_fact:
+    singbox_client_profile: "{{ singbox_client_profile_raw.content | b64decode | from_json }}"
+  no_log: true
+  when: singbox_client_profile_expected
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Collect client profile outbound tags and proxy group members"
+  ansible.builtin.set_fact:
+    singbox_client_profile_tags: >-
+      {{ singbox_client_profile.outbounds | map(attribute='tag') | list }}
+    singbox_client_profile_members: >-
+      {{ singbox_client_profile.outbounds
+         | selectattr('outbounds', 'defined')
+         | map(attribute='outbounds') | flatten | list }}
+  no_log: true
+  when: singbox_client_profile_expected
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Collect Reality peers with unusable client material"
+  ansible.builtin.set_fact:
+    # A client profile is the only place a user learns the public half of the
+    # handshake. An empty public_key or short_id still parses, still passes
+    # `sing-box check`, and still appears in every selector -- it just never
+    # completes a handshake, which reads to the user as a dead node.
+    singbox_client_profile_incomplete_reality: >-
+      {{ singbox_client_profile.outbounds
+         | selectattr('type', 'equalto', 'vless')
+         | selectattr('tls.reality.enabled', 'defined')
+         | selectattr('tls.reality.enabled')
+         | rejectattr('tls.reality.public_key', 'defined')
+         | map(attribute='tag') | list
+         + (singbox_client_profile.outbounds
+            | selectattr('type', 'equalto', 'vless')
+            | selectattr('tls.reality.enabled', 'defined')
+            | selectattr('tls.reality.enabled')
+            | selectattr('tls.reality.public_key', 'defined')
+            | selectattr('tls.reality.public_key', 'equalto', '')
+            | map(attribute='tag') | list)
+         + (singbox_client_profile.outbounds
+            | selectattr('type', 'equalto', 'vless')
+            | selectattr('tls.reality.enabled', 'defined')
+            | selectattr('tls.reality.enabled')
+            | selectattr('tls.reality.short_id', 'defined')
+            | selectattr('tls.reality.short_id', 'equalto', '')
+            | map(attribute='tag') | list) }}
+  no_log: true
+  when: singbox_client_profile_expected
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Assert the published client profile is self-consistent"
+  ansible.builtin.assert:
+    that:
+      - singbox_client_profile_tags | length == singbox_client_profile_tags | unique | length
+      - singbox_client_profile_members | difference(singbox_client_profile_tags) | length == 0
+      - singbox_client_profile_incomplete_reality | length == 0
+    fail_msg: >-
+      The published JSON client profile has duplicate outbound tags, a proxy
+      group member that resolves to nothing, or a Reality outbound without
+      usable public key / short ID. Duplicate tags make sing-box reject the
+      file; an unresolved member makes the group silently unusable.
+  when: singbox_client_profile_expected
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Check the published client profile with the deployed binary"
+  become: true
+  ansible.builtin.command:
+    argv:
+      - "{{ singbox_native_binary_path | default('/usr/bin/sing-box') }}"
+      - check
+      - -c
+      - "{{ singbox_data_dir }}/web/{{ singbox_sub_token }}.json"
+  register: singbox_client_profile_check
+  changed_when: false
+  no_log: true
+  when:
+    - singbox_client_profile_expected
+    - singbox_effective_mode == 'native'
+  tags: [verify, services, singbox, phase5]
+
+- name: "[Sing-box] Check the published client profile with the deployed image"
+  become: true
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - -v
+      - "{{ singbox_data_dir }}/web/{{ singbox_sub_token }}.json:/profile.json:ro"
+      - "{{ singbox_image }}"
+      - check
+      - -c
+      - /profile.json
+  register: singbox_client_profile_check
+  changed_when: false
+  no_log: true
+  when:
+    - singbox_client_profile_expected
+    - singbox_effective_mode == 'docker'
+  tags: [verify, services, singbox, phase5]

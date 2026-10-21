@@ -26,6 +26,37 @@ downloads, no FakeIP DNS, no ruleset DNS rules. Default outbound stays
 direct-out and Mesh/private/relay routing is untouched. It is off by default so
 every non-NAT node keeps its full rules.
 
+**Published client profiles are deploy artifacts (#344).** `configure_common.yml`
+renders three files into `{{ singbox_data_dir }}/web/`, all from the same node
+facts, and nginx aliases them under the subscription token:
+
+| File | Template | Consumer |
+| :--- | :--- | :--- |
+| `<token>.yaml` | `singbox_client_profile.yaml.j2` | Mihomo / Clash |
+| `<token>.json` | `singbox_client_profile.json.j2` | sing-box native client |
+| `<token>.compact.yaml` | `singbox_provider_profile.yaml.j2` | Sub-Store provider |
+
+Two rules hold across all three, because they describe the server rather than
+the client format:
+
+1. **Destination port follows the listener.** Only a `behind_nginx` inbound
+   (loopback listen, TLS terminated by nginx) is published on 443; every other
+   node is published on the port its inbound actually binds.
+2. **Auxiliary outbounds are not nodes.** `selector` / `urltest` / `direct`
+   exist to choose a node; only `vless` / `trojan` / `hysteria2` / `anytls` /
+   `tuic` outbounds count as published nodes when formats are compared.
+
+`verify_subscription_profile.yml` (included from both verify branches) reads the
+published `<token>.json` back, asserts unique tags, resolvable group members and
+non-empty Reality `public_key`/`short_id`, then runs the host's own binary or
+image against that file. Server-side fragments can be correct while the
+subscription a user downloads is not, so the subscription file is what gets
+checked. `singbox_verify_client_profile: false` opts a host out.
+
+`singbox_client_profile_backup.json.j2` is a historical snapshot with no
+consumer; do not wire it up — it predates extra relay nodes and the shared
+Reality metadata.
+
 ## Variables
 
 | Variable | Default | Meaning |
@@ -44,6 +75,7 @@ every non-NAT node keeps its full rules.
 | `singbox_web_port` | `10080` | Web panel. |
 | `singbox_zero_rules` | `false` | Zero-rule mode (see `docker_apps_singbox_zero_rules`). |
 | `singbox_reality_sni_candidates` | 2 entries | Reality SNI pool. |
+| `singbox_verify_client_profile` | `true` | Verify the published `<token>.json`: unique tags, resolvable group members, Reality material, and `sing-box check` against that file. |
 | `singbox_reality_short_id_count` | `8` | Short IDs generated per listener. |
 | `singbox_verify_rss_max_kb` | `0` (off) | Host-declared RSS ceiling in kB. |
 | `singbox_verify_expected_tcp_ports` | `[]` | Defining this enables the listener contract check. |

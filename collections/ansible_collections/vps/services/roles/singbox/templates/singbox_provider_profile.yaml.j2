@@ -6,7 +6,7 @@ proxies:
   - name: "{{ node.name }}"
     type: vless
     server: "{{ node.server | default(singbox_domain) }}"
-    port: {{ node.port }}
+    port: {{ 443 if node.behind_nginx | default(false) | bool else node.port }}
     uuid: "{{ node.uuid }}"
     network: tcp
     tls: true
