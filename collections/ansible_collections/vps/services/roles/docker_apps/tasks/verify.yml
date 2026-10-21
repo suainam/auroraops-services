@@ -1316,7 +1316,7 @@
   register: docker_apps_hy_memory_active
   changed_when: false
   failed_when: docker_apps_hy_memory_active.stdout | trim != 'active'
-  when: verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == ''
+  when: "'hy_memory' in docker_apps_containers and (verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == '')"
   tags: [verify, services, docker_apps, hy_memory]
 
 - name: Probe Hy-Memory health endpoint on the host
@@ -1326,7 +1326,7 @@
     status_code: 200
   register: docker_apps_hy_memory_healthz
   changed_when: false
-  when: verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == ''
+  when: "'hy_memory' in docker_apps_containers and (verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == '')"
   tags: [verify, services, docker_apps, hy_memory]
 
 - name: Assert Hy-Memory health payload reports a ready client
@@ -1335,7 +1335,7 @@
       - (docker_apps_hy_memory_healthz.json | default({})).status == 'ok'
       - (docker_apps_hy_memory_healthz.json | default({})).client_ready | default(false) | bool
     fail_msg: "Hy-Memory /healthz did not report a ready HyMemoryClient"
-  when: verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == ''
+  when: "'hy_memory' in docker_apps_containers and (verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == '')"
   tags: [verify, services, docker_apps, hy_memory]
 
 - name: Assert Hy-Memory MCP endpoint rejects a request without a bearer token
@@ -1358,7 +1358,7 @@
       Accept: "application/json, text/event-stream"
   register: docker_apps_hy_memory_mcp_noauth
   changed_when: false
-  when: verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == ''
+  when: "'hy_memory' in docker_apps_containers and (verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == '')"
   tags: [verify, services, docker_apps, hy_memory]
 
 - name: Assert Hy-Memory MCP endpoint completes initialize with the bearer token
@@ -1379,7 +1379,7 @@
   register: docker_apps_hy_memory_mcp_auth
   changed_when: false
   no_log: true
-  when: verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == ''
+  when: "'hy_memory' in docker_apps_containers and (verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == '')"
   tags: [verify, services, docker_apps, hy_memory]
 
 - name: Assert Hy-Memory MCP initialize advertises the expected server identity
@@ -1387,7 +1387,7 @@
     that:
       - docker_apps_hy_memory_mcp_auth.content is search('"name":"Hy-Memory PRO"')
     fail_msg: "Hy-Memory MCP initialize did not return the expected server identity"
-  when: verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == ''
+  when: "'hy_memory' in docker_apps_containers and (verify_docker_app_name | default('') == 'hy_memory' or verify_docker_app_name | default('') == '')"
   tags: [verify, services, docker_apps, hy_memory]
 
 
