@@ -116,3 +116,21 @@ def test_json_selector_members_are_unique_and_resolve():
     assert len(selector["outbounds"]) == len(set(selector["outbounds"]))
     assert set(selector["outbounds"]) <= set(tags)
     assert selector["default"] in selector["outbounds"]
+
+
+def _display_name(name: str) -> str:
+    # Both published profiles prefix a flag when the node name does not already
+    # start with a non-ASCII one; the compact provider keeps the raw name
+    # because Sub-Store applies its own labels.
+    return name if name[0] > "\x7f" else f"🌍 {name}"
+
+
+def test_compact_provider_publishes_the_same_nodes_on_the_same_ports():
+    compact = yaml.safe_load(_render("singbox_provider_profile.yaml.j2"))["proxies"]
+    json_nodes = _singbox_nodes()
+    # The compact provider is a strict subset by protocol support, not by node
+    # set: it omits tuic/trojan, which this fixture does not use, so every
+    # published node must appear on both sides with identical semantics.
+    assert [(_display_name(node["name"]), _mihomo_semantics(node)) for node in compact] == [
+        (node["tag"], _singbox_semantics(node)) for node in json_nodes
+    ]
