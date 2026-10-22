@@ -209,20 +209,21 @@ native 分支每次部署渲染统一模板。
 
 | 变量名 | 默认值 |
 | :--- | :--- |
-| `sillytavern_image` | `ghcr.io/sillytavern/sillytavern:1.17.0` |
-| `singbox_image` | `ghcr.io/sagernet/sing-box:v1.13.21` |
-| `sub_store_image` | `xream/sub-store:2.36.29` |
+| `sillytavern_image` | `ghcr.io/sillytavern/sillytavern:1.18.0` |
+| `singbox_image` | `ghcr.io/sagernet/sing-box:v1.14.3` |
+| `sub_store_image` | `xream/sub-store:2.42.3` |
 | `vaultwarden_version` | `1.37.2` |
 | `vaultwarden_registry` | `vaultwarden` |
 | `vaultwarden_image` | `{{ vaultwarden_registry }}/server:{{ vaultwarden_version }}` |
 | `gcli2api_image` | `ghcr.io/su-kaka/gcli2api:latest` |
-| `ds2api_image` | `ghcr.io/ouqiting/ds2api:v3.5.0` | 固定上游 Release；不使用 `latest` |
+| `ds2api_image` | `ghcr.io/cjackhwang/ds2api:v4.6.1` | 固定上游 Release；不使用 `latest` |
 | `vertex_image` | `vertex-proxy:20260809-0a2df82` | 本地构建标签，与源码包摘要配套 |
-| `workbuddy2api_image` | `ghcr.io/ardeyouxipianyi/workbuddy2api-hub:v1.6.20` |
+| `workbuddy2api_image` | `ghcr.io/ardeyouxipianyi/workbuddy2api-hub:v1.7.29` |
+| `magpie_image` | `ghcr.io/yetone/magpie:0.1.1323` |
 | `gemini_balance_image` | `ghcr.io/snailyp/gemini-balance:2.2.8` |
-| `cliproxyapi_image` | `eceasy/cli-proxy-api:v7.3.2` |
+| `cliproxyapi_image` | `eceasy/cli-proxy-api:v8.0.22` |
 | `flare_image` | `soulteary/flare:0.5.1` |
-| `newapi_image` | `calciumion/new-api:v1.0.0-rc.4` |
+| `newapi_image` | `calciumion/new-api:v1.0.0-rc.6` |
 | `manifest_image` | `manifestdotbuild/manifest:sha-2b14bc3` |
 | `shellcrash_image` | `juewuy/shellcrash:latest` |
 GCLI2API 使用可变 `latest` 标签；其 focused deploy 会显式拉取镜像，使同标签的新 digest 能替换运行容器。
