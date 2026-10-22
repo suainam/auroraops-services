@@ -1,0 +1,36 @@
+[Unit]
+Description=Rclone WebDAV Gateway Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/rclone serve webdav {{ rclone_webdav_remote }} \
+    --addr {{ rclone_webdav_addr }} \
+    --vfs-cache-mode {{ rclone_webdav_vfs_cache_mode }} \
+    --vfs-cache-max-size {{ rclone_webdav_cache_max_size }} \
+    --vfs-cache-max-age {{ rclone_webdav_cache_max_age }} \
+    --cache-dir {{ rclone_webdav_linux_cache_dir }} \
+    --dir-cache-time {{ rclone_webdav_dir_cache_time }} \
+    --poll-interval {{ rclone_webdav_poll_interval }} \
+    --buffer-size {{ rclone_webdav_buffer_size }} \
+    --vfs-read-chunk-size {{ rclone_webdav_read_chunk_size }} \
+    --vfs-read-chunk-size-limit {{ rclone_webdav_read_chunk_size_limit }} \
+    --vfs-fast-fingerprint \
+    --log-level {{ rclone_webdav_log_level }}
+Restart=always
+RestartSec=10s
+Environment=RCLONE_CONFIG={{ rclone_config_path }}
+{% if rclone_use_proxy | bool %}
+Environment=HTTP_PROXY={{ rclone_http_proxy }}
+Environment=HTTPS_PROXY={{ rclone_https_proxy }}
+Environment=ALL_PROXY={{ rclone_https_proxy }}
+Environment=NO_PROXY=localhost,127.0.0.1,::1
+Environment=http_proxy={{ rclone_http_proxy }}
+Environment=https_proxy={{ rclone_https_proxy }}
+Environment=all_proxy={{ rclone_https_proxy }}
+Environment=no_proxy=localhost,127.0.0.1,::1
+{% endif %}
+
+[Install]
+WantedBy=multi-user.target

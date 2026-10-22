@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{{ rclone_webdav_darwin_launchagent_label }}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/rclone</string>
+        <string>serve</string>
+        <string>webdav</string>
+        <string>{{ rclone_webdav_remote }}</string>
+        <string>--addr</string>
+        <string>{{ rclone_webdav_addr }}</string>
+        <string>--vfs-cache-mode</string>
+        <string>{{ rclone_webdav_vfs_cache_mode }}</string>
+        <string>--vfs-cache-max-size</string>
+        <string>{{ rclone_webdav_cache_max_size }}</string>
+        <string>--vfs-cache-max-age</string>
+        <string>{{ rclone_webdav_cache_max_age }}</string>
+        <string>--cache-dir</string>
+        <string>{{ rclone_webdav_darwin_cache_dir }}</string>
+        <string>--dir-cache-time</string>
+        <string>{{ rclone_webdav_dir_cache_time }}</string>
+        <string>--poll-interval</string>
+        <string>{{ rclone_webdav_poll_interval }}</string>
+        <string>--buffer-size</string>
+        <string>{{ rclone_webdav_buffer_size }}</string>
+        <string>--vfs-read-chunk-size</string>
+        <string>{{ rclone_webdav_read_chunk_size }}</string>
+        <string>--vfs-read-chunk-size-limit</string>
+        <string>{{ rclone_webdav_read_chunk_size_limit }}</string>
+        <string>--vfs-fast-fingerprint</string>
+        <string>--log-file</string>
+        <string>{{ rclone_webdav_darwin_log_path }}</string>
+        <string>--log-level</string>
+        <string>{{ rclone_webdav_log_level }}</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>{{ ansible_env.HOME | default('~') }}</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>RCLONE_CONFIG</key>
+        <string>{{ rclone_darwin_config_path }}</string>
+{% if rclone_use_proxy | bool %}
+        <key>HTTP_PROXY</key>
+        <string>{{ rclone_http_proxy }}</string>
+        <key>HTTPS_PROXY</key>
+        <string>{{ rclone_https_proxy }}</string>
+        <key>ALL_PROXY</key>
+        <string>{{ rclone_https_proxy }}</string>
+        <key>NO_PROXY</key>
+        <string>localhost,127.0.0.1,::1</string>
+        <key>http_proxy</key>
+        <string>{{ rclone_http_proxy }}</string>
+        <key>https_proxy</key>
+        <string>{{ rclone_https_proxy }}</string>
+        <key>all_proxy</key>
+        <string>{{ rclone_https_proxy }}</string>
+        <key>no_proxy</key>
+        <string>localhost,127.0.0.1,::1</string>
+{% endif %}
+    </dict>
+    <key>KeepAlive</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{{ rclone_webdav_darwin_log_path }}.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>{{ rclone_webdav_darwin_log_path }}.stderr.log</string>
+</dict>
+</plist>

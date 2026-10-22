@@ -31,3 +31,35 @@
     dest: "{{ rclone_darwin_config_path }}"
     mode: "0600"
   tags: [deploy, personalization, rclone, phase2]
+
+- name: Ensure Darwin WebDAV LaunchAgent directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0700"
+  loop:
+    - "{{ rclone_webdav_darwin_plist_path | dirname }}"
+    - "{{ rclone_webdav_darwin_cache_dir }}"
+    - "{{ rclone_webdav_darwin_log_path | dirname }}"
+  when: rclone_webdav_enabled | default(false) | bool
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: Deploy Darwin WebDAV LaunchAgent plist
+  ansible.builtin.template:
+    src: com.auroraops.rclone-webdav.plist.j2
+    dest: "{{ rclone_webdav_darwin_plist_path }}"
+    mode: "0644"
+  register: rclone_webdav_darwin_plist_result
+  when: rclone_webdav_enabled | default(false) | bool
+  tags: [deploy, personalization, rclone, phase2]
+
+- name: Reload Darwin WebDAV LaunchAgent when plist changed
+  ansible.builtin.shell: |
+    launchctl unload "{{ rclone_webdav_darwin_plist_path }}" 2>/dev/null || true
+    launchctl load -w "{{ rclone_webdav_darwin_plist_path }}"
+  args:
+    executable: /bin/bash
+  when:
+    - rclone_webdav_enabled | default(false) | bool
+    - rclone_webdav_darwin_plist_result.changed
+  tags: [deploy, personalization, rclone, phase2]
