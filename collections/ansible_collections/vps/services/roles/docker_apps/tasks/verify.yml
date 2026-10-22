@@ -56,6 +56,7 @@
       vertex: vertex-proxy
       workbuddy2api: workbuddy2api
       magpie: magpie
+      ai_memory: ai-memory
       # hy_memory 是 systemd 服务，没有同名容器；docker_apps_containers 里的条目只作开关。
   tags:
     - verify
@@ -105,6 +106,7 @@
     - shellcrash
     - workbuddy2api
     - magpie
+    - ai_memory
 
 - name: Verify Sing-box native service is active and enabled on systemd
   become: true
@@ -180,6 +182,7 @@
       vertex: true
       workbuddy2api: true
       magpie: true
+      ai_memory: true
   tags:
     - verify
     - services
@@ -188,6 +191,7 @@
     - ds2api
     - phase5
     - vertex
+    - ai_memory
 
 - name: Verify gcli2api is bound to loopback
   ansible.builtin.assert:
@@ -404,6 +408,66 @@
     fail_msg: "magpie config directory must exist and be owned by 65532:65532"
   when: verify_docker_app_name | default('') == 'magpie'
   tags: [verify, services, docker_apps, magpie, phase5]
+
+- name: Verify ai-memory publish binding and digest-pinned image
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.NetworkSettings.Ports['49374/tcp'][0].HostIp == ai_memory_publish_address
+      - docker_apps_container_info.container.NetworkSettings.Ports['49374/tcp'][0].HostPort == (docker_apps_app_port_ai_memory | string)
+      - docker_apps_container_info.container.Config.Image == docker_apps_ai_memory_image
+    fail_msg: "ai-memory must use the digest-pinned image and bind only to the WireGuard address"
+  when: verify_docker_app_name | default('') == 'ai_memory'
+  tags: [verify, services, docker_apps, ai_memory, phase5]
+
+- name: Verify ai-memory container health status
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.State.Health.Status is defined
+      - docker_apps_container_info.container.State.Health.Status in ['healthy', 'starting']
+    fail_msg: "ai-memory container healthcheck must report healthy or starting"
+  when: verify_docker_app_name | default('') == 'ai_memory'
+  tags: [verify, services, docker_apps, ai_memory, phase5]
+
+- name: Verify ai-memory data directory ownership
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_apps_ai_memory_data_dir }}"
+  register: docker_apps_ai_memory_data_stat
+  when: verify_docker_app_name | default('') == 'ai_memory'
+  tags: [verify, services, docker_apps, ai_memory, phase5]
+
+- name: Validate ai-memory data directory ownership for the image user
+  ansible.builtin.assert:
+    that:
+      - docker_apps_ai_memory_data_stat.stat.exists
+      - docker_apps_ai_memory_data_stat.stat.isdir
+      - docker_apps_ai_memory_data_stat.stat.uid == (docker_apps_ai_memory_uid | int)
+      - docker_apps_ai_memory_data_stat.stat.gid == (docker_apps_ai_memory_gid | int)
+    fail_msg: "ai-memory data directory must be owned by the image declared UID/GID"
+  when: verify_docker_app_name | default('') == 'ai_memory'
+  tags: [verify, services, docker_apps, ai_memory, phase5]
+
+- name: Verify ai-memory rejects an unauthenticated request
+  no_log: true
+  ansible.builtin.uri:
+    url: "http://{{ ai_memory_publish_address }}:{{ docker_apps_app_port_ai_memory }}/healthz"
+    method: GET
+    status_code: [401, 403]
+    return_content: false
+  when: verify_docker_app_name | default('') == 'ai_memory'
+  tags: [verify, services, docker_apps, ai_memory, phase5]
+
+- name: Verify ai-memory serves healthz with the bearer token
+  no_log: true
+  ansible.builtin.uri:
+    url: "http://{{ ai_memory_publish_address }}:{{ docker_apps_app_port_ai_memory }}/healthz"
+    method: GET
+    status_code: 200
+    headers:
+      Authorization: "Bearer {{ vault_ai_memory_auth_token }}"
+    return_content: false
+  when: verify_docker_app_name | default('') == 'ai_memory'
+  tags: [verify, services, docker_apps, ai_memory, phase5]
 
 - name: Verify vaultwarden is bound to loopback
   ansible.builtin.assert:

@@ -29,6 +29,7 @@
   vars:
     docker_app_rollback_name_map:
       vertex: vertex-proxy
+      ai_memory: ai-memory
     rollback_container_name: "{{ docker_app_rollback_name_map[rollback_docker_app_name] | default(rollback_docker_app_name) }}"
   when:
     - rollback_docker_app_name is defined
@@ -57,6 +58,7 @@
     - vertex
     - workbuddy2api
     - magpie
+    - ai_memory
     - phase5
 
 - name: Stop and disable Hy-Memory systemd unit
@@ -86,5 +88,6 @@
     - vertex-proxy
     - workbuddy2api
     - magpie
+    - ai-memory
   when: rollback_docker_app_name is not defined
   tags: [rollback, services, docker_apps, docker_apps_manifest, phase5]

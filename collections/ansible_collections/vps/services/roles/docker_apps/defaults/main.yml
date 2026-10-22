@@ -75,6 +75,18 @@ docker_apps_magpie_cpus: "{{ magpie_cpus | default('1.0') }}"
 docker_apps_magpie_web_key: "{{ vault_magpie_web_key | default(omit) }}"
 docker_apps_magpie_data_dir: "{{ backup_source_docker_dir | default('/opt/dockers') }}/magpie"
 
+# ai-memory shared primary (WireGuard-only). Image contract read from pinned image.
+docker_apps_ai_memory_enabled: false
+docker_apps_ai_memory_pull: false
+docker_apps_app_port_ai_memory: "{{ app_port_ai_memory }}"
+docker_apps_ai_memory_image: "{{ ai_memory_image | default('akitaonrails/ai-memory:3.1.1@sha256:9f638c879654a78d497ab3c485e5ee57465564dd2256878498ccbd5e0e5ec749') }}"
+docker_apps_ai_memory_memory: "{{ ai_memory_memory | default('512m') }}"
+docker_apps_ai_memory_memory_reservation: "{{ ai_memory_memory_reservation | default('160m') }}"
+docker_apps_ai_memory_cpus: "{{ ai_memory_cpus | default('1.0') }}"
+docker_apps_ai_memory_uid: "{{ ai_memory_uid | default(1000) }}"
+docker_apps_ai_memory_gid: "{{ ai_memory_gid | default(999) }}"
+docker_apps_ai_memory_data_dir: "{{ backup_source_docker_dir | default('/opt/dockers') }}/ai-memory"
+
 # Hy-Memory PRO (systemd 服务，非容器；`docker_apps_containers` 中的 hy_memory 仅作开关)
 docker_apps_hy_memory_data_root: >-
   {{ backup_source_docker_dir | default('/opt/dockers') }}/hy_memory

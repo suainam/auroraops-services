@@ -32,6 +32,7 @@
         - vertex
         - workbuddy2api
         - magpie
+        - ai_memory
         - phase5
 
     - name: 加载 Docker Apps 公共准备任务
@@ -55,6 +56,7 @@
         - vertex
         - workbuddy2api
         - magpie
+        - ai_memory
         - phase5
 
     - name: 加载 Docker Apps 数据恢复任务
@@ -80,6 +82,10 @@
       ansible.builtin.import_tasks: magpie.yml
       when: "'magpie' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'magpie')"
       tags: [deploy, services, docker_apps, magpie, phase5]
+    - name: 加载 ai-memory 部署任务
+      ansible.builtin.import_tasks: ai_memory.yml
+      when: "'ai_memory' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'ai_memory')"
+      tags: [deploy, services, docker_apps, ai_memory, phase5]
 
     - name: 加载 Vertex AI Proxy 部署任务
       ansible.builtin.import_tasks: vertex.yml

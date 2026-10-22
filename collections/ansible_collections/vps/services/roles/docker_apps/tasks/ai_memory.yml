@@ -1,0 +1,63 @@
+---
+# ai-memory shared primary (#327).
+
+- name: Validate ai-memory secrets are defined
+  ansible.builtin.assert:
+    that:
+      - vault_ai_memory_auth_token is defined
+      - vault_ai_memory_auth_token | string | length > 0
+      - vault_ai_memory_llm_api_key is defined
+      - vault_ai_memory_llm_api_key | string | length > 0
+    fail_msg: ai-memory requires vault_ai_memory_auth_token and vault_ai_memory_llm_api_key in Ansible Vault.
+  no_log: true
+  tags: [deploy, services, docker_apps, ai_memory, phase5]
+
+- name: Ensure ai-memory host directories
+  become: true
+  ansible.builtin.file:
+    path: "{{ docker_apps_ai_memory_data_dir }}"
+    state: directory
+    owner: "{{ docker_apps_ai_memory_uid }}"
+    group: "{{ docker_apps_ai_memory_gid }}"
+    mode: "0750"
+  tags: [deploy, services, docker_apps, ai_memory, phase5]
+
+- name: Deploy ai-memory container via container_deployer
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+    apply:
+      tags:
+        - ai_memory
+        - phase5
+  vars:
+    cdp_name: "ai-memory"
+    cdp_image: "{{ docker_apps_ai_memory_image }}"
+    cdp_pull: "{{ docker_apps_ai_memory_pull | default(false) | bool }}"
+    container_deployer_cdp_pull: "{{ docker_apps_ai_memory_pull | default(false) | bool }}"
+    cdp_dir_owner: "{{ docker_apps_ai_memory_uid }}"
+    cdp_dir_group: "{{ docker_apps_ai_memory_gid }}"
+    cdp_dir_mode: "0750"
+    cdp_memory: "{{ docker_apps_ai_memory_memory }}"
+    cdp_memory_reservation: "{{ docker_apps_ai_memory_memory_reservation }}"
+    cdp_cpus: "{{ docker_apps_ai_memory_cpus }}"
+    cdp_restart_policy: "unless-stopped"
+    cdp_networks: [{name: "sweb"}]
+    cdp_ports:
+      - "{{ ai_memory_publish_address }}:{{ docker_apps_app_port_ai_memory }}:49374"
+    cdp_volumes:
+      - "{{ docker_apps_ai_memory_data_dir }}:/data"
+    cdp_env:
+      TZ: "Asia/Shanghai"
+      AI_MEMORY_AUTH_TOKEN: "{{ vault_ai_memory_auth_token }}"
+      AI_MEMORY_ALLOWED_HOSTS: "{{ ai_memory_allowed_hosts }}"
+      AI_MEMORY_LLM_PROVIDER: "openai-compat"
+      AI_MEMORY_LLM_BASE_URL: "{{ ai_memory_llm_base_url }}"
+      AI_MEMORY_LLM_MODEL: "{{ ai_memory_llm_model }}"
+      LLM_API_KEY: "{{ vault_ai_memory_llm_api_key }}"
+    cdp_healthcheck:
+      test: ["CMD", "/usr/local/bin/ai-memory", "status"]
+      interval: 1800s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+  tags: [deploy, services, docker_apps, ai_memory, phase5]

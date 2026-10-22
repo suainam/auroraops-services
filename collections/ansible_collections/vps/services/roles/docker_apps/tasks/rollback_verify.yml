@@ -38,6 +38,26 @@
   no_log: true
   tags: [rollback_verify, services, docker_apps, magpie, phase5]
 
+- name: Verify ai-memory container is absent after rollback
+  become: true
+  community.docker.docker_container_info:
+    name: ai-memory
+  register: docker_apps_rollback_ai_memory_info
+  changed_when: false
+  failed_when: docker_apps_rollback_ai_memory_info.exists
+  when: rollback_docker_app_name | default('') == 'ai_memory'
+  no_log: true
+  tags: [rollback_verify, services, docker_apps, ai_memory, phase5]
+
+- name: Verify ai-memory WireGuard port is no longer listening after rollback
+  ansible.builtin.wait_for:
+    host: "{{ ai_memory_publish_address }}"
+    port: "{{ docker_apps_app_port_ai_memory }}"
+    state: stopped
+    timeout: 20
+  when: rollback_docker_app_name | default('') == 'ai_memory'
+  tags: [rollback_verify, services, docker_apps, ai_memory, phase5]
+
 - name: Verify Hy-Memory systemd unit is inactive after rollback
   ansible.builtin.command:
     argv: [systemctl, is-active, hy-memory]
