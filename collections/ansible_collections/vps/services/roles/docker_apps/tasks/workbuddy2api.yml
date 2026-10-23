@@ -60,15 +60,6 @@
   no_log: true
   tags: [deploy, services, docker_apps, workbuddy2api, phase5]
 
-- name: Ensure workbuddy2api settings permissions
-  become: true
-  ansible.builtin.file:
-    path: "{{ docker_apps_workbuddy2api_data_dir }}/accounts/settings.json"
-    owner: "{{ docker_apps_docker_user_uid }}"
-    group: "{{ docker_apps_docker_user_gid }}"
-    mode: "0600"
-  when: not ansible_check_mode or _wb_settings_stat.stat.exists
-  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
 
 - name: Probe existing workbuddy2api container for pre-deploy baseline
   become: true
