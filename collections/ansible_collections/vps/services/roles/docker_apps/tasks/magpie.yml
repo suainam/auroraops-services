@@ -180,9 +180,41 @@
     name: "{{ (docker_apps_container_name | default('magpie')) ~ '_baseline_' ~ _magpie_checkpoint_id }}"
     docker_host: "{{ docker_host | default(omit) }}"
   register: _magpie_pre_deploy_baseline_info
+  # Probed unconditionally: after an interrupted run the live container may
+  # already be renamed to the baseline name, so gating this on the live
+  # container's existence leaves the baseline invisible and unstopped.
+  when:
+    - not ansible_check_mode
+  tags: [deploy, services, docker_apps, magpie, phase5]
+
+- name: Quiesce live magpie container before it is renamed to the baseline
+  # The snapshot block above stops the container only when no checkpoint exists
+  # yet. A retry finds the checkpoint already written, skips that block, and
+  # would rename a still-running container: its docker-proxy keeps 30022/30023
+  # bound, so the new container creates fine and then fails to start with
+  # "Bind for 127.0.0.1:30022 failed: port is already allocated".
+  community.docker.docker_container:
+    name: "{{ docker_apps_container_name | default('magpie') }}"
+    docker_host: "{{ docker_host | default(omit) }}"
+    state: stopped
   when:
     - not ansible_check_mode
     - _magpie_pre_deploy_info.exists | default(false)
+    - _magpie_pre_deploy_info.container.State.Running | default(false)
+  tags: [deploy, services, docker_apps, magpie, phase5]
+
+- name: Quiesce the preserved baseline magpie container so it releases the ports
+  # Same invariant from the other side: the baseline is kept for rollback and is
+  # restarted only by the rescue path, so it must not hold the published ports
+  # while the replacement starts.
+  community.docker.docker_container:
+    name: "{{ (docker_apps_container_name | default('magpie')) ~ '_baseline_' ~ _magpie_checkpoint_id }}"
+    docker_host: "{{ docker_host | default(omit) }}"
+    state: stopped
+  when:
+    - not ansible_check_mode
+    - _magpie_pre_deploy_baseline_info.exists | default(false)
+    - _magpie_pre_deploy_baseline_info.container.State.Running | default(false)
   tags: [deploy, services, docker_apps, magpie, phase5]
 
 - name: Rename baseline magpie container to preserve runtime contract before deploy

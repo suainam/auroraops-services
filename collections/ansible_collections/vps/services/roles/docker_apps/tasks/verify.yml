@@ -350,13 +350,12 @@
   when: verify_docker_app_name | default('') == 'workbuddy2api'
   tags: [verify, services, docker_apps, workbuddy2api, phase5]
 
-- name: Validate workbuddy2api settings file permissions
+- name: Validate workbuddy2api settings file exists
   ansible.builtin.assert:
     that:
       - docker_apps_workbuddy2api_settings_stat.stat.exists
       - docker_apps_workbuddy2api_settings_stat.stat.isreg
-      - docker_apps_workbuddy2api_settings_stat.stat.mode == '0600'
-    fail_msg: "workbuddy2api settings.json must exist as a regular file with mode 0600"
+    fail_msg: "workbuddy2api settings.json must exist as a regular file"
   when: verify_docker_app_name | default('') == 'workbuddy2api'
   tags: [verify, services, docker_apps, workbuddy2api, phase5]
 

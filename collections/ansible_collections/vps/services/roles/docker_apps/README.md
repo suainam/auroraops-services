@@ -218,8 +218,8 @@ native 分支每次部署渲染统一模板。
 | `gcli2api_image` | `ghcr.io/su-kaka/gcli2api:latest` |
 | `ds2api_image` | `ghcr.io/cjackhwang/ds2api:v4.6.1` | 固定上游 Release；不使用 `latest` |
 | `vertex_image` | `vertex-proxy:20260809-0a2df82` | 本地构建标签，与源码包摘要配套 |
-| `workbuddy2api_image` | `ghcr.io/ardeyouxipianyi/workbuddy2api-hub:v1.7.29` |
-| `magpie_image` | `ghcr.io/yetone/magpie:0.1.1323` |
+| `workbuddy2api_image` | `ghcr.io/ardeyouxipianyi/workbuddy2api-hub:v1.7.30` |
+| `magpie_image` | `ghcr.io/yetone/magpie:0.1.1329` |
 | `gemini_balance_image` | `ghcr.io/snailyp/gemini-balance:2.2.8` |
 | `cliproxyapi_image` | `eceasy/cli-proxy-api:v8.0.22` |
 | `flare_image` | `soulteary/flare:0.5.1` |

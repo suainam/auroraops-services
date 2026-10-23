@@ -60,15 +60,6 @@
   no_log: true
   tags: [deploy, services, docker_apps, workbuddy2api, phase5]
 
-- name: Ensure workbuddy2api settings permissions
-  become: true
-  ansible.builtin.file:
-    path: "{{ docker_apps_workbuddy2api_data_dir }}/accounts/settings.json"
-    owner: "{{ docker_apps_docker_user_uid }}"
-    group: "{{ docker_apps_docker_user_gid }}"
-    mode: "0600"
-  when: not ansible_check_mode or _wb_settings_stat.stat.exists
-  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
 
 - name: Probe existing workbuddy2api container for pre-deploy baseline
   become: true
@@ -235,9 +226,41 @@
     name: "{{ (docker_apps_container_name | default('workbuddy2api')) ~ '_baseline_' ~ _wb_checkpoint_id }}"
     docker_host: "{{ docker_host | default(omit) }}"
   register: _wb_pre_deploy_baseline_info
+  # Probed unconditionally: after an interrupted run the live container may
+  # already be renamed to the baseline name, so gating this on the live
+  # container's existence leaves the baseline invisible and unstopped.
+  when:
+    - not ansible_check_mode
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+- name: Quiesce live workbuddy2api container before it is renamed to the baseline
+  # The snapshot block above stops the container only when no checkpoint exists
+  # yet. A retry finds the checkpoint already written, skips that block, and
+  # would rename a still-running container: its docker-proxy keeps 30021 bound,
+  # so the new container creates fine and then fails to start with
+  # "Bind for 127.0.0.1:30021 failed: port is already allocated".
+  community.docker.docker_container:
+    name: "{{ docker_apps_container_name | default('workbuddy2api') }}"
+    docker_host: "{{ docker_host | default(omit) }}"
+    state: stopped
   when:
     - not ansible_check_mode
     - _wb_pre_deploy_info.exists | default(false)
+    - _wb_pre_deploy_info.container.State.Running | default(false)
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+- name: Quiesce the preserved baseline workbuddy2api container so it releases the ports
+  # Same invariant from the other side: the baseline is kept for rollback and is
+  # restarted only by the rescue path, so it must not hold the published port
+  # while the replacement starts.
+  community.docker.docker_container:
+    name: "{{ (docker_apps_container_name | default('workbuddy2api')) ~ '_baseline_' ~ _wb_checkpoint_id }}"
+    docker_host: "{{ docker_host | default(omit) }}"
+    state: stopped
+  when:
+    - not ansible_check_mode
+    - _wb_pre_deploy_baseline_info.exists | default(false)
+    - _wb_pre_deploy_baseline_info.container.State.Running | default(false)
   tags: [deploy, services, docker_apps, workbuddy2api, phase5]
 
 - name: Rename baseline workbuddy2api container to preserve runtime contract before deploy

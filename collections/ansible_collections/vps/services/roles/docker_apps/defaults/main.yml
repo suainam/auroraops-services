@@ -55,7 +55,7 @@ docker_apps_ds2api_config: >-
 # WorkBuddy2API-Hub
 docker_apps_workbuddy2api_enabled: false
 docker_apps_app_port_workbuddy2api: "{{ app_port_workbuddy2api }}"
-docker_apps_workbuddy2api_image: "{{ workbuddy2api_image | default('ghcr.io/ardeyouxipianyi/workbuddy2api-hub:v1.7.29') }}"
+docker_apps_workbuddy2api_image: "{{ workbuddy2api_image | default('ghcr.io/ardeyouxipianyi/workbuddy2api-hub:v1.7.30') }}"
 docker_apps_workbuddy2api_memory: "{{ workbuddy2api_memory | default('128m') }}"
 docker_apps_workbuddy2api_memory_reservation: "{{ workbuddy2api_memory_reservation | default('64m') }}"
 docker_apps_workbuddy2api_cpus: "{{ workbuddy2api_cpus | default('1.0') }}"
@@ -68,7 +68,7 @@ docker_apps_magpie_enabled: false
 docker_apps_magpie_pull: false
 docker_apps_app_port_magpie_api: "{{ app_port_magpie_api }}"
 docker_apps_app_port_magpie_web: "{{ app_port_magpie_web }}"
-docker_apps_magpie_image: "{{ magpie_image | default('ghcr.io/yetone/magpie:0.1.1323') }}"
+docker_apps_magpie_image: "{{ magpie_image | default('ghcr.io/yetone/magpie:0.1.1329') }}"
 docker_apps_magpie_memory: "{{ magpie_memory | default('384m') }}"
 docker_apps_magpie_memory_reservation: "{{ magpie_memory_reservation | default('128m') }}"
 docker_apps_magpie_cpus: "{{ magpie_cpus | default('1.0') }}"
