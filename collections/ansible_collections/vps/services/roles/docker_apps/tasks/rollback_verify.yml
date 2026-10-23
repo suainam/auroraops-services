@@ -16,25 +16,169 @@
     - sub_store
     - phase5
 
-- name: Verify workbuddy2api container is absent after rollback
+- name: 读取 WorkBuddy2API 最优检查点指针进行回滚校验
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/latest_checkpoint.txt"
+  register: _wb_verify_latest_ptr
+  failed_when: false
+  when: rollback_docker_app_name | default('') == 'workbuddy2api'
+  tags: [rollback_verify, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 确定 WorkBuddy2API 生效检查点标识符 (显式指定优先于指针)
+  ansible.builtin.set_fact:
+    _wb_verify_active_cp_id: "{{ rollback_checkpoint_id | default((_wb_verify_latest_ptr.content | b64decode | trim) if (_wb_verify_latest_ptr is defined and (_wb_verify_latest_ptr.content | default(''))) else 'latest') }}"
+  when: rollback_docker_app_name | default('') == 'workbuddy2api'
+  tags: [rollback_verify, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 读取 WorkBuddy2API 固化的检查点记录进行回滚校验
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/checkpoints/{{ _wb_verify_active_cp_id }}/checkpoint.json"
+  register: _wb_verify_slurp
+  failed_when: false
+  when: rollback_docker_app_name | default('') == 'workbuddy2api'
+  tags: [rollback_verify, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 解析 WorkBuddy2API 固化的检查点记录
+  ansible.builtin.set_fact:
+    wb_verify_checkpoint: "{{ (_wb_verify_slurp.content | b64decode | from_json) if (_wb_verify_slurp is defined and (_wb_verify_slurp.content | default(''))) else {} }}"
+  when: rollback_docker_app_name | default('') == 'workbuddy2api'
+  tags: [rollback_verify, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 验证 workbuddy2api 降级后容器状态与基线镜像 (核对不可变 image_id)
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ docker_apps_container_name | default('workbuddy2api') }}"
+    docker_host: "{{ docker_host | default(omit) }}"
+  register: docker_apps_rollback_wb_downgrade_info
+  vars:
+    expected_image_id: "{{ wb_verify_checkpoint.baseline_image_id | default('') }}"
+    expected_image: "{{ rollback_baseline_image | default(wb_verify_checkpoint.baseline_image | default('')) }}"
+  changed_when: false
+  failed_when: >-
+    (not docker_apps_rollback_wb_downgrade_info.exists)
+    or (not docker_apps_rollback_wb_downgrade_info.container.State.Running)
+    or (expected_image_id | length > 0 and docker_apps_rollback_wb_downgrade_info.container.Image != expected_image_id)
+    or (expected_image_id | length == 0 and expected_image | length > 0 and docker_apps_rollback_wb_downgrade_info.container.Config.Image != expected_image)
+  when:
+    - rollback_docker_app_name | default('') == 'workbuddy2api'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (wb_verify_checkpoint.mode | default('') == 'existing_service')
+  no_log: true
+  tags: [rollback_verify, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 验证 workbuddy2api 降级后持久化受保护数据与指纹一致性
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_apps_workbuddy2api_data_dir }}/accounts/settings.json"
+    checksum_algorithm: sha256
+  register: docker_apps_rollback_wb_data_stat
+  failed_when: >-
+    (not docker_apps_rollback_wb_data_stat.stat.exists)
+    or (wb_verify_checkpoint.settings_sha256 is defined and wb_verify_checkpoint.settings_sha256 | length > 0 and docker_apps_rollback_wb_data_stat.stat.checksum != wb_verify_checkpoint.settings_sha256)
+  when:
+    - rollback_docker_app_name | default('') == 'workbuddy2api'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (wb_verify_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback_verify, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: Verify workbuddy2api container is absent after rollback (revocation)
   become: true
   community.docker.docker_container_info:
     name: workbuddy2api
   register: docker_apps_rollback_wb_info
   changed_when: false
   failed_when: docker_apps_rollback_wb_info.exists
-  when: rollback_docker_app_name | default('') == 'workbuddy2api'
+  when:
+    - rollback_docker_app_name | default('') == 'workbuddy2api'
+    - not (((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (wb_verify_checkpoint.mode | default('') == 'existing_service'))
   no_log: true
   tags: [rollback_verify, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
 
-- name: Verify magpie container is absent after rollback
+- name: 读取 Magpie 最优检查点指针进行回滚校验
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ docker_apps_magpie_data_dir }}/lifecycle/latest_checkpoint.txt"
+  register: _magpie_verify_latest_ptr
+  failed_when: false
+  when: rollback_docker_app_name | default('') == 'magpie'
+  tags: [rollback_verify, services, docker_apps, magpie, phase5]
+
+- name: 确定 Magpie 生效检查点标识符 (显式指定优先于指针)
+  ansible.builtin.set_fact:
+    _magpie_verify_active_cp_id: "{{ rollback_checkpoint_id | default((_magpie_verify_latest_ptr.content | b64decode | trim) if (_magpie_verify_latest_ptr is defined and (_magpie_verify_latest_ptr.content | default(''))) else 'latest') }}"
+  when: rollback_docker_app_name | default('') == 'magpie'
+  tags: [rollback_verify, services, docker_apps, magpie, phase5]
+
+- name: 读取 Magpie 固化的检查点记录进行回滚校验
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ docker_apps_magpie_data_dir }}/lifecycle/checkpoints/{{ _magpie_verify_active_cp_id }}/checkpoint.json"
+  register: _magpie_verify_slurp
+  failed_when: false
+  when: rollback_docker_app_name | default('') == 'magpie'
+  tags: [rollback_verify, services, docker_apps, magpie, phase5]
+
+- name: 解析 Magpie 固化的检查点记录
+  ansible.builtin.set_fact:
+    magpie_verify_checkpoint: "{{ (_magpie_verify_slurp.content | b64decode | from_json) if (_magpie_verify_slurp is defined and (_magpie_verify_slurp.content | default(''))) else {} }}"
+  when: rollback_docker_app_name | default('') == 'magpie'
+  tags: [rollback_verify, services, docker_apps, magpie, phase5]
+
+- name: 验证 magpie 降级后容器状态与基线镜像 (核对不可变 image_id)
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ docker_apps_container_name | default('magpie') }}"
+    docker_host: "{{ docker_host | default(omit) }}"
+  register: docker_apps_rollback_magpie_downgrade_info
+  vars:
+    expected_image_id: "{{ magpie_verify_checkpoint.baseline_image_id | default('') }}"
+    expected_image: "{{ rollback_baseline_image | default(magpie_verify_checkpoint.baseline_image | default('')) }}"
+  changed_when: false
+  failed_when: >-
+    (not docker_apps_rollback_magpie_downgrade_info.exists)
+    or (not docker_apps_rollback_magpie_downgrade_info.container.State.Running)
+    or (expected_image_id | length > 0 and docker_apps_rollback_magpie_downgrade_info.container.Image != expected_image_id)
+    or (expected_image_id | length == 0 and expected_image | length > 0 and docker_apps_rollback_magpie_downgrade_info.container.Config.Image != expected_image)
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_verify_checkpoint.mode | default('') == 'existing_service')
+  no_log: true
+  tags: [rollback_verify, services, docker_apps, magpie, phase5]
+
+- name: 验证 magpie 降级后持久化受保护数据存在且完整指纹吻合
+  become: true
+  block:
+    - name: 检查 magpie 配置目录存在
+      ansible.builtin.stat:
+        path: "{{ docker_apps_magpie_data_dir }}/config"
+      register: docker_apps_rollback_magpie_data_stat
+      failed_when: not docker_apps_rollback_magpie_data_stat.stat.exists or not docker_apps_rollback_magpie_data_stat.stat.isdir
+    - name: 重新计算恢复后 magpie 配置校验和
+      ansible.builtin.shell:
+        cmd: "find . -type f -exec sha256sum {} + | sort"
+        chdir: "{{ docker_apps_magpie_data_dir }}/config"
+      register: _magpie_verify_restored_checksums
+      changed_when: false
+    - name: 断言恢复后的配置与快照基线完全一致
+      ansible.builtin.assert:
+        that:
+          - _magpie_verify_restored_checksums.stdout | trim == (magpie_verify_checkpoint.config_checksums | trim)
+        fail_msg: "Rollback verification failed: restored files do not match baseline checksums"
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_verify_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback_verify, services, docker_apps, magpie, phase5]
+
+- name: Verify magpie container is absent after rollback (revocation)
   become: true
   community.docker.docker_container_info:
     name: magpie
   register: docker_apps_rollback_magpie_info
   changed_when: false
   failed_when: docker_apps_rollback_magpie_info.exists
-  when: rollback_docker_app_name | default('') == 'magpie'
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - not (((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_verify_checkpoint.mode | default('') == 'existing_service'))
   no_log: true
   tags: [rollback_verify, services, docker_apps, magpie, phase5]
 

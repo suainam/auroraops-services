@@ -70,43 +70,337 @@
   when: not ansible_check_mode or _wb_settings_stat.stat.exists
   tags: [deploy, services, docker_apps, workbuddy2api, phase5]
 
-- name: Deploy workbuddy2api
-  ansible.builtin.include_role:
-    name: vps.services.container_deployer
-    apply:
-      tags:
-        - workbuddy2api
-  vars:
-    cdp_name: "workbuddy2api"
-    cdp_image: "{{ docker_apps_workbuddy2api_image }}"
-    cdp_pull: "{{ docker_apps_workbuddy2api_pull | default(false) | bool }}"
-    container_deployer_cdp_pull: "{{ docker_apps_workbuddy2api_pull | default(false) | bool }}"
-    cdp_dirs: ["accounts", "usage"]
-    cdp_dir_owner: "{{ docker_apps_docker_user_uid }}"
-    cdp_dir_group: "{{ docker_apps_docker_user_gid }}"
-    cdp_dir_mode: "0750"
-    cdp_memory: "{{ docker_apps_workbuddy2api_memory }}"
-    cdp_cpus: "{{ docker_apps_workbuddy2api_cpus }}"
-    cdp_memory_reservation: "{{ docker_apps_workbuddy2api_memory_reservation }}"
-    cdp_restart_policy: "unless-stopped"
-    cdp_networks: [{name: "sweb"}]
-    cdp_ports:
-      - "127.0.0.1:{{ docker_apps_app_port_workbuddy2api }}:8788"
-    cdp_volumes:
-      - "{{ docker_apps_workbuddy2api_data_dir }}/accounts:/app/accounts"
-      - "{{ docker_apps_workbuddy2api_data_dir }}/usage:/app/usage"
-    cdp_env:
-      TZ: "Asia/Shanghai"
-      HOST: "0.0.0.0"
-      PORT: "8788"
-    cdp_healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8788/health', timeout=3)"
-      interval: 1800s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+- name: Probe existing workbuddy2api container for pre-deploy baseline
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ docker_apps_container_name | default('workbuddy2api') }}"
+    docker_host: "{{ docker_host | default(omit) }}"
+  register: _wb_pre_deploy_info
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+- name: Determine upgrade checkpoint identifier for workbuddy2api
+  ansible.builtin.set_fact:
+    _wb_checkpoint_id: "{{ upgrade_run_id | default(upgrade_checkpoint_id | default('upgrade_' ~ ((docker_apps_workbuddy2api_image | string) | regex_replace('[^a-zA-Z0-9_.-]', '_')))) }}"
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+- name: Check if workbuddy2api checkpoint already exists from earlier attempt
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/checkpoints/{{ _wb_checkpoint_id }}/checkpoint.json"
+  register: _wb_existing_cp_stat
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+- name: Solidify immutable versioned baseline for existing workbuddy2api
+  become: true
+  block:
+    - name: Ensure workbuddy2api checkpoint directory exists
+      ansible.builtin.file:
+        path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/checkpoints/{{ _wb_checkpoint_id }}"
+        state: directory
+        owner: "{{ docker_apps_docker_user_uid }}"
+        group: "{{ docker_apps_docker_user_gid }}"
+        mode: "0750"
+
+    - name: Block deployment if existing workbuddy2api settings are invalid
+      ansible.builtin.fail:
+        msg: "Deploy blocked: existing workbuddy2api settings file missing for baseline snapshot"
+      when: not _wb_settings_stat.stat.exists
+
+    - name: Quiesce container, snapshot data, and record checkpoint
+      block:
+        - name: Gracefully pause/quiesce existing workbuddy2api container for consistent snapshot
+          community.docker.docker_container:
+            name: "{{ docker_apps_container_name | default('workbuddy2api') }}"
+            docker_host: "{{ docker_host | default(omit) }}"
+            state: stopped
+          when: _wb_pre_deploy_info.container.State.Running | default(false)
+
+        - name: Create pre-upgrade data snapshot archive for workbuddy2api
+          ansible.builtin.command:
+            argv:
+              - tar
+              - -czf
+              - "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/checkpoints/{{ _wb_checkpoint_id }}/snapshot.tar.gz"
+              - -C
+              - "{{ docker_apps_workbuddy2api_data_dir }}"
+              - accounts
+              - usage
+
+        - name: Capture SHA256 checksum of workbuddy2api settings
+          ansible.builtin.stat:
+            path: "{{ docker_apps_workbuddy2api_data_dir }}/accounts/settings.json"
+            checksum_algorithm: sha256
+          register: _wb_baseline_stat
+
+
+        - name: Write versioned checkpoint record for workbuddy2api
+          ansible.builtin.copy:
+            dest: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/checkpoints/{{ _wb_checkpoint_id }}/checkpoint.json"
+            content: >-
+              {{
+                {
+                  "service": "workbuddy2api",
+                  "checkpoint_id": _wb_checkpoint_id,
+                  "mode": "existing_service",
+                  "baseline_container_name": (docker_apps_container_name | default('workbuddy2api')) ~ "_baseline_" ~ _wb_checkpoint_id,
+                  "baseline_image": _wb_pre_deploy_info.container.Config.Image,
+                  "baseline_image_id": _wb_pre_deploy_info.container.Image,
+                  "snapshot_path": (docker_apps_workbuddy2api_data_dir ~ "/lifecycle/checkpoints/" ~ _wb_checkpoint_id ~ "/snapshot.tar.gz"),
+                  "settings_sha256": _wb_baseline_stat.stat.checksum | default(''),
+                  "timestamp": ansible_date_time.iso8601 | default('unknown')
+                } | to_nice_json
+              }}
+            mode: "0400"
+            owner: "{{ docker_apps_docker_user_uid }}"
+            group: "{{ docker_apps_docker_user_gid }}"
+
+        - name: Update latest checkpoint pointer for workbuddy2api
+          ansible.builtin.copy:
+            dest: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/latest_checkpoint.txt"
+            content: "{{ _wb_checkpoint_id }}\n"
+            mode: "0640"
+            owner: "{{ docker_apps_docker_user_uid }}"
+            group: "{{ docker_apps_docker_user_gid }}"
+      rescue:
+        - name: Check if renamed baseline container exists after failed snapshot
+          community.docker.docker_container_info:
+            name: "{{ docker_apps_container_name | default('workbuddy2api') }}_baseline_{{ _wb_checkpoint_id }}"
+            docker_host: "{{ docker_host | default(omit) }}"
+          register: _wb_rescue_baseline_info
+        - name: Restore renamed baseline container name on failed snapshot
+          ansible.builtin.command:
+            argv:
+              - docker
+              - rename
+              - "{{ docker_apps_container_name | default('workbuddy2api') }}_baseline_{{ _wb_checkpoint_id }}"
+              - "{{ docker_apps_container_name | default('workbuddy2api') }}"
+          when: _wb_rescue_baseline_info.exists | default(false)
+        - name: Resume existing workbuddy2api container after failed snapshot
+          community.docker.docker_container:
+            name: "{{ docker_apps_container_name | default('workbuddy2api') }}"
+            state: started
+            docker_host: "{{ docker_host | default(omit) }}"
+          when: _wb_pre_deploy_info.container.State.Running | default(false)
+        - name: Fail closed after restoring container
+          ansible.builtin.fail:
+            msg: "Deploy blocked: workbuddy2api snapshot failed; container was resumed safely."
+  when:
+    - not ansible_check_mode
+    - _wb_pre_deploy_info.exists | default(false)
+    - not (_wb_existing_cp_stat.stat.exists | default(false))
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+- name: Write clean slate baseline for first install of workbuddy2api
+  become: true
+  block:
+    - name: Ensure workbuddy2api checkpoint directory exists
+      ansible.builtin.file:
+        path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/checkpoints/{{ _wb_checkpoint_id }}"
+        state: directory
+        owner: "{{ docker_apps_docker_user_uid }}"
+        group: "{{ docker_apps_docker_user_gid }}"
+        mode: "0750"
+
+    - name: Write first install checkpoint record for workbuddy2api
+      ansible.builtin.copy:
+        dest: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/checkpoints/{{ _wb_checkpoint_id }}/checkpoint.json"
+        content: >-
+          {{
+            {
+              "service": "workbuddy2api",
+              "checkpoint_id": _wb_checkpoint_id,
+              "mode": "first_install",
+              "timestamp": ansible_date_time.iso8601 | default('unknown')
+            } | to_nice_json
+          }}
+        mode: "0400"
+        owner: "{{ docker_apps_docker_user_uid }}"
+        group: "{{ docker_apps_docker_user_gid }}"
+
+    - name: Update latest checkpoint pointer for workbuddy2api
+      ansible.builtin.copy:
+        dest: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/latest_checkpoint.txt"
+        content: "{{ _wb_checkpoint_id }}\n"
+        mode: "0640"
+        owner: "{{ docker_apps_docker_user_uid }}"
+        group: "{{ docker_apps_docker_user_gid }}"
+  when:
+    - not ansible_check_mode
+    - not (_wb_pre_deploy_info.exists | default(false))
+    - not (_wb_existing_cp_stat.stat.exists | default(false))
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+- name: Probe if baseline workbuddy2api container already preserved
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ (docker_apps_container_name | default('workbuddy2api')) ~ '_baseline_' ~ _wb_checkpoint_id }}"
+    docker_host: "{{ docker_host | default(omit) }}"
+  register: _wb_pre_deploy_baseline_info
+  when:
+    - not ansible_check_mode
+    - _wb_pre_deploy_info.exists | default(false)
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+- name: Rename baseline workbuddy2api container to preserve runtime contract before deploy
+  ansible.builtin.command:
+    argv:
+      - docker
+      - rename
+      - "{{ docker_apps_container_name | default('workbuddy2api') }}"
+      - "{{ (docker_apps_container_name | default('workbuddy2api')) ~ '_baseline_' ~ _wb_checkpoint_id }}"
+  when:
+    - not ansible_check_mode
+    - _wb_pre_deploy_info.exists | default(false)
+    - not (_wb_pre_deploy_baseline_info.exists | default(false))
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
+- name: Deploy workbuddy2api with failure recovery
+  block:
+    - name: Deploy workbuddy2api via container_deployer
+      ansible.builtin.include_role:
+        name: vps.services.container_deployer
+        apply:
+          tags:
+            - workbuddy2api
+            - phase5
+      vars:
+        cdp_name: "{{ docker_apps_container_name | default('workbuddy2api') }}"
+        cdp_image: "{{ docker_apps_workbuddy2api_image }}"
+        cdp_pull: "{{ docker_apps_workbuddy2api_pull | default(false) | bool }}"
+        container_deployer_cdp_pull: "{{ docker_apps_workbuddy2api_pull | default(false) | bool }}"
+        cdp_dirs: ["accounts", "usage"]
+        cdp_dir_owner: "{{ docker_apps_docker_user_uid }}"
+        cdp_dir_group: "{{ docker_apps_docker_user_gid }}"
+        cdp_dir_mode: "0750"
+        cdp_memory: "{{ docker_apps_workbuddy2api_memory }}"
+        cdp_cpus: "{{ docker_apps_workbuddy2api_cpus }}"
+        cdp_memory_reservation: "{{ docker_apps_workbuddy2api_memory_reservation }}"
+        cdp_restart_policy: "unless-stopped"
+        cdp_networks: [{name: "sweb"}]
+        cdp_ports:
+          - "127.0.0.1:{{ docker_apps_app_port_workbuddy2api }}:8788"
+        cdp_volumes:
+          - "{{ docker_apps_workbuddy2api_data_dir }}/accounts:/app/accounts"
+          - "{{ docker_apps_workbuddy2api_data_dir }}/usage:/app/usage"
+        cdp_env:
+          TZ: "Asia/Shanghai"
+          HOST: "0.0.0.0"
+          PORT: "8788"
+        cdp_healthcheck:
+          test:
+            - CMD
+            - python
+            - -c
+            - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8788/health', timeout=3)"
+          interval: 1800s
+          timeout: 5s
+          retries: 3
+          start_period: 10s
+  rescue:
+    - name: Remove partially deployed workbuddy2api container after deploy failure
+      community.docker.docker_container:
+        name: "{{ docker_apps_container_name | default('workbuddy2api') }}"
+        state: absent
+        docker_host: "{{ docker_host | default(omit) }}"
+    - name: Restore pre-upgrade data snapshot after deploy failure
+      block:
+        - name: 读取基线检查点以备校验
+          become: true
+          ansible.builtin.slurp:
+            src: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/checkpoints/{{ _wb_checkpoint_id }}/checkpoint.json"
+          register: _wb_deploy_fail_cp_slurp
+        - name: 解析基线检查点
+          ansible.builtin.set_fact:
+            _wb_deploy_fail_cp: "{{ _wb_deploy_fail_cp_slurp.content | b64decode | from_json }}"
+        - name: 清理历史暂存区以保证解包纯净
+          become: true
+          ansible.builtin.file:
+            path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging"
+            state: absent
+        - name: 建立暂存目录
+          become: true
+          ansible.builtin.file:
+            path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging"
+            state: directory
+            owner: "{{ omit if ((ansible_system | default('')) == 'Darwin' or (ansible_os_family | default('')) == 'Darwin') else docker_apps_docker_user_uid }}"
+            group: "{{ omit if ((ansible_system | default('')) == 'Darwin' or (ansible_os_family | default('')) == 'Darwin') else docker_apps_docker_user_gid }}"
+            mode: "0750"
+        - name: 提取快照至暂存目录
+          become: true
+          ansible.builtin.command:
+            argv:
+              - tar
+              - -xzf
+              - "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/checkpoints/{{ _wb_checkpoint_id }}/snapshot.tar.gz"
+              - -C
+              - "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging"
+        - name: 校验暂存 settings.json 指纹
+          become: true
+          ansible.builtin.stat:
+            path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/accounts/settings.json"
+            checksum_algorithm: sha256
+          register: _wb_deploy_fail_staging_stat
+        - name: 验证暂存目录中 accounts 与 usage 均完整提取
+          become: true
+          ansible.builtin.stat:
+            path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/{{ item }}"
+          register: _wb_deploy_fail_dir_stats
+          loop:
+            - accounts
+            - usage
+        - name: 断言暂存目录结构完整
+          ansible.builtin.assert:
+            that:
+              - item.stat.exists and item.stat.isdir
+            fail_msg: "Deploy rescue blocked: staging directory incomplete, missing {{ item.item }}"
+          loop: "{{ _wb_deploy_fail_dir_stats.results }}"
+        - name: 断言暂存配置与基线记录指纹一致
+          ansible.builtin.assert:
+            that:
+              - _wb_deploy_fail_staging_stat.stat.checksum == _wb_deploy_fail_cp.settings_sha256
+            fail_msg: "Deploy rescue blocked: staging settings checksum does not match baseline"
+        - name: 备份新版部署产生的未定义 accounts 与 usage 配置 (保留现场无裸rm)
+          become: true
+          ansible.builtin.command:
+            argv:
+              - mv
+              - "{{ docker_apps_workbuddy2api_data_dir }}/{{ item }}"
+              - "{{ docker_apps_workbuddy2api_data_dir }}/{{ item }}.failed_deploy.{{ ansible_date_time.iso8601_basic_short | default('bak') }}"
+          loop:
+            - accounts
+            - usage
+        - name: 原子切换经校验的暂存数据至生效路径
+          become: true
+          ansible.builtin.command:
+            argv:
+              - mv
+              - "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/{{ item }}"
+              - "{{ docker_apps_workbuddy2api_data_dir }}/{{ item }}"
+          loop:
+            - accounts
+            - usage
+      when: _wb_pre_deploy_info.exists | default(false)
+    - name: Check if preserved baseline container exists before restore
+      community.docker.docker_container_info:
+        name: "{{ (docker_apps_container_name | default('workbuddy2api')) ~ '_baseline_' ~ _wb_checkpoint_id }}"
+        docker_host: "{{ docker_host | default(omit) }}"
+      register: _wb_deploy_rescue_baseline_info
+    - name: Restore baseline workbuddy2api container after deploy failure
+      ansible.builtin.command:
+        argv:
+          - docker
+          - rename
+          - "{{ (docker_apps_container_name | default('workbuddy2api')) ~ '_baseline_' ~ _wb_checkpoint_id }}"
+          - "{{ docker_apps_container_name | default('workbuddy2api') }}"
+      when: _wb_deploy_rescue_baseline_info.exists | default(false)
+    - name: Restart restored baseline workbuddy2api container
+      community.docker.docker_container:
+        name: "{{ docker_apps_container_name | default('workbuddy2api') }}"
+        state: started
+        docker_host: "{{ docker_host | default(omit) }}"
+      when:
+        - _wb_deploy_rescue_baseline_info.exists | default(false)
+        - _wb_pre_deploy_info.container.State.Running | default(false)
+    - name: Fail closed after restoring baseline container and data
+      ansible.builtin.fail:
+        msg: "Deploy failed: workbuddy2api container deployment failed; baseline container and pre-upgrade data safely restored."
   tags: [deploy, services, docker_apps, workbuddy2api, phase5]

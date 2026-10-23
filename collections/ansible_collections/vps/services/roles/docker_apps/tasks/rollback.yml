@@ -21,7 +21,448 @@
     - opcotoai_toolkit
     - phase5
 
-- name: 停止并移除 Docker 应用程序容器 (单个)
+- name: 读取 Magpie 最优检查点指针
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ docker_apps_magpie_data_dir }}/lifecycle/latest_checkpoint.txt"
+  register: _magpie_latest_ptr
+  failed_when: false
+  when: rollback_docker_app_name | default('') == 'magpie'
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 确定 Magpie 生效检查点标识符 (显式指定优先于指针)
+  ansible.builtin.set_fact:
+    _magpie_active_cp_id: "{{ rollback_checkpoint_id | default((_magpie_latest_ptr.content | b64decode | trim) if (_magpie_latest_ptr is defined and (_magpie_latest_ptr.content | default(''))) else 'latest') }}"
+  when: rollback_docker_app_name | default('') == 'magpie'
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 读取 Magpie 固化的检查点记录
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ docker_apps_magpie_data_dir }}/lifecycle/checkpoints/{{ _magpie_active_cp_id }}/checkpoint.json"
+  register: _magpie_checkpoint_slurp
+  failed_when: false
+  when: rollback_docker_app_name | default('') == 'magpie'
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 解析 Magpie 固化的检查点记录
+  ansible.builtin.set_fact:
+    magpie_checkpoint: "{{ (_magpie_checkpoint_slurp.content | b64decode | from_json) if (_magpie_checkpoint_slurp is defined and (_magpie_checkpoint_slurp.content | default(''))) else {} }}"
+  when: rollback_docker_app_name | default('') == 'magpie'
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 读取 WorkBuddy2API 最优检查点指针
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/latest_checkpoint.txt"
+  register: _wb_latest_ptr
+  failed_when: false
+  when: rollback_docker_app_name | default('') == 'workbuddy2api'
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 确定 WorkBuddy2API 生效检查点标识符 (显式指定优先于指针)
+  ansible.builtin.set_fact:
+    _wb_active_cp_id: "{{ rollback_checkpoint_id | default((_wb_latest_ptr.content | b64decode | trim) if (_wb_latest_ptr is defined and (_wb_latest_ptr.content | default(''))) else 'latest') }}"
+  when: rollback_docker_app_name | default('') == 'workbuddy2api'
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 读取 WorkBuddy2API 固化的检查点记录
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/checkpoints/{{ _wb_active_cp_id }}/checkpoint.json"
+  register: _wb_checkpoint_slurp
+  failed_when: false
+  when: rollback_docker_app_name | default('') == 'workbuddy2api'
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 解析 WorkBuddy2API 固化的检查点记录
+  ansible.builtin.set_fact:
+    workbuddy2api_checkpoint: "{{ (_wb_checkpoint_slurp.content | b64decode | from_json) if (_wb_checkpoint_slurp is defined and (_wb_checkpoint_slurp.content | default(''))) else {} }}"
+  when: rollback_docker_app_name | default('') == 'workbuddy2api'
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 拦截缺失检查点记录的回滚 (Fail closed)
+  ansible.builtin.fail:
+    msg: "Rollback blocked: missing checkpoint record for {{ rollback_docker_app_name }}"
+  when:
+    - rollback_docker_app_name is defined
+    - rollback_docker_app_name in ['magpie', 'workbuddy2api']
+    - (rollback_docker_app_name == 'magpie' and magpie_checkpoint.mode is not defined) or (rollback_docker_app_name == 'workbuddy2api' and workbuddy2api_checkpoint.mode is not defined)
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, workbuddy2api, phase5]
+
+- name: 拦截不可逆架构/数据迁移的回滚 (Fail closed)
+  ansible.builtin.fail:
+    msg: "Rollback blocked: irreversible data migration detected for {{ rollback_docker_app_name }}"
+  when:
+    - rollback_docker_app_name is defined
+    - rollback_docker_app_name in ['magpie', 'workbuddy2api']
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or ((rollback_docker_app_name == 'magpie' and magpie_checkpoint.mode | default('') == 'existing_service') or (rollback_docker_app_name == 'workbuddy2api' and workbuddy2api_checkpoint.mode | default('') == 'existing_service'))
+    - rollback_irreversible_migration | default(false) | bool
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, workbuddy2api, phase5]
+
+- name: 预检 Magpie 快照物理文件是否存在且可读
+  become: true
+  ansible.builtin.stat:
+    path: "{{ magpie_checkpoint.snapshot_path | default('/nonexistent') }}"
+  register: _magpie_snap_file_stat
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 拦截 Magpie 缺失物理快照归档的回滚 (Fail closed)
+  ansible.builtin.fail:
+    msg: "Rollback blocked: Magpie snapshot archive missing or inaccessible before mutation"
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+    - not (_magpie_snap_file_stat.stat.exists | default(false))
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 预检 WorkBuddy2API 快照物理文件是否存在且可读
+  become: true
+  ansible.builtin.stat:
+    path: "{{ workbuddy2api_checkpoint.snapshot_path | default('/nonexistent') }}"
+  register: _wb_snap_file_stat
+  when:
+    - rollback_docker_app_name | default('') == 'workbuddy2api'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 拦截 WorkBuddy2API 缺失物理快照归档的回滚 (Fail closed)
+  ansible.builtin.fail:
+    msg: "Rollback blocked: WorkBuddy2API snapshot archive missing or inaccessible before mutation"
+  when:
+    - rollback_docker_app_name | default('') == 'workbuddy2api'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+    - not (_wb_snap_file_stat.stat.exists | default(false))
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 解压 Magpie 快照至隔离预备目录进行解压与数据安全校验
+  become: true
+  block:
+    - name: 建立 Magpie 隔离暂存目录
+      ansible.builtin.file:
+        path: "{{ docker_apps_magpie_data_dir }}/lifecycle/staging"
+        state: directory
+        owner: "{{ omit if ((ansible_system | default('')) == 'Darwin' or (ansible_os_family | default('')) == 'Darwin') else '65532' }}"
+        group: "{{ omit if ((ansible_system | default('')) == 'Darwin' or (ansible_os_family | default('')) == 'Darwin') else '65532' }}"
+        mode: "0750"
+    - name: 提取快照至暂存目录
+      ansible.builtin.command:
+        argv:
+          - tar
+          - -xzf
+          - "{{ magpie_checkpoint.snapshot_path }}"
+          - -C
+          - "{{ docker_apps_magpie_data_dir }}/lifecycle/staging"
+    - name: 校验暂存配置校验和完整性
+      ansible.builtin.shell:
+        cmd: "find . -type f -exec sha256sum {} + | sort"
+        chdir: "{{ docker_apps_magpie_data_dir }}/lifecycle/staging/config"
+      register: _magpie_staging_checksums
+      changed_when: false
+    - name: 断言暂存配置与基线记录指纹一致
+      ansible.builtin.assert:
+        that:
+          - _magpie_staging_checksums.stdout | trim == (magpie_checkpoint.config_checksums | trim)
+        fail_msg: "Rollback blocked: staged unarchived files do not match baseline checksums"
+    - name: 验证暂存目录中 config 完整提取
+      ansible.builtin.stat:
+        path: "{{ docker_apps_magpie_data_dir }}/lifecycle/staging/config"
+      register: _magpie_staging_dir_stat
+    - name: 断言暂存配置目录结构完整
+      ansible.builtin.assert:
+        that:
+          - _magpie_staging_dir_stat.stat.exists and _magpie_staging_dir_stat.stat.isdir
+        fail_msg: "Rollback blocked: staging config directory incomplete"
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 停止当前升级中的 Magpie 容器以备原子替换
+  become: true
+  community.docker.docker_container:
+    name: "{{ docker_apps_container_name | default('magpie') }}"
+    state: absent
+    docker_host: "{{ docker_host | default(omit) }}"
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 原子归档备份被替换的 Magpie 现状目录 (禁止裸rm)
+  become: true
+  ansible.builtin.command:
+    argv:
+      - mv
+      - "{{ docker_apps_magpie_data_dir }}/config"
+      - "{{ docker_apps_magpie_data_dir }}/config.replaced.{{ ansible_date_time.iso8601_basic_short | default('bak') }}"
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 原子切换经校验的 Magpie 暂存数据至生效路径
+  become: true
+  ansible.builtin.command:
+    argv:
+      - mv
+      - "{{ docker_apps_magpie_data_dir }}/lifecycle/staging/config"
+      - "{{ docker_apps_magpie_data_dir }}/config"
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 探测 Magpie 保留的基线容器是否存在
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ magpie_checkpoint.baseline_container_name | default('magpie_baseline_' ~ _magpie_active_cp_id) }}"
+    docker_host: "{{ docker_host | default(omit) }}"
+  register: _magpie_preserved_baseline_info
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 恢复保留的 Magpie 基线容器 (完整保留旧 Runtime Config / HostConfig)
+  become: true
+  ansible.builtin.command:
+    argv:
+      - docker
+      - rename
+      - "{{ magpie_checkpoint.baseline_container_name | default('magpie_baseline_' ~ _magpie_active_cp_id) }}"
+      - "{{ docker_apps_container_name | default('magpie') }}"
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+    - _magpie_preserved_baseline_info.exists | default(false)
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 启动恢复后的 Magpie 基线容器
+  become: true
+  community.docker.docker_container:
+    name: "{{ docker_apps_container_name | default('magpie') }}"
+    state: started
+    docker_host: "{{ docker_host | default(omit) }}"
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+    - _magpie_preserved_baseline_info.exists | default(false)
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 兜底重建 Magpie 旧版本镜像 (仅当保留容器不存在时)
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+    apply:
+      tags:
+        - rollback
+        - docker_apps_manifest
+        - magpie
+        - phase5
+  vars:
+    cdp_name: "{{ docker_apps_container_name | default('magpie') }}"
+    cdp_image: "{{ rollback_baseline_image | default(magpie_checkpoint.baseline_image_id | default(magpie_checkpoint.baseline_image | default(''))) }}"
+    cdp_pull: false
+    container_deployer_cdp_pull: false
+    cdp_dirs: ["config"]
+    cdp_dir_owner: "65532"
+    cdp_dir_group: "65532"
+    cdp_dir_mode: "0750"
+    cdp_memory: "{{ docker_apps_magpie_memory }}"
+    cdp_memory_reservation: "{{ docker_apps_magpie_memory_reservation }}"
+    cdp_cpus: "{{ docker_apps_magpie_cpus }}"
+    cdp_restart_policy: "unless-stopped"
+    cdp_networks: [{name: "sweb"}]
+    cdp_ports:
+      - "127.0.0.1:{{ docker_apps_app_port_magpie_api }}:3425"
+      - "127.0.0.1:{{ docker_apps_app_port_magpie_web }}:3430"
+    cdp_volumes:
+      - "{{ docker_apps_magpie_data_dir }}/config:/config"
+    cdp_command:
+      - "web"
+      - "--addr"
+      - "0.0.0.0:3430"
+      - "--no-open"
+    cdp_env:
+      TZ: "Asia/Shanghai"
+      MAGPIE_ADDR: "0.0.0.0:3425"
+      MAGPIE_WEB_ADDR: "0.0.0.0:3430"
+      MAGPIE_WEB_KEY: "{{ docker_apps_magpie_web_key | default(omit) }}"
+    cdp_healthcheck:
+      test: ["CMD", "/magpie", "healthcheck"]
+      interval: 1800s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+    - not (_magpie_preserved_baseline_info.exists | default(false))
+  tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 解压 WorkBuddy2API 快照至隔离预备目录进行解压与数据安全校验
+  become: true
+  block:
+    - name: 建立 WorkBuddy2API 隔离暂存目录
+      ansible.builtin.file:
+        path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging"
+        state: directory
+        owner: "{{ omit if ((ansible_system | default('')) == 'Darwin' or (ansible_os_family | default('')) == 'Darwin') else docker_apps_docker_user_uid }}"
+        group: "{{ omit if ((ansible_system | default('')) == 'Darwin' or (ansible_os_family | default('')) == 'Darwin') else docker_apps_docker_user_gid }}"
+        mode: "0750"
+    - name: 提取快照至暂存目录
+      ansible.builtin.command:
+        argv:
+          - tar
+          - -xzf
+          - "{{ workbuddy2api_checkpoint.snapshot_path }}"
+          - -C
+          - "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging"
+    - name: 校验暂存 settings.json 指纹
+      ansible.builtin.stat:
+        path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/accounts/settings.json"
+        checksum_algorithm: sha256
+      register: _wb_staging_settings_stat
+    - name: 断言暂存配置与基线记录指纹一致
+      ansible.builtin.assert:
+        that:
+          - _wb_staging_settings_stat.stat.checksum == workbuddy2api_checkpoint.settings_sha256
+        fail_msg: "Rollback blocked: staged unarchived settings do not match baseline checksum"
+    - name: 验证暂存目录中 accounts 与 usage 均完整提取
+      ansible.builtin.stat:
+        path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/{{ item }}"
+      register: _wb_staging_dir_stats
+      loop:
+        - accounts
+        - usage
+    - name: 断言暂存目录结构完整
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists and item.stat.isdir
+        fail_msg: "Rollback blocked: staging directory incomplete, missing {{ item.item }}"
+      loop: "{{ _wb_staging_dir_stats.results }}"
+  when:
+    - rollback_docker_app_name | default('') == 'workbuddy2api'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 停止当前升级中的 WorkBuddy2API 容器以备原子替换
+  become: true
+  community.docker.docker_container:
+    name: "{{ docker_apps_container_name | default('workbuddy2api') }}"
+    state: absent
+    docker_host: "{{ docker_host | default(omit) }}"
+  when:
+    - rollback_docker_app_name | default('') == 'workbuddy2api'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 原子归档备份被替换的 WorkBuddy2API 现状目录 (禁止裸rm)
+  become: true
+  ansible.builtin.command:
+    argv:
+      - mv
+      - "{{ docker_apps_workbuddy2api_data_dir }}/{{ item }}"
+      - "{{ docker_apps_workbuddy2api_data_dir }}/{{ item }}.replaced.{{ ansible_date_time.iso8601_basic_short | default('bak') }}"
+  loop:
+    - accounts
+    - usage
+  when:
+    - rollback_docker_app_name | default('') == 'workbuddy2api'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 原子切换经校验的 WorkBuddy2API 暂存数据至生效路径
+  become: true
+  ansible.builtin.command:
+    argv:
+      - mv
+      - "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/{{ item }}"
+      - "{{ docker_apps_workbuddy2api_data_dir }}/{{ item }}"
+  loop:
+    - accounts
+    - usage
+  when:
+    - rollback_docker_app_name | default('') == 'workbuddy2api'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 探测 WorkBuddy2API 保留的基线容器是否存在
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ workbuddy2api_checkpoint.baseline_container_name | default('workbuddy2api_baseline_' ~ _wb_active_cp_id) }}"
+    docker_host: "{{ docker_host | default(omit) }}"
+  register: _wb_preserved_baseline_info
+  when:
+    - rollback_docker_app_name | default('') == 'workbuddy2api'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 恢复保留的 WorkBuddy2API 基线容器 (完整保留旧 Runtime Config / HostConfig)
+  become: true
+  ansible.builtin.command:
+    argv:
+      - docker
+      - rename
+      - "{{ workbuddy2api_checkpoint.baseline_container_name | default('workbuddy2api_baseline_' ~ _wb_active_cp_id) }}"
+      - "{{ docker_apps_container_name | default('workbuddy2api') }}"
+  when:
+    - rollback_docker_app_name | default('') == 'workbuddy2api'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+    - _wb_preserved_baseline_info.exists | default(false)
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 启动恢复后的 WorkBuddy2API 基线容器
+  become: true
+  community.docker.docker_container:
+    name: "{{ docker_apps_container_name | default('workbuddy2api') }}"
+    state: started
+    docker_host: "{{ docker_host | default(omit) }}"
+  when:
+    - rollback_docker_app_name | default('') == 'workbuddy2api'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+    - _wb_preserved_baseline_info.exists | default(false)
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+
+- name: 兜底重建 WorkBuddy2API 旧版本镜像 (仅当保留容器不存在时)
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+    apply:
+      tags:
+        - rollback
+        - docker_apps_manifest
+        - workbuddy2api
+        - phase5
+  vars:
+    cdp_name: "{{ docker_apps_container_name | default('workbuddy2api') }}"
+    cdp_image: "{{ rollback_baseline_image | default(workbuddy2api_checkpoint.baseline_image_id | default(workbuddy2api_checkpoint.baseline_image | default(''))) }}"
+    cdp_pull: false
+    container_deployer_cdp_pull: false
+    cdp_memory: "{{ docker_apps_workbuddy2api_memory }}"
+    cdp_memory_reservation: "{{ docker_apps_workbuddy2api_memory_reservation }}"
+    cdp_cpus: "{{ docker_apps_workbuddy2api_cpus }}"
+    cdp_restart_policy: "unless-stopped"
+    cdp_networks: [{name: "sweb"}]
+    cdp_ports:
+      - "127.0.0.1:{{ docker_apps_app_port_workbuddy2api }}:8788"
+    cdp_volumes:
+      - "{{ docker_apps_workbuddy2api_data_dir }}/accounts:/app/accounts"
+      - "{{ docker_apps_workbuddy2api_data_dir }}/usage:/app/usage"
+    cdp_healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8788/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+  when:
+    - rollback_docker_app_name | default('') == 'workbuddy2api'
+    - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+    - not (_wb_preserved_baseline_info.exists | default(false))
+  tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
+- name: 停止并移除 Docker 应用程序容器 (单个首次安装撤销)
   become: true
   community.docker.docker_container:
     name: "{{ rollback_container_name }}"
@@ -34,6 +475,7 @@
   when:
     - rollback_docker_app_name is defined
     - rollback_docker_app_name != 'hy_memory'
+    - (rollback_docker_app_name not in ['magpie', 'workbuddy2api']) or ((rollback_docker_app_name == 'magpie' and magpie_checkpoint.mode | default('') == 'first_install') or (rollback_docker_app_name == 'workbuddy2api' and workbuddy2api_checkpoint.mode | default('') == 'first_install'))
     - not (rollback_docker_app_name == 'singbox' and (
              (singbox_deploy_mode | default('auto') | lower) == 'native'
              or ((singbox_deploy_mode | default('auto') | lower) not in ['native', 'docker']

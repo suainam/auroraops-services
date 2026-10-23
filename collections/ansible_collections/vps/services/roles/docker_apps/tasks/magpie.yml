@@ -12,46 +12,323 @@
     - "{{ docker_apps_magpie_data_dir }}/config"
   tags: [deploy, services, docker_apps, magpie, phase5]
 
-- name: Deploy magpie container via container_deployer
-  ansible.builtin.include_role:
-    name: vps.services.container_deployer
-    apply:
-      tags:
-        - magpie
-        - phase5
-  vars:
-    cdp_name: "magpie"
-    cdp_image: "{{ docker_apps_magpie_image }}"
-    cdp_pull: "{{ docker_apps_magpie_pull | default(false) | bool }}"
-    container_deployer_cdp_pull: "{{ docker_apps_magpie_pull | default(false) | bool }}"
-    cdp_dirs: ["config"]
-    cdp_dir_owner: "65532"
-    cdp_dir_group: "65532"
-    cdp_dir_mode: "0750"
-    cdp_memory: "{{ docker_apps_magpie_memory }}"
-    cdp_memory_reservation: "{{ docker_apps_magpie_memory_reservation }}"
-    cdp_cpus: "{{ docker_apps_magpie_cpus }}"
-    cdp_restart_policy: "unless-stopped"
-    cdp_networks: [{name: "sweb"}]
-    cdp_ports:
-      - "127.0.0.1:{{ docker_apps_app_port_magpie_api }}:3425"
-      - "127.0.0.1:{{ docker_apps_app_port_magpie_web }}:3430"
-    cdp_volumes:
-      - "{{ docker_apps_magpie_data_dir }}/config:/config"
-    cdp_command:
-      - "web"
-      - "--addr"
-      - "0.0.0.0:3430"
-      - "--no-open"
-    cdp_env:
-      TZ: "Asia/Shanghai"
-      MAGPIE_ADDR: "0.0.0.0:3425"
-      MAGPIE_WEB_ADDR: "0.0.0.0:3430"
-      MAGPIE_WEB_KEY: "{{ docker_apps_magpie_web_key }}"
-    cdp_healthcheck:
-      test: ["CMD", "/magpie", "healthcheck"]
-      interval: 1800s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
+- name: Probe existing magpie container for pre-deploy baseline
+  become: true
+  community.docker.docker_container_info:
+    name: magpie
+  register: _magpie_pre_deploy_info
+  tags: [deploy, services, docker_apps, magpie, phase5]
+
+- name: Determine upgrade checkpoint identifier for magpie
+  ansible.builtin.set_fact:
+    _magpie_checkpoint_id: "{{ upgrade_run_id | default(upgrade_checkpoint_id | default('upgrade_' ~ ((docker_apps_magpie_image | string) | regex_replace('[^a-zA-Z0-9_.-]', '_')))) }}"
+  tags: [deploy, services, docker_apps, magpie, phase5]
+
+- name: Check if magpie checkpoint already exists from earlier attempt
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_apps_magpie_data_dir }}/lifecycle/checkpoints/{{ _magpie_checkpoint_id }}/checkpoint.json"
+  register: _magpie_existing_cp_stat
+  tags: [deploy, services, docker_apps, magpie, phase5]
+
+- name: Solidify immutable versioned baseline for existing magpie
+  become: true
+  block:
+    - name: Ensure magpie checkpoint directory exists
+      ansible.builtin.file:
+        path: "{{ docker_apps_magpie_data_dir }}/lifecycle/checkpoints/{{ _magpie_checkpoint_id }}"
+        state: directory
+        owner: "65532"
+        group: "65532"
+        mode: "0750"
+
+    - name: Check safety of snapshotting existing magpie configuration
+      ansible.builtin.stat:
+        path: "{{ docker_apps_magpie_data_dir }}/config"
+      register: _magpie_config_stat
+
+    - name: Block deployment if existing magpie data directory is invalid
+      ansible.builtin.fail:
+        msg: "Deploy blocked: existing magpie configuration directory is missing or invalid for baseline snapshot"
+      when: not _magpie_config_stat.stat.exists or not _magpie_config_stat.stat.isdir
+
+    - name: Quiesce container, snapshot data, and record checkpoint
+      block:
+        - name: Gracefully pause/quiesce existing magpie container for consistent snapshot
+          community.docker.docker_container:
+            name: magpie
+            state: stopped
+          when: _magpie_pre_deploy_info.container.State.Running | default(false)
+
+        - name: Create pre-upgrade data snapshot archive for magpie
+          ansible.builtin.command:
+            argv:
+              - tar
+              - -czf
+              - "{{ docker_apps_magpie_data_dir }}/lifecycle/checkpoints/{{ _magpie_checkpoint_id }}/snapshot.tar.gz"
+              - -C
+              - "{{ docker_apps_magpie_data_dir }}"
+              - config
+        - name: Capture SHA256 checksums of magpie configuration files
+          ansible.builtin.shell:
+            cmd: "find . -type f -exec sha256sum {} + | sort"
+            chdir: "{{ docker_apps_magpie_data_dir }}/config"
+          register: _magpie_config_checksums
+          changed_when: false
+
+
+        - name: Write versioned checkpoint record for magpie
+          ansible.builtin.copy:
+            dest: "{{ docker_apps_magpie_data_dir }}/lifecycle/checkpoints/{{ _magpie_checkpoint_id }}/checkpoint.json"
+            content: >-
+              {{
+                {
+                  "service": "magpie",
+                  "checkpoint_id": _magpie_checkpoint_id,
+                  "mode": "existing_service",
+                  "baseline_container_name": "magpie_baseline_" ~ _magpie_checkpoint_id,
+                  "baseline_image": _magpie_pre_deploy_info.container.Config.Image,
+                  "baseline_image_id": _magpie_pre_deploy_info.container.Image,
+                  "snapshot_path": (docker_apps_magpie_data_dir ~ "/lifecycle/checkpoints/" ~ _magpie_checkpoint_id ~ "/snapshot.tar.gz"),
+                  "config_checksums": _magpie_config_checksums.stdout | trim,
+                  "timestamp": ansible_date_time.iso8601 | default('unknown')
+                } | to_nice_json
+              }}
+            mode: "0400"
+            owner: "65532"
+            group: "65532"
+
+        - name: Update latest checkpoint pointer for magpie
+          ansible.builtin.copy:
+            dest: "{{ docker_apps_magpie_data_dir }}/lifecycle/latest_checkpoint.txt"
+            content: "{{ _magpie_checkpoint_id }}\n"
+            mode: "0640"
+            owner: "65532"
+            group: "65532"
+      rescue:
+        - name: Check if renamed baseline container exists after failed snapshot
+          community.docker.docker_container_info:
+            name: "magpie_baseline_{{ _magpie_checkpoint_id }}"
+            docker_host: "{{ docker_host | default(omit) }}"
+          register: _magpie_rescue_baseline_info
+        - name: Restore renamed baseline container name on failed snapshot
+          ansible.builtin.command:
+            argv:
+              - docker
+              - rename
+              - "magpie_baseline_{{ _magpie_checkpoint_id }}"
+              - "{{ docker_apps_container_name | default('magpie') }}"
+          when: _magpie_rescue_baseline_info.exists | default(false)
+        - name: Resume existing magpie container after failed snapshot
+          community.docker.docker_container:
+            name: "{{ docker_apps_container_name | default('magpie') }}"
+            state: started
+            docker_host: "{{ docker_host | default(omit) }}"
+          when: _magpie_pre_deploy_info.container.State.Running | default(false)
+        - name: Fail closed after restoring container
+          ansible.builtin.fail:
+            msg: "Deploy blocked: magpie snapshot failed; container was resumed safely."
+  when:
+    - not ansible_check_mode
+    - _magpie_pre_deploy_info.exists | default(false)
+    - not (_magpie_existing_cp_stat.stat.exists | default(false))
+  tags: [deploy, services, docker_apps, magpie, phase5]
+
+- name: Write clean slate baseline for first install of magpie
+  become: true
+  block:
+    - name: Ensure magpie checkpoint directory exists
+      ansible.builtin.file:
+        path: "{{ docker_apps_magpie_data_dir }}/lifecycle/checkpoints/{{ _magpie_checkpoint_id }}"
+        state: directory
+        owner: "65532"
+        group: "65532"
+        mode: "0750"
+
+    - name: Write first install checkpoint record for magpie
+      ansible.builtin.copy:
+        dest: "{{ docker_apps_magpie_data_dir }}/lifecycle/checkpoints/{{ _magpie_checkpoint_id }}/checkpoint.json"
+        content: >-
+          {{
+            {
+              "service": "magpie",
+              "checkpoint_id": _magpie_checkpoint_id,
+              "mode": "first_install",
+              "timestamp": ansible_date_time.iso8601 | default('unknown')
+            } | to_nice_json
+          }}
+        mode: "0400"
+        owner: "65532"
+        group: "65532"
+
+    - name: Update latest checkpoint pointer for magpie
+      ansible.builtin.copy:
+        dest: "{{ docker_apps_magpie_data_dir }}/lifecycle/latest_checkpoint.txt"
+        content: "{{ _magpie_checkpoint_id }}\n"
+        mode: "0640"
+        owner: "65532"
+        group: "65532"
+  when:
+    - not ansible_check_mode
+    - not (_magpie_pre_deploy_info.exists | default(false))
+    - not (_magpie_existing_cp_stat.stat.exists | default(false))
+  tags: [deploy, services, docker_apps, magpie, phase5]
+
+- name: Probe if baseline magpie container already preserved
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ (docker_apps_container_name | default('magpie')) ~ '_baseline_' ~ _magpie_checkpoint_id }}"
+    docker_host: "{{ docker_host | default(omit) }}"
+  register: _magpie_pre_deploy_baseline_info
+  when:
+    - not ansible_check_mode
+    - _magpie_pre_deploy_info.exists | default(false)
+  tags: [deploy, services, docker_apps, magpie, phase5]
+
+- name: Rename baseline magpie container to preserve runtime contract before deploy
+  ansible.builtin.command:
+    argv:
+      - docker
+      - rename
+      - "{{ docker_apps_container_name | default('magpie') }}"
+      - "{{ (docker_apps_container_name | default('magpie')) ~ '_baseline_' ~ _magpie_checkpoint_id }}"
+  when:
+    - not ansible_check_mode
+    - _magpie_pre_deploy_info.exists | default(false)
+    - not (_magpie_pre_deploy_baseline_info.exists | default(false))
+  tags: [deploy, services, docker_apps, magpie, phase5]
+
+- name: Deploy magpie container with failure recovery
+  block:
+    - name: Deploy magpie container via container_deployer
+      ansible.builtin.include_role:
+        name: vps.services.container_deployer
+        apply:
+          tags:
+            - magpie
+            - phase5
+      vars:
+        cdp_name: "magpie"
+        cdp_image: "{{ docker_apps_magpie_image }}"
+        cdp_pull: "{{ docker_apps_magpie_pull | default(false) | bool }}"
+        container_deployer_cdp_pull: "{{ docker_apps_magpie_pull | default(false) | bool }}"
+        cdp_dirs: ["config"]
+        cdp_dir_owner: "65532"
+        cdp_dir_group: "65532"
+        cdp_dir_mode: "0750"
+        cdp_memory: "{{ docker_apps_magpie_memory }}"
+        cdp_memory_reservation: "{{ docker_apps_magpie_memory_reservation }}"
+        cdp_cpus: "{{ docker_apps_magpie_cpus }}"
+        cdp_restart_policy: "unless-stopped"
+        cdp_networks: [{name: "sweb"}]
+        cdp_ports:
+          - "127.0.0.1:{{ docker_apps_app_port_magpie_api }}:3425"
+          - "127.0.0.1:{{ docker_apps_app_port_magpie_web }}:3430"
+        cdp_volumes:
+          - "{{ docker_apps_magpie_data_dir }}/config:/config"
+        cdp_command:
+          - "web"
+          - "--addr"
+          - "0.0.0.0:3430"
+          - "--no-open"
+        cdp_env:
+          TZ: "Asia/Shanghai"
+          MAGPIE_ADDR: "0.0.0.0:3425"
+          MAGPIE_WEB_ADDR: "0.0.0.0:3430"
+          MAGPIE_WEB_KEY: "{{ docker_apps_magpie_web_key | default(omit) }}"
+        cdp_healthcheck:
+          test: ["CMD", "/magpie", "healthcheck"]
+          interval: 1800s
+          timeout: 10s
+          retries: 3
+          start_period: 15s
+  rescue:
+    - name: Remove partially deployed magpie container after deploy failure
+      community.docker.docker_container:
+        name: "{{ docker_apps_container_name | default('magpie') }}"
+        state: absent
+        docker_host: "{{ docker_host | default(omit) }}"
+    - name: Restore pre-upgrade data snapshot after deploy failure
+      block:
+        - name: 读取基线检查点以备校验
+          become: true
+          ansible.builtin.slurp:
+            src: "{{ docker_apps_magpie_data_dir }}/lifecycle/checkpoints/{{ _magpie_checkpoint_id }}/checkpoint.json"
+          register: _magpie_deploy_fail_cp_slurp
+        - name: 解析基线检查点
+          ansible.builtin.set_fact:
+            _magpie_deploy_fail_cp: "{{ _magpie_deploy_fail_cp_slurp.content | b64decode | from_json }}"
+        - name: 清理历史暂存区以保证解包纯净
+          become: true
+          ansible.builtin.file:
+            path: "{{ docker_apps_magpie_data_dir }}/lifecycle/staging"
+            state: absent
+        - name: 建立暂存目录
+          become: true
+          ansible.builtin.file:
+            path: "{{ docker_apps_magpie_data_dir }}/lifecycle/staging"
+            state: directory
+            owner: "{{ omit if ((ansible_system | default('')) == 'Darwin' or (ansible_os_family | default('')) == 'Darwin') else '65532' }}"
+            group: "{{ omit if ((ansible_system | default('')) == 'Darwin' or (ansible_os_family | default('')) == 'Darwin') else '65532' }}"
+            mode: "0750"
+        - name: 提取快照至暂存目录
+          become: true
+          ansible.builtin.command:
+            argv:
+              - tar
+              - -xzf
+              - "{{ docker_apps_magpie_data_dir }}/lifecycle/checkpoints/{{ _magpie_checkpoint_id }}/snapshot.tar.gz"
+              - -C
+              - "{{ docker_apps_magpie_data_dir }}/lifecycle/staging"
+        - name: 校验暂存配置校验和完整性
+          become: true
+          ansible.builtin.shell:
+            cmd: "find . -type f -exec sha256sum {} + | sort"
+            chdir: "{{ docker_apps_magpie_data_dir }}/lifecycle/staging/config"
+          register: _magpie_deploy_fail_staging_checksums
+          changed_when: false
+        - name: 断言暂存配置与基线记录指纹一致
+          ansible.builtin.assert:
+            that:
+              - _magpie_deploy_fail_staging_checksums.stdout | trim == (_magpie_deploy_fail_cp.config_checksums | trim)
+            fail_msg: "Deploy rescue blocked: staging checksums do not match baseline"
+        - name: 备份新版部署产生的未定义配置 (保留现场无裸rm)
+          become: true
+          ansible.builtin.command:
+            argv:
+              - mv
+              - "{{ docker_apps_magpie_data_dir }}/config"
+              - "{{ docker_apps_magpie_data_dir }}/config.failed_deploy.{{ ansible_date_time.iso8601_basic_short | default('bak') }}"
+        - name: 原子切换经校验的暂存数据至生效路径
+          become: true
+          ansible.builtin.command:
+            argv:
+              - mv
+              - "{{ docker_apps_magpie_data_dir }}/lifecycle/staging/config"
+              - "{{ docker_apps_magpie_data_dir }}/config"
+      when: _magpie_pre_deploy_info.exists | default(false)
+    - name: Check if preserved baseline container exists before restore
+      community.docker.docker_container_info:
+        name: "{{ (docker_apps_container_name | default('magpie')) ~ '_baseline_' ~ _magpie_checkpoint_id }}"
+        docker_host: "{{ docker_host | default(omit) }}"
+      register: _magpie_deploy_rescue_baseline_info
+    - name: Restore baseline magpie container after deploy failure
+      ansible.builtin.command:
+        argv:
+          - docker
+          - rename
+          - "{{ (docker_apps_container_name | default('magpie')) ~ '_baseline_' ~ _magpie_checkpoint_id }}"
+          - "{{ docker_apps_container_name | default('magpie') }}"
+      when: _magpie_deploy_rescue_baseline_info.exists | default(false)
+    - name: Restart restored baseline magpie container
+      community.docker.docker_container:
+        name: "{{ docker_apps_container_name | default('magpie') }}"
+        state: started
+        docker_host: "{{ docker_host | default(omit) }}"
+      when:
+        - _magpie_deploy_rescue_baseline_info.exists | default(false)
+        - _magpie_pre_deploy_info.container.State.Running | default(false)
+    - name: Fail closed after restoring baseline container
+      ansible.builtin.fail:
+        msg: "Deploy failed: magpie container deployment failed; baseline container safely restored."
   tags: [deploy, services, docker_apps, magpie, phase5]
