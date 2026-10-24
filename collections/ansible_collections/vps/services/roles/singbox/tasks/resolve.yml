@@ -29,7 +29,12 @@
     singbox_has_reality_inbound: >-
       {%- set ns = namespace(found=false) -%}
       {%- for n in ((docker_apps_singbox_processed_nodes | default(singbox_nodes | default([]))) + (singbox_extra_nodes | default([]))) -%}
-        {%- if (n.reality | default(true) | bool) and not (n.behind_nginx | default(false) | bool) and not (n.behind_gateway | default(false) | bool) -%}
+        {%- if (n.type | default('vless')) == 'vless'
+               and (n.reality | default(true) | bool)
+               and not (n.external | default(false) | bool)
+               and n.shared_inbound is not defined
+               and not (n.behind_nginx | default(false) | bool)
+               and not (n.behind_gateway | default(false) | bool) -%}
           {%- set ns.found = true -%}
         {%- endif -%}
       {%- endfor -%}
