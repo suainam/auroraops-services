@@ -108,6 +108,8 @@
   when:
     - rollback_docker_app_name | default('') == 'magpie'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+    - magpie_checkpoint.snapshot_path is defined
+    - magpie_checkpoint.snapshot_path | length > 0
   tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
 
 - name: 拦截 Magpie 缺失物理快照归档的回滚 (Fail closed)
@@ -116,6 +118,8 @@
   when:
     - rollback_docker_app_name | default('') == 'magpie'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+    - magpie_checkpoint.snapshot_path is defined
+    - magpie_checkpoint.snapshot_path | length > 0
     - not (_magpie_snap_file_stat.stat.exists | default(false))
   tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
 
@@ -127,6 +131,8 @@
   when:
     - rollback_docker_app_name | default('') == 'workbuddy2api'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+    - workbuddy2api_checkpoint.snapshot_path is defined
+    - workbuddy2api_checkpoint.snapshot_path | length > 0
   tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
 
 - name: 拦截 WorkBuddy2API 缺失物理快照归档的回滚 (Fail closed)
@@ -135,6 +141,8 @@
   when:
     - rollback_docker_app_name | default('') == 'workbuddy2api'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+    - workbuddy2api_checkpoint.snapshot_path is defined
+    - workbuddy2api_checkpoint.snapshot_path | length > 0
     - not (_wb_snap_file_stat.stat.exists | default(false))
   tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
 
@@ -179,6 +187,8 @@
   when:
     - rollback_docker_app_name | default('') == 'magpie'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+    - magpie_checkpoint.snapshot_path is defined
+    - magpie_checkpoint.snapshot_path | length > 0
   tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
 
 - name: 停止当前升级中的 Magpie 容器以备原子替换
@@ -202,6 +212,8 @@
   when:
     - rollback_docker_app_name | default('') == 'magpie'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+    - magpie_checkpoint.snapshot_path is defined
+    - magpie_checkpoint.snapshot_path | length > 0
   tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
 
 - name: 原子切换经校验的 Magpie 暂存数据至生效路径
@@ -214,6 +226,8 @@
   when:
     - rollback_docker_app_name | default('') == 'magpie'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
+    - magpie_checkpoint.snapshot_path is defined
+    - magpie_checkpoint.snapshot_path | length > 0
   tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
 
 - name: 探测 Magpie 保留的基线容器是否存在
@@ -343,6 +357,8 @@
   when:
     - rollback_docker_app_name | default('') == 'workbuddy2api'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+    - workbuddy2api_checkpoint.snapshot_path is defined
+    - workbuddy2api_checkpoint.snapshot_path | length > 0
   tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
 
 - name: 停止当前升级中的 WorkBuddy2API 容器以备原子替换
@@ -366,6 +382,8 @@
   when:
     - rollback_docker_app_name | default('') == 'workbuddy2api'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+    - workbuddy2api_checkpoint.snapshot_path is defined
+    - workbuddy2api_checkpoint.snapshot_path | length > 0
   tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
 
 - name: 原子切换经校验的 WorkBuddy2API 暂存数据至生效路径
@@ -378,6 +396,8 @@
   when:
     - rollback_docker_app_name | default('') == 'workbuddy2api'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
+    - workbuddy2api_checkpoint.snapshot_path is defined
+    - workbuddy2api_checkpoint.snapshot_path | length > 0
   tags: [rollback, services, docker_apps, docker_apps_manifest, workbuddy2api, phase5]
 
 - name: 探测 WorkBuddy2API 保留的基线容器是否存在
