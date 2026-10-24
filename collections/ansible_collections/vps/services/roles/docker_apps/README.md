@@ -1212,5 +1212,21 @@ docker exec -it hysteria2-client sh
 ```
 
 
-## 2. 变量说明
-TODO: 补充此章节内容。
+## 9. 升级停机与快照治理规范 (Downtime & Snapshot Governance)
+
+### 9.1 预拉取机制 (Pre-pull Before Quiesce)
+在容器优雅停机 (`quiesce`) 前，Ansible 优先执行异步/同步 `docker_image: source=pull`，将目标镜像提前下载至本地缓存：
+- **单应用独立升级路径** (`magpie.yml` / `workbuddy2api.yml`): 在 `state: stopped` 任务前声明预拉取步骤，消除停机窗口内的网络传输耗时。
+- **全量部署路径** (`docker` 角色 `prepull.yml`): 基于各主机 `docker_apps_containers`（SSOT 实机清单）动态匹配目标镜像字典，不再拉取未部署应用。
+
+### 9.2 狭义快照与排除规则 (Narrow Config Snapshot)
+升级前的基线快照仅用于灾难回滚时恢复被新版本可能不可逆迁移的核心配置，严禁打包运行时二进制、动态包缓存和高频日志。
+
+| 应用 | 归档范围 | 明确排除项 (Exclude Paths) | 停机实测窗口 | 快照体积 |
+| :--- | :--- | :--- | :--- | :--- |
+| **Magpie** | `config/` (核心配置) | `config/magpie/routing/` (路由日志)<br>`config/magpie/usage.jsonl` (用量记录)<br>`config/cache/` (Bun/包缓存 230M)<br>`config/magpie/our-free-model/runtime/` (Node 运行环境 252M)<br>`config/magpie/gemini-signatures/` (动态签名 45M) | **8.79 秒** (优化前 122 秒) | **13 MB** (优化前 245 MB) |
+| **WorkBuddy2API** | `accounts/` (配置与凭据) | `usage/` (用量日志流水与定价快照) | **10.0 秒** | **~260 KB** |
+
+### 9.3 健康检查与 Baseline 容器生命周期
+- **Healthcheck 收敛**: 具备冷启动预热/目录刷新的容器，Docker 探针由 `CMD` 脚本驱动；升级后验证必须显式断言至 `healthy` 状态，严禁停留在 `starting` 阶段宣告完成。
+- **Baseline 容器清理**: 升级成功且验证就绪后，由生命周期管理例程自动清理 `_baseline_` 前缀的旧容器，避免僵尸容器残留占用存储与端口元数据。
