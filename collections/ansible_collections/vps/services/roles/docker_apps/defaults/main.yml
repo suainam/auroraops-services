@@ -31,6 +31,9 @@ docker_apps_hysteria2_client_networks: >-
 # Sub-Store
 docker_apps_sub_store_pull: false
 sub_store_capability_pools_enabled: false
+docker_apps_sub_store_dir_owner: "{{ sub_store_dir_owner | default('root') }}"
+docker_apps_sub_store_dir_group: "{{ sub_store_dir_group | default(nginx_internal_sub_group | default(nginx_user | default('www-data'))) }}"
+docker_apps_sub_store_dir_mode: "{{ sub_store_dir_mode | default('0750') }}"
 # Shared Docker data root used by backup-aware setup tasks.  Keep the role
 # runnable when the parent inventory does not import the optional backup.yml.
 backup_source_docker_dir: "/opt/dockers"

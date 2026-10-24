@@ -10,6 +10,9 @@
     cdp_memory: "{{ docker_apps_sub_store_memory | default('512m') }}"
     cdp_memory_reservation: "{{ docker_apps_sub_store_memory_reservation | default('64m') }}"
     cdp_dirs: ["data"]
+    cdp_dir_owner: "{{ docker_apps_sub_store_dir_owner }}"
+    cdp_dir_group: "{{ docker_apps_sub_store_dir_group }}"
+    cdp_dir_mode: "{{ docker_apps_sub_store_dir_mode }}"
     cdp_ports:
       - "127.0.0.1:{{ app_port_sub_store }}:3000"
     cdp_volumes:
