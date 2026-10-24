@@ -1,56 +1,62 @@
 ---
-- name: "Docker 智能预拉取 (仅针对已启用的角色和应用)"
-  community.docker.docker_image:
-    name: "{{ item.image }}"
-    source: pull
-  # 使用 vars 定义镜像清单，方便维护
+# Pre-pull images for the containers this host actually runs.
+#
+# The old list was a flat name/image/enabled triple per application, and its
+# enabled flags defaulted to true for applications most hosts no longer run
+# (gcli2api, flare, singbox, newapi_suite, shellcrash, ...), so a host such as
+# cc15 fetched a dozen images it never starts.
+#
+# The selection is now driven by the same variable docker_apps uses to decide
+# what to deploy: docker_apps_containers = global + host - exclude. That is the
+# host's real deployment list, so the pull set and the deploy set cannot drift.
+#
+# docker_apps only merges that list in phase5, while this role runs in phase3,
+# so the merge is repeated here against the same helper and the same inputs.
+- name: "合并 Docker Apps 容器列表 (与 phase5 同一规则)"
+  ansible.builtin.include_tasks: "{{ role_path }}/../../../common/tasks/merge_list_vars.yml"
   vars:
-    # 基础判定逻辑：所属角色启用且应用本身启用
-    is_docker_apps_enabled: "{{ auroraops_roles['services']['docker_apps'] | default(true) | bool }}"
-  loop:
-    - name: "newapi"
-      image: "{{ newapi_image }}"
-      enabled: "{{ is_docker_apps_enabled and (docker_apps_newapi_suite_enabled | default(true) | bool) }}"
-    - name: "cliproxyapi"
-      image: "{{ cliproxyapi_image }}"
-      enabled: "{{ is_docker_apps_enabled and (docker_apps_cliproxyapi_enabled | default(true) | bool) }}"
-    - name: "sillytavern"
-      image: "{{ sillytavern_image }}"
-      enabled: "{{ is_docker_apps_enabled and (docker_apps_sillytavern_enabled | default(true) | bool) }}"
-    - name: "gcli2api"
-      image: "{{ gcli2api_image }}"
-      enabled: "{{ is_docker_apps_enabled and (docker_apps_gcli2api_enabled | default(true) | bool) }}"
-    - name: "ds2api"
-      image: "{{ ds2api_image }}"
-      enabled: "{{ is_docker_apps_enabled and (docker_apps_ds2api_enabled | default(false) | bool) }}"
-    - name: "vaultwarden"
-      image: "{{ vaultwarden_image }}"
-      enabled: "{{ is_docker_apps_enabled and (docker_apps_vaultwarden_enabled | default(true) | bool) }}"
-    - name: "flare"
-      image: "{{ flare_image }}"
-      enabled: "{{ is_docker_apps_enabled and (docker_apps_flare_enabled | default(true) | bool) }}"
-    - name: "singbox"
-      image: "{{ singbox_image }}"
-      enabled: "{{ is_docker_apps_enabled and (docker_apps_singbox_enabled | default(true) | bool) }}"
-    - name: "sub_store"
-      image: "{{ sub_store_image }}"
-      enabled: "{{ is_docker_apps_enabled and (docker_apps_sub_store_enabled | default(false) | bool) }}"
-    - name: "shellcrash"
-      image: "{{ shellcrash_image }}"
-      enabled: "{{ is_docker_apps_enabled and (docker_apps_shellcrash_enabled | default(false) | bool) }}"
-    - name: "gemini_balance"
-      image: "{{ gemini_balance_image }}"
-      enabled: "{{ is_docker_apps_enabled and (docker_apps_gemini_balance_enabled | default(false) | bool) }}"
-    # Pulled here so an upgrade never spends the container's downtime window
-    # fetching the new tag: docker_apps stops the old container before the new
-    # one is created, so a pull inside that window is outage time.
-    - name: "magpie"
-      image: "{{ magpie_image }}"
-      enabled: "{{ is_docker_apps_enabled and (docker_apps_magpie_enabled | default(false) | bool) }}"
-    - name: "workbuddy2api"
-      image: "{{ workbuddy2api_image }}"
-      enabled: "{{ is_docker_apps_enabled and (docker_apps_workbuddy2api_enabled | default(false) | bool) }}"
-  when: (item.enabled | bool) and (not ansible_check_mode)
+    merge_var_name: docker_apps_containers
+  when: auroraops_roles['services']['docker_apps'] | default(true) | bool
+  tags: [deploy, services, docker, docker_prepull, phase3]
+
+- name: "构造本机实际运行容器的镜像映射"
+  ansible.builtin.set_fact:
+    docker_prepull_images: >-
+      {{
+        {
+          'sub_store': sub_store_image,
+          'magpie': docker_apps_magpie_image | default(magpie_image | default('')),
+          'workbuddy2api': docker_apps_workbuddy2api_image | default(workbuddy2api_image | default('')),
+          'ai_memory': docker_apps_ai_memory_image | default(ai_memory_image | default('')),
+          'vaultwarden': vaultwarden_image | default(''),
+          'sillytavern': sillytavern_image | default(''),
+          'gcli2api': gcli2api_image | default(''),
+          'ds2api': ds2api_image | default(''),
+          'flare': flare_image | default(''),
+          'singbox': singbox_image | default(''),
+          'newapi_suite': newapi_image | default(''),
+          'shellcrash': shellcrash_image | default(''),
+          'gemini_balance': gemini_balance_image | default(''),
+          'manifest': manifest_image | default(''),
+          'vertex': docker_apps_vertex_image | default(vertex_image | default('')),
+        }
+        | dict2items
+        | selectattr('value', 'ne', '')
+        | selectattr('key', 'in', docker_apps_containers | default([]))
+        | list
+      }}
+  when: auroraops_roles['services']['docker_apps'] | default(true) | bool
+  tags: [deploy, services, docker, docker_prepull, phase3]
+
+- name: "Docker 智能预拉取 (仅本机实际运行的容器)"
+  community.docker.docker_image:
+    name: "{{ item.value }}"
+    source: pull
+  loop: "{{ docker_prepull_images | default([]) }}"
+  when:
+    - not ansible_check_mode
+    # Sub-Store keeps its own refresh cadence; it must not be pulled here.
+    - item.key != 'sub_store' or (docker_apps_sub_store_enabled | default(false) | bool)
   async: 600
   poll: 0
   changed_when: false # 异步预拉取作为后台优化任务，不视为配置变更

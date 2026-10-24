@@ -23,7 +23,6 @@
   ansible.builtin.set_fact:
     _magpie_checkpoint_id: "{{ upgrade_run_id | default(upgrade_checkpoint_id | default('upgrade_' ~ ((docker_apps_magpie_image | string) | regex_replace('[^a-zA-Z0-9_.-]', '_')))) }}"
   tags: [deploy, services, docker_apps, magpie, phase5]
-
 - name: Check if magpie checkpoint already exists from earlier attempt
   become: true
   ansible.builtin.stat:
@@ -31,6 +30,20 @@
   register: _magpie_existing_cp_stat
   tags: [deploy, services, docker_apps, magpie, phase5]
 
+- name: Pre-pull the target magpie image before the container is stopped
+  # container_deployer pulls the image inside the same task that creates and
+  # starts the replacement, which runs after the old container is stopped. A
+  # slow registry fetch there is pure downtime for every caller. Pulling the
+  # target tag first, while the old container is still serving, keeps the
+  # outage window to stop -> rename -> start.
+  become: true
+  community.docker.docker_image:
+    name: "{{ docker_apps_magpie_image }}"
+    source: pull
+  when:
+    - not ansible_check_mode
+    - docker_apps_magpie_pull | default(false) | bool
+  tags: [deploy, services, docker_apps, magpie, phase5]
 - name: Solidify immutable versioned baseline for existing magpie
   become: true
   block:
@@ -75,13 +88,16 @@
               - "{{ docker_apps_magpie_data_dir }}/lifecycle/checkpoints/{{ _magpie_checkpoint_id }}/snapshot.tar.gz"
               - -C
               - "{{ docker_apps_magpie_data_dir }}"
-              - --exclude=config/usage.jsonl
-              - --exclude=config/routing
+              - --exclude=config/magpie/usage.jsonl
+              - --exclude=config/magpie/routing
+              - --exclude=config/cache
+              - --exclude=config/magpie/our-free-model/runtime
+              - --exclude=config/magpie/gemini-signatures
               - config
 
         - name: Capture SHA256 checksums of magpie configuration files
           ansible.builtin.shell:
-            cmd: "find . -type f -path './routing/*' -prune -o -name usage.jsonl -prune -o -type f -exec sha256sum {} + | sort"
+            cmd: "find . -path './magpie/routing/*' -prune -o -path './cache/*' -prune -o -path './magpie/our-free-model/runtime/*' -prune -o -path './magpie/gemini-signatures/*' -prune -o -name usage.jsonl -prune -o -type f -exec sha256sum {} + | sort"
             chdir: "{{ docker_apps_magpie_data_dir }}/config"
           register: _magpie_config_checksums
           changed_when: false

@@ -81,6 +81,21 @@
   register: _wb_existing_cp_stat
   tags: [deploy, services, docker_apps, workbuddy2api, phase5]
 
+- name: Pre-pull the target workbuddy2api image before the container is stopped
+  # container_deployer pulls the image inside the same task that creates and
+  # starts the replacement, which runs after the old container is stopped. A
+  # slow registry fetch there is pure downtime for every caller. Pulling the
+  # target tag first, while the old container is still serving, keeps the
+  # outage window to stop -> rename -> start.
+  become: true
+  community.docker.docker_image:
+    name: "{{ docker_apps_workbuddy2api_image }}"
+    source: pull
+  when:
+    - not ansible_check_mode
+    - docker_apps_workbuddy2api_pull | default(false) | bool
+  tags: [deploy, services, docker_apps, workbuddy2api, phase5]
+
 - name: Solidify immutable versioned baseline for existing workbuddy2api
   become: true
   block:
