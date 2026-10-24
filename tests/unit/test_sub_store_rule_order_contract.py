@@ -105,6 +105,13 @@ def test_served_mihomo_profile_uses_the_ordered_policy_and_defines_its_targets()
     assert rules.index("GEOSITE,geolocation-!cn,🚀 默认代理") < rules.index("GEOSITE,cn,DIRECT")
     assert rules.index("GEOSITE,cn,DIRECT") < rules.index("MATCH,🚀 默认代理")
 
+    # Verify IPv6 local and private ranges route to DIRECT ahead of general fallbacks
+    assert "IP-CIDR6,::1/128,DIRECT,no-resolve" in rules
+    assert "IP-CIDR6,fe80::/10,DIRECT,no-resolve" in rules
+    assert "IP-CIDR6,fc00::/7,DIRECT,no-resolve" in rules
+    assert rules.index("IP-CIDR6,::1/128,DIRECT,no-resolve") < rules.index("GEOSITE,geolocation-!cn,🚀 默认代理")
+    assert rules.index("IP-CIDR6,fc00::/7,DIRECT,no-resolve") < rules.index("GEOSITE,geolocation-!cn,🚀 默认代理")
+
     # Verify DNS nameserver-policy consolidation
     dns = profile["dns"]
     assert "geosite:cn,private" in dns["nameserver-policy"]
