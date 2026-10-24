@@ -41,6 +41,15 @@
     - name: "gemini_balance"
       image: "{{ gemini_balance_image }}"
       enabled: "{{ is_docker_apps_enabled and (docker_apps_gemini_balance_enabled | default(false) | bool) }}"
+    # Pulled here so an upgrade never spends the container's downtime window
+    # fetching the new tag: docker_apps stops the old container before the new
+    # one is created, so a pull inside that window is outage time.
+    - name: "magpie"
+      image: "{{ magpie_image }}"
+      enabled: "{{ is_docker_apps_enabled and (docker_apps_magpie_enabled | default(false) | bool) }}"
+    - name: "workbuddy2api"
+      image: "{{ workbuddy2api_image }}"
+      enabled: "{{ is_docker_apps_enabled and (docker_apps_workbuddy2api_enabled | default(false) | bool) }}"
   when: (item.enabled | bool) and (not ansible_check_mode)
   async: 600
   poll: 0
