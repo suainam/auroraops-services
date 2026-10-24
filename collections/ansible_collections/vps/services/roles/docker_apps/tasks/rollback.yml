@@ -331,19 +331,15 @@
         that:
           - _wb_staging_settings_stat.stat.checksum == workbuddy2api_checkpoint.settings_sha256
         fail_msg: "Rollback blocked: staged unarchived settings do not match baseline checksum"
-    - name: 验证暂存目录中 accounts 与 usage 均完整提取
+    - name: 验证暂存目录中 accounts 完整提取
       ansible.builtin.stat:
-        path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/{{ item }}"
-      register: _wb_staging_dir_stats
-      loop:
-        - accounts
-        - usage
+        path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/accounts"
+      register: _wb_staging_accounts_stat
     - name: 断言暂存目录结构完整
       ansible.builtin.assert:
         that:
-          - item.stat.exists and item.stat.isdir
-        fail_msg: "Rollback blocked: staging directory incomplete, missing {{ item.item }}"
-      loop: "{{ _wb_staging_dir_stats.results }}"
+          - _wb_staging_accounts_stat.stat.exists and _wb_staging_accounts_stat.stat.isdir
+        fail_msg: "Rollback blocked: staging directory incomplete, missing accounts"
   when:
     - rollback_docker_app_name | default('') == 'workbuddy2api'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
@@ -365,11 +361,8 @@
   ansible.builtin.command:
     argv:
       - mv
-      - "{{ docker_apps_workbuddy2api_data_dir }}/{{ item }}"
-      - "{{ docker_apps_workbuddy2api_data_dir }}/{{ item }}.replaced.{{ ansible_date_time.iso8601_basic_short | default('bak') }}"
-  loop:
-    - accounts
-    - usage
+      - "{{ docker_apps_workbuddy2api_data_dir }}/accounts"
+      - "{{ docker_apps_workbuddy2api_data_dir }}/accounts.replaced.{{ ansible_date_time.iso8601_basic_short | default('bak') }}"
   when:
     - rollback_docker_app_name | default('') == 'workbuddy2api'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')
@@ -380,11 +373,8 @@
   ansible.builtin.command:
     argv:
       - mv
-      - "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/{{ item }}"
-      - "{{ docker_apps_workbuddy2api_data_dir }}/{{ item }}"
-  loop:
-    - accounts
-    - usage
+      - "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/accounts"
+      - "{{ docker_apps_workbuddy2api_data_dir }}/accounts"
   when:
     - rollback_docker_app_name | default('') == 'workbuddy2api'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (workbuddy2api_checkpoint.mode | default('') == 'existing_service')

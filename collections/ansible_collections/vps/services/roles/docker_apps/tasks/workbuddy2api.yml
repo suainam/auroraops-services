@@ -106,7 +106,12 @@
             state: stopped
           when: _wb_pre_deploy_info.container.State.Running | default(false)
 
-        - name: Create pre-upgrade data snapshot archive for workbuddy2api
+        - name: Create pre-upgrade config snapshot archive for workbuddy2api
+          # accounts/ holds the recoverable configuration (settings.json plus the
+          # per-account credential files) and is ~260K. usage/ is runtime records
+          # (usage.jsonl, pricing-timeline.jsonl) that grow on every request and
+          # is not configuration; excluding it keeps the snapshot ~22M smaller and
+          # the quiesce window in seconds.
           ansible.builtin.command:
             argv:
               - tar
@@ -115,7 +120,6 @@
               - -C
               - "{{ docker_apps_workbuddy2api_data_dir }}"
               - accounts
-              - usage
 
         - name: Capture SHA256 checksum of workbuddy2api settings
           ansible.builtin.stat:
@@ -362,45 +366,35 @@
             path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/accounts/settings.json"
             checksum_algorithm: sha256
           register: _wb_deploy_fail_staging_stat
-        - name: 验证暂存目录中 accounts 与 usage 均完整提取
+        - name: 验证暂存目录中 accounts 完整提取
           become: true
           ansible.builtin.stat:
-            path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/{{ item }}"
-          register: _wb_deploy_fail_dir_stats
-          loop:
-            - accounts
-            - usage
+            path: "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/accounts"
+          register: _wb_deploy_fail_accounts_stat
         - name: 断言暂存目录结构完整
           ansible.builtin.assert:
             that:
-              - item.stat.exists and item.stat.isdir
-            fail_msg: "Deploy rescue blocked: staging directory incomplete, missing {{ item.item }}"
-          loop: "{{ _wb_deploy_fail_dir_stats.results }}"
+              - _wb_deploy_fail_accounts_stat.stat.exists and _wb_deploy_fail_accounts_stat.stat.isdir
+            fail_msg: "Deploy rescue blocked: staging directory incomplete, missing accounts"
         - name: 断言暂存配置与基线记录指纹一致
           ansible.builtin.assert:
             that:
               - _wb_deploy_fail_staging_stat.stat.checksum == _wb_deploy_fail_cp.settings_sha256
             fail_msg: "Deploy rescue blocked: staging settings checksum does not match baseline"
-        - name: 备份新版部署产生的未定义 accounts 与 usage 配置 (保留现场无裸rm)
+        - name: 备份新版部署产生的未定义 accounts 配置 (保留现场无裸rm)
           become: true
           ansible.builtin.command:
             argv:
               - mv
-              - "{{ docker_apps_workbuddy2api_data_dir }}/{{ item }}"
-              - "{{ docker_apps_workbuddy2api_data_dir }}/{{ item }}.failed_deploy.{{ ansible_date_time.iso8601_basic_short | default('bak') }}"
-          loop:
-            - accounts
-            - usage
+              - "{{ docker_apps_workbuddy2api_data_dir }}/accounts"
+              - "{{ docker_apps_workbuddy2api_data_dir }}/accounts.failed_deploy.{{ ansible_date_time.iso8601_basic_short | default('bak') }}"
         - name: 原子切换经校验的暂存数据至生效路径
           become: true
           ansible.builtin.command:
             argv:
               - mv
-              - "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/{{ item }}"
-              - "{{ docker_apps_workbuddy2api_data_dir }}/{{ item }}"
-          loop:
-            - accounts
-            - usage
+              - "{{ docker_apps_workbuddy2api_data_dir }}/lifecycle/staging/accounts"
+              - "{{ docker_apps_workbuddy2api_data_dir }}/accounts"
       when: _wb_pre_deploy_info.exists | default(false)
     - name: Check if preserved baseline container exists before restore
       community.docker.docker_container_info:
