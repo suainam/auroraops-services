@@ -23,3 +23,17 @@
     fail_msg: >-
       singbox_deploy_mode must be 'native' or 'docker', got '{{ singbox_deploy_mode }}'.
   tags: [deploy, verify, rollback, rollback_verify, services, singbox, phase5]
+
+- name: Derive whether a Reality inbound is present
+  ansible.builtin.set_fact:
+    # A host whose nodes are all gateway/nginx-terminated (e.g. VLESS+WS behind
+    # an InstaBox gateway) has no Reality listener; the verify task that waits
+    # on the Reality port must be gated on this so it does not fail vacuously.
+    singbox_has_reality_inbound: >-
+      {{ (docker_apps_singbox_processed_nodes | default(singbox_nodes | default([])))
+         + (singbox_extra_nodes | default([]))
+         | selectattr('reality', 'default', true) | selectattr('reality')
+         | rejectattr('behind_nginx', 'default', false) | rejectattr('behind_nginx')
+         | rejectattr('behind_gateway', 'default', false) | rejectattr('behind_gateway')
+         | list | length > 0 }}
+  tags: [deploy, verify, rollback, rollback_verify, services, singbox, phase5]
