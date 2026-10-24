@@ -16,9 +16,12 @@
 {% if node.type == 'vless' -%}
 {% if node.transport is defined and node.transport == 'grpc' -%}
 vless://{{ node.uuid }}@{{ node.server | default(singbox_domain) }}:{{ use_port }}?encryption=none&security={{ 'reality' if is_reality else 'tls' }}&sni={{ node.sni }}&alpn=h2&fp=chrome{% if is_reality %}&pbk={{ _pbk }}&sid={{ _sid }}{% endif %}&type=grpc&serviceName={{ node.service_name }}&mode=gun#{{ display_name | urlencode }}
+{% elif node.transport is defined and node.transport == 'ws' -%}
+vless://{{ node.uuid }}@{{ node.server | default(singbox_domain) }}:{{ use_port }}?encryption=none&security=tls&sni={{ node.sni }}&type=ws&path={{ node.path | default('/') | urlencode }}{% if node.host is defined %}&host={{ node.host }}{% endif %}#{{ display_name | urlencode }}
 {% else -%}
 vless://{{ node.uuid }}@{{ node.server | default(singbox_domain) }}:{{ use_port }}?encryption=none{% if is_reality %}&flow=xtls-rprx-vision{% endif %}&security={{ 'reality' if is_reality else 'tls' }}&sni={{ node.sni }}&fp=chrome{% if is_reality %}&pbk={{ _pbk }}&sid={{ _sid }}{% endif %}&type=tcp&headerType=none#{{ display_name | urlencode }}
 {% endif -%}
+
 {% elif node.type == 'hysteria2' -%}
 hysteria2://{{ node.password | urlencode }}@{{ node.server | default(singbox_domain) }}:{{ node.port }}?insecure={% if node.insecure | default(false) %}1{% else %}0{% endif %}{% if node.sni is defined %}&sni={{ node.sni }}{% endif %}{% if node.alpn is defined %}&alpn={{ node.alpn }}{% else %}&alpn=h3{% endif %}{% if node.obfs is defined %}&obfs={{ node.obfs }}&obfs-password={{ node.obfs_password | urlencode }}{% endif %}#{{ display_name | urlencode }}
 {% elif node.type == 'trojan' -%}

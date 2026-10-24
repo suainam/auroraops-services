@@ -100,7 +100,7 @@
       "type": "vless",
       "tag": "{{ display_name }}",
       "server": "{{ node.server | default(singbox_domain) }}",
-      "server_port": {{ 443 if node.behind_nginx | default(false) else node.port }},
+      "server_port": {{ 443 if node.behind_nginx | default(false) | bool or node.behind_gateway | default(false) | bool else node.port }},
       "uuid": "{{ node.uuid }}",
 {%- if not node.transport is defined or node.transport == 'tcp' %}
 {%- if node.reality | default(true) %}
@@ -129,6 +129,16 @@
         "idle_timeout": "15s",
         "ping_timeout": "5s",
         "permit_without_stream": true
+      },
+{%- elif node.transport == 'ws' %}
+      "transport": {
+        "type": "ws",
+        "path": "{{ node.path | default('/') }}"
+{%- if node.host is defined %},
+        "headers": {
+          "Host": "{{ node.host }}"
+        }
+{%- endif %}
       },
 {%- endif %}
       "packet_encoding": "xudp"

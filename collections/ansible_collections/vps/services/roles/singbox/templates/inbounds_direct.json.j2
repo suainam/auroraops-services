@@ -7,10 +7,12 @@
     {%- endif -%}
     {%- set ns.first_inbound = false -%}
     {%- set is_reality = node.reality | default(true) | bool -%}
-    {%- set is_behind_nginx = node.behind_nginx | default(false) | bool -%}
     {%- set is_grpc = node.transport | default('') == 'grpc' -%}
-    {%- set has_tls = not is_behind_nginx -%}
-    {%- set has_flow = is_reality and not is_grpc and node.type == 'vless' -%}
+    {%- set is_ws = node.transport | default('') == 'ws' -%}
+    {%- set is_behind_nginx = node.behind_nginx | default(false) | bool -%}
+    {%- set is_behind_gateway = node.behind_gateway | default(false) | bool -%}
+    {%- set has_tls = not is_behind_nginx and not is_behind_gateway -%}
+    {%- set has_flow = is_reality and not is_grpc and not is_ws and node.type == 'vless' -%}
     {%- set _pbk = node.relay_public_key | default(docker_apps_singbox_reality_public_key) -%}
     {%- set _sid = node.relay_short_id | default((docker_apps_singbox_short_ids_gen.stdout_lines | default(['']))[0] | default('')) -%}
     {%- if node.type == 'vless' %}
@@ -51,6 +53,10 @@
         "idle_timeout": "15s",
         "ping_timeout": "5s",
         "permit_without_stream": true
+      }{% elif is_ws %},
+      "transport": {
+        "type": "ws",
+        "path": "{{ node.path | default('/') }}"
       }{% endif %}
     }
     {%- elif node.type == 'hysteria2' %}
