@@ -42,7 +42,7 @@ proxies:
     # Client destination follows the listener, not the TLS mode: an nginx-
     # terminated inbound binds loopback on node.port and is only reachable on
     # 443, everything else is dialled on the port it actually listens on.
-    port: {{ 443 if node.behind_nginx | default(false) | bool else node.port }}
+    port: {{ 443 if node.behind_nginx | default(false) | bool or node.behind_gateway | default(false) | bool else node.port }}
     uuid: "{{ node.uuid }}"
     network: tcp
     tls: true
@@ -61,7 +61,7 @@ proxies:
   - name: "{{ display_name }}"
     type: vless
     server: "{{ node.server | default(singbox_domain) }}"
-    port: {{ 443 if node.behind_nginx | default(false) | bool else node.port }}
+    port: {{ 443 if node.behind_nginx | default(false) | bool or node.behind_gateway | default(false) | bool else node.port }}
     uuid: "{{ node.uuid }}"
     network: grpc
     tls: true
@@ -78,6 +78,22 @@ proxies:
       short-id: "{{ (singbox_reality_short_ids | default(['']))[0] }}"
 {% else %}
     udp: true
+{% endif %}
+{% elif node.transport == 'ws' %}
+  - name: "{{ display_name }}"
+    type: vless
+    server: "{{ node.server | default(singbox_domain) }}"
+    port: {{ 443 if node.behind_nginx | default(false) | bool or node.behind_gateway | default(false) | bool else node.port }}
+    uuid: "{{ node.uuid }}"
+    network: ws
+    tls: true
+    servername: "{{ node.sni }}"
+    udp: true
+    ws-opts:
+      path: "{{ node.path | default('/') }}"
+{% if node.host is defined %}
+      headers:
+        Host: "{{ node.host }}"
 {% endif %}
 {% endif %}
 {% elif node.type == 'hysteria2' and not ('resi' in node.name) %}

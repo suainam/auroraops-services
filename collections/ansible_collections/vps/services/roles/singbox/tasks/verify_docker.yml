@@ -23,4 +23,15 @@
     port: "{{ singbox_reality_port }}"
     state: started
     timeout: 5
+  when: singbox_has_reality_inbound | default(true) | bool
+  tags: [verify, services, singbox, phase5]
+
+- name: Verify Sing-box container declared ports are listening
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ item }}"
+    state: started
+    timeout: 5
+  loop: "{{ singbox_verify_expected_tcp_ports | default([]) }}"
+  when: (singbox_verify_expected_tcp_ports | default([]) | length) > 0
   tags: [verify, services, singbox, phase5]

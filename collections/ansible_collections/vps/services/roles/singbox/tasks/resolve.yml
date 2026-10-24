@@ -23,3 +23,15 @@
     fail_msg: >-
       singbox_deploy_mode must be 'native' or 'docker', got '{{ singbox_deploy_mode }}'.
   tags: [deploy, verify, rollback, rollback_verify, services, singbox, phase5]
+
+- name: Derive whether a Reality inbound is present
+  ansible.builtin.set_fact:
+    singbox_has_reality_inbound: >-
+      {%- set ns = namespace(found=false) -%}
+      {%- for n in ((docker_apps_singbox_processed_nodes | default(singbox_nodes | default([]))) + (singbox_extra_nodes | default([]))) -%}
+        {%- if (n.reality | default(true) | bool) and not (n.behind_nginx | default(false) | bool) and not (n.behind_gateway | default(false) | bool) -%}
+          {%- set ns.found = true -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ ns.found }}
+  tags: [deploy, verify, rollback, rollback_verify, services, singbox, phase5]

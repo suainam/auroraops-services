@@ -4,7 +4,7 @@
     singbox_role_enabled: >-
       {{ singbox_enabled | default(true) | bool and
          ((auroraops_roles | default({})).get('services', {}).get('singbox', true) | bool) }}
-  tags: [deploy, services, singbox, phase5]
+  tags: [deploy, verify, rollback, rollback_verify, services, singbox, phase5]
 
 - name: Report disabled singbox role
   ansible.builtin.debug:
@@ -15,7 +15,7 @@
 - name: Resolve singbox deployment mode
   ansible.builtin.import_tasks: resolve.yml
   when: singbox_role_enabled
-  tags: [deploy, services, singbox, phase5]
+  tags: [deploy, verify, rollback, rollback_verify, services, singbox, phase5]
 
 - name: Execute singbox common preparation
   ansible.builtin.import_tasks: common_prep.yml

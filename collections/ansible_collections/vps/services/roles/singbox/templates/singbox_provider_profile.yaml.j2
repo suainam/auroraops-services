@@ -7,7 +7,7 @@ proxies:
     protocol those two publish, or a Sub-Store consumer silently loses nodes:
     the hubs publish gRPC and TUIC alongside TCP VLESS, Hy2 and AnyTLS. -#}
 {% set is_reality = node.reality | default(true) | bool %}
-{% set client_port = 443 if node.behind_nginx | default(false) | bool else node.port %}
+{% set client_port = 443 if node.behind_nginx | default(false) | bool or node.behind_gateway | default(false) | bool else node.port %}
 {% if node.type == 'vless' and (not node.transport is defined or node.transport == 'tcp') %}
   - name: "{{ node.name }}"
     type: vless
@@ -27,25 +27,21 @@ proxies:
       public-key: "{{ singbox_reality_public_key | default('') or docker_apps_singbox_reality_public_key | default('') or singbox_reality_public_key_generated | default('') }}"
       short-id: "{{ (singbox_reality_short_ids | default(['']))[0] }}"
 {% endif %}
-{% elif node.type == 'vless' and node.transport | default('') == 'grpc' %}
+{% elif node.type == 'vless' and node.transport | default('') == 'ws' %}
   - name: "{{ node.name }}"
     type: vless
     server: "{{ node.server | default(singbox_domain) }}"
     port: {{ client_port }}
     uuid: "{{ node.uuid }}"
-    network: grpc
+    network: ws
     tls: true
     servername: "{{ node.sni }}"
-    alpn:
-      - h2
-    grpc-opts:
-      grpc-service-name: "{{ node.service_name }}"
     udp: true
-{% if is_reality %}
-    client-fingerprint: chrome
-    reality-opts:
-      public-key: "{{ singbox_reality_public_key | default('') or docker_apps_singbox_reality_public_key | default('') or singbox_reality_public_key_generated | default('') }}"
-      short-id: "{{ (singbox_reality_short_ids | default(['']))[0] }}"
+    ws-opts:
+      path: "{{ node.path | default('/') }}"
+{% if node.host is defined %}
+      headers:
+        Host: "{{ node.host }}"
 {% endif %}
 {% elif node.type == 'trojan' %}
   - name: "{{ node.name }}"

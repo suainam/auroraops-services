@@ -43,6 +43,7 @@
     port: "{{ singbox_reality_port }}"
     state: started
     timeout: 5
+  when: singbox_has_reality_inbound | default(true) | bool
   tags: [verify, services, singbox, phase5]
 
 # ---------------------------------------------------------------------------
