@@ -7,7 +7,7 @@
 - name: Install wireguard-tools package on Debian / Ubuntu
   become: true
   ansible.builtin.apt:
-    name: "{{ wireguard_native_package_name }}"
+    name: "{{ wireguard_packages | default(wireguard_native_package_name) }}"
     state: present
     update_cache: true
   environment: "{{ wireguard_native_download_environment }}"
@@ -20,7 +20,7 @@
 - name: Install wireguard-tools package on Alpine
   become: true
   community.general.apk:
-    name: "{{ wireguard_native_package_name }}"
+    name: "{{ wireguard_packages | default(wireguard_native_package_name) }}"
     state: present
     update_cache: true
   when:
