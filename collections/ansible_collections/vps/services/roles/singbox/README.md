@@ -122,6 +122,12 @@ runs exactly the checks it ran before and opts into each one it can satisfy:
   assertion can stay strict for everyone while recording that a userspace
   WireGuard endpoint holds one ephemeral transport socket.
 
+**Reality listener resolution.** `singbox_has_reality_inbound` is derived during
+`resolve.yml` to gate reality port verification. It requires an active
+non-external, non-shared VLESS node without `behind_nginx` or `behind_gateway`
+and with `reality: true`, ensuring non-Reality nodes (e.g. VLESS+WS behind gateway,
+Hysteria2-only, external subscriptions) do not trip the Reality listener assertion.
+
 **Mesh probe replaces a weaker check.** The earlier version only asserted the
 loopback SOCKS socket was bound, which passes on a guest whose WireGuard
 handshake never completed. The probe connects **through** the SOCKS to the
