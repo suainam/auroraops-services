@@ -42,7 +42,7 @@ def test_client_capability_profile_renders_dns_contract_without_app_managed_tun(
     assert "tun" not in profile
 
     dns = profile["dns"]
-
+    assert dns["ipv6"] is True
     assert dns["respect-rules"] is True
     assert dns["nameserver"] == [
         "223.5.5.5",
