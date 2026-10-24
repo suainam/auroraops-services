@@ -52,7 +52,14 @@
         msg: "Deploy blocked: existing magpie configuration directory is missing or invalid for baseline snapshot"
       when: not _magpie_config_stat.stat.exists or not _magpie_config_stat.stat.isdir
 
-    - name: Quiesce container, snapshot data, and record checkpoint
+    - name: Quiesce container, snapshot config, and record checkpoint
+      # The config directory is a bind-mount volume, so container replacement never
+      # deletes it; the snapshot exists only to restore pre-upgrade config if a new
+      # version migrates/rewrites it irreversibly. Pack only the real config files
+      # (settings/providers/profiles/library/plugins/accounts) and exclude the
+      # runtime append-only logs (usage.jsonl, routing/*.jsonl) that grow on every
+      # request and are not configuration. The narrow archive keeps the quiesce
+      # window to seconds (stop -> tar -> rename -> start).
       block:
         - name: Gracefully pause/quiesce existing magpie container for consistent snapshot
           community.docker.docker_container:
@@ -60,7 +67,7 @@
             state: stopped
           when: _magpie_pre_deploy_info.container.State.Running | default(false)
 
-        - name: Create pre-upgrade data snapshot archive for magpie
+        - name: Create pre-upgrade config snapshot archive for magpie
           ansible.builtin.command:
             argv:
               - tar
@@ -68,14 +75,16 @@
               - "{{ docker_apps_magpie_data_dir }}/lifecycle/checkpoints/{{ _magpie_checkpoint_id }}/snapshot.tar.gz"
               - -C
               - "{{ docker_apps_magpie_data_dir }}"
+              - --exclude=config/usage.jsonl
+              - --exclude=config/routing
               - config
+
         - name: Capture SHA256 checksums of magpie configuration files
           ansible.builtin.shell:
-            cmd: "find . -type f -exec sha256sum {} + | sort"
+            cmd: "find . -type f -path './routing/*' -prune -o -name usage.jsonl -prune -o -type f -exec sha256sum {} + | sort"
             chdir: "{{ docker_apps_magpie_data_dir }}/config"
           register: _magpie_config_checksums
           changed_when: false
-
 
         - name: Write versioned checkpoint record for magpie
           ansible.builtin.copy:
@@ -106,19 +115,6 @@
             owner: "65532"
             group: "65532"
       rescue:
-        - name: Check if renamed baseline container exists after failed snapshot
-          community.docker.docker_container_info:
-            name: "magpie_baseline_{{ _magpie_checkpoint_id }}"
-            docker_host: "{{ docker_host | default(omit) }}"
-          register: _magpie_rescue_baseline_info
-        - name: Restore renamed baseline container name on failed snapshot
-          ansible.builtin.command:
-            argv:
-              - docker
-              - rename
-              - "magpie_baseline_{{ _magpie_checkpoint_id }}"
-              - "{{ docker_apps_container_name | default('magpie') }}"
-          when: _magpie_rescue_baseline_info.exists | default(false)
         - name: Resume existing magpie container after failed snapshot
           community.docker.docker_container:
             name: "{{ docker_apps_container_name | default('magpie') }}"
@@ -134,6 +130,16 @@
     - not (_magpie_existing_cp_stat.stat.exists | default(false))
   tags: [deploy, services, docker_apps, magpie, phase5]
 
+- name: Quiesce live magpie container before it is renamed to the baseline
+  community.docker.docker_container:
+    name: "{{ docker_apps_container_name | default('magpie') }}"
+    docker_host: "{{ docker_host | default(omit) }}"
+    state: stopped
+  when:
+    - not ansible_check_mode
+    - _magpie_pre_deploy_info.exists | default(false)
+    - _magpie_pre_deploy_info.container.State.Running | default(false)
+  tags: [deploy, services, docker_apps, magpie, phase5]
 - name: Write clean slate baseline for first install of magpie
   become: true
   block:
