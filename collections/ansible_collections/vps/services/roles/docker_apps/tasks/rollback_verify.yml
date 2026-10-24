@@ -167,6 +167,8 @@
   when:
     - rollback_docker_app_name | default('') == 'magpie'
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_verify_checkpoint.mode | default('') == 'existing_service')
+    - magpie_verify_checkpoint.config_checksums is defined
+    - magpie_verify_checkpoint.config_checksums | length > 0
   tags: [rollback_verify, services, docker_apps, magpie, phase5]
 
 - name: Verify magpie container is absent after rollback (revocation)
