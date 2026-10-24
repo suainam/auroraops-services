@@ -9,7 +9,7 @@ wireguard_native_service_name: "wg-quick@{{ wireguard_native_interface }}"
 
 # 本机参数
 wireguard_native_role: "client"  # server | client
-wireguard_native_address: "10.144.10.15/32"
+wireguard_native_address: ""
 # The listen port is mandatory and has no default on purpose. A default here
 # would be a second, silent copy of the port allocation: it can name a port that
 # the authority has already reassigned, and nothing would notice until a peer

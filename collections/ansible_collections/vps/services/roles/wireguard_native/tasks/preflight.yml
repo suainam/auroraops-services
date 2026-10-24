@@ -7,6 +7,27 @@
   when: wireguard_native_enabled | bool
   tags: [deploy, services, wireguard_native, wireguard_native_preflight, phase3]
 
+- name: Probe host-local WireGuard private key if not provided
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ wireguard_native_config_dir }}/{{ wireguard_native_interface }}.key"
+  register: wireguard_native_host_key_slurp
+  failed_when: false
+  when:
+    - wireguard_native_enabled | bool
+    - wireguard_native_private_key | default('') | length == 0
+  tags: [deploy, services, wireguard_native, wireguard_native_preflight, phase3]
+
+- name: Adopt host-local WireGuard private key
+  ansible.builtin.set_fact:
+    wireguard_native_private_key: "{{ wireguard_native_host_key_slurp.content | b64decode | trim }}"
+  no_log: true
+  when:
+    - wireguard_native_enabled | bool
+    - wireguard_native_private_key | default('') | length == 0
+    - wireguard_native_host_key_slurp.content is defined
+  tags: [deploy, services, wireguard_native, wireguard_native_preflight, phase3]
+
 - name: Validate WireGuard parameters
   ansible.builtin.assert:
     that:
