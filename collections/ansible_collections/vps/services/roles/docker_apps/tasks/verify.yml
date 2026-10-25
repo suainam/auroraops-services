@@ -449,9 +449,12 @@
 - name: Verify ai-memory rejects an unauthenticated request
   no_log: true
   ansible.builtin.uri:
-    url: "http://{{ ai_memory_publish_address }}:{{ docker_apps_app_port_ai_memory }}/healthz"
-    method: GET
-    status_code: [401, 403]
+    url: "http://{{ ai_memory_publish_address }}:{{ docker_apps_app_port_ai_memory }}/mcp"
+    method: POST
+    headers:
+      Content-Type: application/json
+    body: '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+    status_code: 401
     return_content: false
   when: verify_docker_app_name | default('') == 'ai_memory'
   tags: [verify, services, docker_apps, ai_memory, phase5]
