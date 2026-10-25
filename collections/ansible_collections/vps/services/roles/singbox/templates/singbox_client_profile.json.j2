@@ -130,7 +130,7 @@
         "ping_timeout": "5s",
         "permit_without_stream": true
       },
-{%- elif node.transport == 'ws' %}
+{%- elif node.transport is defined and node.transport == 'ws' %}
       "transport": {
         "type": "ws",
         "path": "{{ node.path | default('/') }}"
@@ -158,7 +158,7 @@
         "server_name": "{{ node.sni | default('') }}",
         "insecure": false
       }
-{%- if node.transport == 'ws' %},
+{%- if node.transport is defined and node.transport == 'ws' %},
       "transport": {
         "type": "ws",
         "path": "{{ node.path | default('/') }}"
