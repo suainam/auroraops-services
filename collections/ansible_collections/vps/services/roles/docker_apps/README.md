@@ -17,7 +17,7 @@
 - ✅ **opcotoai-toolkit**: SMTP Console 与 gateway（旧 Grok 已迁移到独立 `grok_register` Role）
 - ✅ **DS2API**: DeepSeek Web API 兼容服务（固定 Release 镜像）
 - ✅ **Vertex AI Proxy**: OpenAI-compatible Gemini proxy（本地构建镜像，SSE 入口）
-- ✅ **WorkBuddy2API-Hub**: 个人企业微信/WorkBuddy API 网关（单容器模式，SSE 流式转发）
+- ✅ **WorkBuddy2API-Hub**: 个人企业微信/WorkBuddy API 网关（单容器模式，SSE 流式转发）— **已从 cc15 退役（2026-10-25）**：上游收紧非官方客户端识别，cc15 已移除容器并置 `docker_apps_workbuddy2api_enabled=false`；数据目录保留，nginx 站点 `wb.msuai.top` 配置暂留。
 
 Sub-Store 的 `aurora-singbox` 是幂等 upsert：如果旧版本已经创建了同名
 `local` 订阅，后续部署也必须将它 PATCH 为当前 `sub_store_source_url` 的
@@ -152,6 +152,8 @@ Role 内部统一使用 `docker_apps_*` 前缀变量。现有 inventory 中的�
 DS2API 的 `docker_apps_ds2api_admin_key` 和 `docker_apps_ds2api_config` 必须来自 Ansible Vault。配置文件只在 `/opt/dockers/ds2api/data/config.json` 不存在时 seed，避免覆盖 WebUI/Admin API 后续修改；容器只绑定宿主回环地址，公网入口由 Nginx 单独管理。
 
 WorkBuddy2API-Hub 通过 `docker_apps_containers_host` 中的 `workbuddy2api` 启用。持久化目录为 `/opt/dockers/workbuddy2api-hub/{accounts,usage}`；`settings.json` 仅在首次部署时从 `vault_workbuddy2api_panel_password` 与 `vault_workbuddy2api_api_key` seed，后续由管理面板维护。容器仅绑定宿主回环地址 `127.0.0.1:30021`，公网通过 Nginx SSE 反代暴露。
+
+**退役状态（2026-10-25）**：cc15 已从 `docker_apps_containers_host` 移除 `workbuddy2api` 并设 `docker_apps_workbuddy2api_enabled=false`（容器已删，`/opt/dockers/workbuddy2api-hub` 数据目录保留）。nginx 站点 `wb.msuai.top` 配置暂留未删（当前后端已停，会返回 502，待决策删除或复用）。其余主机如需启用，加入 `docker_apps_containers_host` 并置 `docker_apps_workbuddy2api_enabled=true` 即可。
 
 Vertex AI Proxy 通过 `docker_apps_containers_host` 中的 `vertex` 启用，源码包由 `vertex_source_archive` 提供并用 `vertex_source_sha256` 固定。持久化目录为 `/opt/dockers/vertex-proxy/{config,logs,assets}`；`config.json` 与 `api_keys.txt` 仅首次 seed，后续由管理面板维护。管理密码与 API key 必须来自 `vault_vertex_admin_password`、`vault_vertex_api_key`。
 ### 智能与安全增强 (Advanced)
