@@ -8,6 +8,7 @@
 | `docker__users` | `[admin, ansible_user]` | 需要加入 `docker` 用户组的用户列表。默认包含 admin 用户和当前 Ansible 执行用户。 |
 | `docker__install_compose_plugin` | `true` | 是否安装 Docker Compose 插件。 |
 | `docker__daemon_options` | `{...}` | `daemon.json` 配置字典。默认启用 `live-restore` 和 `no-new-privileges`。 |
+| `docker_systemd_priority` | `{}` | 守护进程 systemd 调度优先级 override 字典 (如 `docker`/`containerd` 的 `nice`, `cpu_weight`, `io_weight`, `timeout_stop_sec`)。渲染至 `<unit>.service.d/priority.conf` 并 daemon-reload，不触发服务重启。 |
 | `docker_logrotate_configs` | `[]` | Docker 容器的日志轮转由 `daemon.json` 的 `json-file` `max-size`/`max-file` 负责；legacy 备份产物轮转已随 `unified-backup` 退役，故默认不再声明 fragment。 |
 | `docker_state` | `present` | 角色终态声明。`present` 安装并配置 Docker；`absent` 执行安全退役卸载。 |
 | `docker_retirement_require_no_running_containers` | `true` | 退役前置条件：若存在运行中的容器则阻断卸载。 |

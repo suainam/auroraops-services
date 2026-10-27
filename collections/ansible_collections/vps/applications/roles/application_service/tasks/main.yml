@@ -16,3 +16,8 @@
     service_environment: "{{ app_service_environment | default(application_service_environment | default({})) }}"
     service_state: "{{ app_service_state | default(application_service_state | default('started')) }}"
     service_enabled: "{{ app_service_enabled | default(application_service_enabled | default(true)) }}"
+    service_nice: "{{ app_service_nice | default(application_service_nice | default('')) }}"
+    service_cpu_weight: "{{ app_service_cpu_weight | default(application_service_cpu_weight | default('')) }}"
+    service_io_weight: "{{ app_service_io_weight | default(application_service_io_weight | default('')) }}"
+    service_ioscheduling_class: "{{ app_service_ioscheduling_class | default(application_service_ioscheduling_class | default('')) }}"
+    service_ioscheduling_priority: "{{ app_service_ioscheduling_priority | default(application_service_ioscheduling_priority | default('')) }}"

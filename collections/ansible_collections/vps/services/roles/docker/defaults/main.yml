@@ -50,6 +50,7 @@ docker__daemon_options:
     }}
 
 # Docker lifecycle state: 'present' (default) or 'absent' (opt-in retirement)
+
 docker_state: present
 
 # Docker retirement preflight and safety controls
@@ -82,3 +83,9 @@ docker_retirement_allowed_removal_packages:
 # Recovery baseline fact path
 docker_retirement_fact_path: /etc/ansible/facts.d/docker_retirement.fact
 docker_retirement_preserve_data: true
+
+# Systemd priority drop-ins for Docker engine units (docker, containerd, ...).
+# Empty map = no drop-ins written. Each key is a unit name; values are unit
+# directives (nice, cpu_weight, io_weight, timeout_stop_sec). Applied to
+# <unit>.service.d/priority.conf with daemon-reload only (no service restart).
+docker_systemd_priority: {}
