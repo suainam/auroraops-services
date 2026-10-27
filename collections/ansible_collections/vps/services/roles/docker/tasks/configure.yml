@@ -44,3 +44,46 @@
 - name: Configure Docker and Backup logrotate
   ansible.builtin.import_tasks: logrotate.yml
   tags: [deploy, services, docker, logrotate, phase3]
+
+- name: Apply systemd priority drop-ins for Docker engine units
+  become: true
+  block:
+    - name: Ensure Docker engine unit drop-in directory exists
+      ansible.builtin.file:
+        path: "/etc/systemd/system/{{ item.key }}.service.d"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop: "{{ docker_systemd_priority | dict2items }}"
+
+    - name: Render Docker engine systemd priority drop-in
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/{{ item.key }}.service.d/priority.conf"
+        content: |
+          [Service]
+          # Managed by AuroraOps: vps.services.docker
+          {% if item.value.nice is defined and item.value.nice != None %}
+          Nice={{ item.value.nice }}
+          {% endif %}
+          {% if item.value.cpu_weight is defined and item.value.cpu_weight %}
+          CPUWeight={{ item.value.cpu_weight }}
+          {% endif %}
+          {% if item.value.io_weight is defined and item.value.io_weight %}
+          IOWeight={{ item.value.io_weight }}
+          {% endif %}
+          {% if item.value.timeout_stop_sec is defined and item.value.timeout_stop_sec %}
+          TimeoutStopSec={{ item.value.timeout_stop_sec }}
+          {% endif %}
+        owner: root
+        group: root
+        mode: '0644'
+      loop: "{{ docker_systemd_priority | dict2items }}"
+      register: _docker_priority_dropins
+
+    - name: Reload systemd to pick up Docker priority drop-ins
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: _docker_priority_dropins.changed
+  when: docker_systemd_priority | length > 0
+  tags: [deploy, services, docker, docker_config, phase3]
