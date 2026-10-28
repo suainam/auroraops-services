@@ -239,6 +239,7 @@
           MAGPIE_ADDR: "0.0.0.0:3425"
           MAGPIE_WEB_ADDR: "0.0.0.0:3430"
           MAGPIE_WEB_KEY: "{{ docker_apps_magpie_web_key | default(omit) }}"
+          GOMEMLIMIT: "{{ docker_apps_magpie_gomemlimit }}"
         cdp_healthcheck:
           test: ["CMD", "/magpie", "healthcheck"]
           interval: 1800s
