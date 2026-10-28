@@ -78,7 +78,7 @@ docker_apps_magpie_memory_reservation: "{{ magpie_memory_reservation | default('
 docker_apps_magpie_cpus: "{{ magpie_cpus | default('1.0') }}"
 docker_apps_magpie_web_key: "{{ vault_magpie_web_key | default(omit) }}"
 docker_apps_magpie_data_dir: "{{ backup_source_docker_dir | default('/opt/dockers') }}/magpie"
-docker_apps_magpie_gomemlimit: "{{ magpie_gomemlimit | default('384m') }}"
+docker_apps_magpie_gomemlimit: "{{ magpie_gomemlimit | default('384MiB') }}"
 
 # ai-memory shared primary (WireGuard-only). Image contract read from pinned image.
 docker_apps_ai_memory_enabled: false
