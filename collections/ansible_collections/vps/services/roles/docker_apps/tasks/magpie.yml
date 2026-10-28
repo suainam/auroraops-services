@@ -1,4 +1,14 @@
 ---
+- name: Validate magpie GOMEMLIMIT conforms to Go runtime specification
+  ansible.builtin.assert:
+    that:
+      - docker_apps_magpie_gomemlimit is match('^[0-9]+([KMGTkmgt]i?B|B)?$')
+    fail_msg: >-
+      Invalid GOMEMLIMIT '{{ docker_apps_magpie_gomemlimit }}'.
+      Go runtime requires units: B, KiB, MiB, GiB, TiB (e.g. 384MiB).
+      Do NOT use Docker-style '384m' or '1g'.
+  when: docker_apps_magpie_gomemlimit | default('') | length > 0
+  tags: [deploy, check, services, docker_apps, magpie, phase5]
 - name: Ensure magpie host directories
   become: true
   ansible.builtin.file:
