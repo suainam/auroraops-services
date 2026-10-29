@@ -73,10 +73,9 @@
     - ds2api
     - phase5
     - vertex
-- name: 验证 Docker 应用程序容器状态 (单个)
-  become: true
   community.docker.docker_container_info:
     name: "{{ docker_apps_container_names[verify_docker_app_name] | default(verify_docker_app_name) }}"
+    docker_host: "{{ docker_host | default(omit) }}"
   register: docker_apps_container_info
   failed_when: >-
     (docker_apps_container_info.exists is defined and not docker_apps_container_info.exists)
@@ -1457,10 +1456,9 @@
   tags: [verify, services, docker_apps, hy_memory]
 
 
-- name: 验证 Docker 应用程序容器状态 (批量)
-  become: true
   community.docker.docker_container_info:
     name: "{{ docker_apps_container_names[item] }}"
+    docker_host: "{{ docker_host | default(omit) }}"
   register: docker_apps_container_info
   failed_when: >-
     not docker_apps_container_info.exists
