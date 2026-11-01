@@ -184,6 +184,7 @@
       workbuddy2api: true
       magpie: true
       ai_memory: true
+      peach: true
   tags:
     - verify
     - services
@@ -193,6 +194,7 @@
     - phase5
     - vertex
     - ai_memory
+    - peach
 
 - name: Verify gcli2api is bound to loopback
   ansible.builtin.assert:
