@@ -37,13 +37,6 @@
   - DOMAIN-SUFFIX,paypal.com,🏦 金融与交易所
   - DOMAIN-SUFFIX,stripe.com,🏦 金融与交易所
 
-  # Apple ID 低价区账号注册与支付精确拦截（免开全局）
-  - DOMAIN,appleid.apple.com,🍎 Apple 低价区
-  - DOMAIN,gsa.apple.com,🍎 Apple 低价区
-  - DOMAIN,idmsa.apple.com,🍎 Apple 低价区
-  - DOMAIN-SUFFIX,buy.itunes.apple.com,🍎 Apple 低价区
-  - DOMAIN-SUFFIX,itunes.apple.com,🍎 Apple 低价区
-
   # 明确 AI 服务
   - GEOSITE,category-ai-!cn,🤖 AI 服务
   - DOMAIN-SUFFIX,googleapis.com,🤖 AI 服务

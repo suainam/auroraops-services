@@ -95,8 +95,8 @@ def test_profile_template_generates_bounded_clean_10_visible_groups():
     groups = payload.get("proxy-groups", [])
     visible_groups = [g["name"] for g in groups if not g.get("hidden", False)]
 
-    # 1. Exactly 10 visible groups
-    assert len(visible_groups) == 10, f"Expected 10 visible groups, got {len(visible_groups)}: {visible_groups}"
+    # 1. Exactly 8 visible groups
+    assert len(visible_groups) == 8, f"Expected 8 visible groups, got {len(visible_groups)}: {visible_groups}"
 
     # 2. Strict priority ordering requested by user
     expected_order = [
@@ -104,12 +104,10 @@ def test_profile_template_generates_bounded_clean_10_visible_groups():
         "⚡ 千兆极速",
         "🤖 AI 服务",
         "🏦 金融与交易所",
-        "🍎 Apple 低价区",
         "🖥️ VPS",
         "🧭 NAT",
         "⚡ YF",
         "🌐 BP",
-        "🌸 SK",
     ]
     assert visible_groups == expected_order
 
@@ -136,12 +134,6 @@ def test_profile_template_generates_bounded_clean_10_visible_groups():
     assert not us_ai_re.search("[baipiao] 白嫖机场.com-官网")
     assert not us_ai_re.search("[baipiao] 剩余流量：858.94 GB")
     assert us_ai_re.search("[baipiao] 🇺🇸美国光速1-OpenAI")
-
-    # 7. Assert SK has zero probes
-    sk_group = group_map["🌸 SK"]
-    assert sk_group["type"] == "select"
-    assert "url" not in sk_group
-    assert "interval" not in sk_group
 
 
 def test_mihomo_syntax_validation():

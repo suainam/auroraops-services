@@ -1195,7 +1195,6 @@
             '⚡ 千兆极速',
             '⚡ 国际流媒体',
             '🏦 金融与交易所',
-            '🍎 Apple 低价区'
           ]
           | difference(
               docker_apps_sub_store_capability_profile_payload['proxy-groups']
