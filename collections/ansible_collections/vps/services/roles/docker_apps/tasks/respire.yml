@@ -1,0 +1,165 @@
+---
+# Respire Runtime Sidecar 部署任务
+# 反向附加到 Magpie 容器网络命名空间 (network_mode: container:<magpie_id>)
+# 不暴露宿主端口，仅供 Magpie 插件通过 127.0.0.1:15169 内部回环访问
+
+- name: Probe target magpie container for respire attachment
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ docker_apps_container_name | default('magpie') }}"
+  register: _magpie_target_info
+  tags: [deploy, services, docker_apps, respire, phase5]
+
+- name: Assert active magpie container is present and running
+  ansible.builtin.assert:
+    that:
+      - _magpie_target_info.exists | default(false)
+      - _magpie_target_info.container.State.Running | default(false)
+    fail_msg: >-
+      Magpie container '{{ docker_apps_container_name | default('magpie') }}' must be running
+      before respire sidecar can attach to its network namespace.
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, respire, phase5]
+
+- name: Ensure respire host data and build directories
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - "{{ docker_apps_respire_data_dir }}"
+    - "{{ docker_apps_respire_data_dir | dirname }}/build"
+  tags: [deploy, services, docker_apps, respire, phase5]
+
+- name: Copy respire Dockerfile to host build directory
+  become: true
+  ansible.builtin.copy:
+    src: respire/Dockerfile
+    dest: "{{ docker_apps_respire_data_dir | dirname }}/build/Dockerfile"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - docker_apps_respire_build | default(true) | bool
+    - not ansible_check_mode
+  tags: [deploy, services, docker_apps, respire, phase5]
+
+- name: Build pinned respire runtime image
+  become: true
+  community.docker.docker_image_build:
+    name: "{{ docker_apps_respire_image }}"
+    path: "{{ docker_apps_respire_data_dir | dirname }}/build"
+    args:
+      RSRS_CLI_VERSION: "{{ docker_apps_respire_cli_version }}"
+  when:
+    - docker_apps_respire_build | default(true) | bool
+    - not ansible_check_mode
+  tags: [deploy, services, docker_apps, respire, phase5]
+
+- name: Probe existing respire container
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ docker_apps_respire_container_name | default('respire') }}"
+  register: _respire_current_info
+  tags: [deploy, services, docker_apps, respire, phase5]
+
+- name: Determine if respire requires recreation due to network binding drift
+  ansible.builtin.set_fact:
+    _respire_binding_drift: >-
+      {{
+        _respire_current_info.exists
+        and (_magpie_target_info.exists | default(false))
+        and (_respire_current_info.container.HostConfig.NetworkMode not in [
+          'container:' ~ _magpie_target_info.container.Id,
+          'container:' ~ (docker_apps_container_name | default('magpie'))
+        ])
+      }}
+  tags: [deploy, services, docker_apps, respire, phase5]
+
+- name: Stop and remove stale respire container before network rebind
+  become: true
+  community.docker.docker_container:
+    name: "{{ docker_apps_respire_container_name | default('respire') }}"
+    state: absent
+  when:
+    - not ansible_check_mode
+    - _respire_binding_drift | bool
+  tags: [deploy, services, docker_apps, respire, phase5]
+
+- name: Deploy and start respire runtime container attached to magpie
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+  vars:
+    cdp_name: "{{ docker_apps_respire_container_name | default('respire') }}"
+    cdp_image: "{{ docker_apps_respire_image }}"
+    cdp_pull: false
+    cdp_network_mode: "container:{{ _magpie_target_info.container.Id if not ansible_check_mode else 'container:magpie' }}"
+    cdp_command:
+      - "--runtime-internal"
+      - "--host"
+      - "127.0.0.1"
+      - "--port"
+      - "{{ docker_apps_respire_internal_port | string }}"
+      - "--no-open"
+    cdp_volumes:
+      - "{{ docker_apps_respire_data_dir }}:/data"
+    cdp_env:
+      HOME: /data
+      RSRS_DATA_DIR: /data
+    cdp_restart_policy: unless-stopped
+    cdp_memory: "{{ docker_apps_respire_memory | default('512m') }}"
+    cdp_memory_reservation: "{{ docker_apps_respire_memory_reservation | default('128m') }}"
+    cdp_cpus: "{{ docker_apps_respire_cpus | default('1.0') }}"
+  tags: [deploy, services, docker_apps, respire, phase5]
+
+- name: Wait for respire runtime RPC endpoint to answer via container loopback
+  become: true
+  ansible.builtin.command:
+    cmd: >-
+      docker exec {{ docker_apps_respire_container_name | default('respire') }}
+      node -e "fetch('http://127.0.0.1:{{ docker_apps_respire_internal_port }}/api/health').then(async r => { if (!r.ok) process.exit(1); const d = await r.json(); if (d.server !== 'respire') process.exit(2); })"
+  register: _respire_health_probe
+  until: _respire_health_probe.rc == 0
+  retries: 15
+  delay: 2
+  changed_when: false
+  when:
+    - not ansible_check_mode
+  tags: [deploy, services, docker_apps, respire, phase5]
+
+- name: Enforce Magpie respire-memory plugin hook enable/disable state
+  become: true
+  ansible.builtin.shell:
+    cmd: |
+      python3 -c "
+      import json, os
+      p = '{{ docker_apps_magpie_data_dir }}/config/magpie/plugins.json'
+      if not os.path.exists(p):
+          exit(0)
+      with open(p, 'r') as f:
+          data = json.load(f)
+      changed = False
+      for pl in data.get('plugins', []):
+          if '@magpie-community/gateway-respire-memory' in pl.get('spec', ''):
+              target_off = {{ 'false' if (docker_apps_respire_hook_enabled | bool) else 'true' }}
+              if pl.get('off') != target_off:
+                  pl['off'] = target_off
+                  changed = True
+              opts = pl.setdefault('options', {})
+              target_archive = {{ 'true' if (docker_apps_respire_archive_enabled | bool) else 'false' }}
+              if opts.get('archive') != target_archive:
+                  opts['archive'] = target_archive
+                  changed = True
+      if changed:
+          with open(p, 'w') as f:
+              json.dump(data, f, indent=2)
+          print('PLUGINS_UPDATED')
+      "
+  register: _respire_plugin_config_result
+  changed_when: "'PLUGINS_UPDATED' in _respire_plugin_config_result.stdout"
+  when:
+    - not ansible_check_mode
+  tags: [deploy, services, docker_apps, respire, phase5]

@@ -191,6 +191,17 @@
     - magpie_checkpoint.snapshot_path | length > 0
   tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
 
+- name: 移除已绑定的 Respire 容器以备 Magpie 回滚
+  become: true
+  community.docker.docker_container:
+    name: "{{ docker_apps_respire_container_name | default('respire') }}"
+    state: absent
+    docker_host: "{{ docker_host | default(omit) }}"
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - docker_apps_respire_enabled | default(false) | bool
+  tags: [rollback, services, docker_apps, magpie, respire, phase5]
+
 - name: 停止当前升级中的 Magpie 容器以备原子替换
   become: true
   community.docker.docker_container:
@@ -316,6 +327,22 @@
     - ((rollback_mode | default('')) in ['downgrade', 'existing_service']) or (magpie_checkpoint.mode | default('') == 'existing_service')
     - not (_magpie_preserved_baseline_info.exists | default(false))
   tags: [rollback, services, docker_apps, docker_apps_manifest, magpie, phase5]
+
+- name: 重新将 Respire 容器附加至回滚后的 Magpie 网络命名空间
+  ansible.builtin.include_tasks: respire.yml
+  when:
+    - rollback_docker_app_name | default('') == 'magpie'
+    - docker_apps_respire_enabled | default(false) | bool
+  tags: [rollback, services, docker_apps, magpie, respire, phase5]
+
+- name: 回滚 Respire 容器 (仅移除容器实例，保留 /opt/dockers/respire/data 数据)
+  become: true
+  community.docker.docker_container:
+    name: "{{ docker_apps_respire_container_name | default('respire') }}"
+    state: absent
+    docker_host: "{{ docker_host | default(omit) }}"
+  when: rollback_docker_app_name | default('') == 'respire'
+  tags: [rollback, services, docker_apps, respire, phase5]
 
 - name: 解压 WorkBuddy2API 快照至隔离预备目录进行解压与数据安全校验
   become: true

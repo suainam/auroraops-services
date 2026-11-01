@@ -80,6 +80,20 @@ docker_apps_magpie_web_key: "{{ vault_magpie_web_key | default(omit) }}"
 docker_apps_magpie_data_dir: "{{ backup_source_docker_dir | default('/opt/dockers') }}/magpie"
 docker_apps_magpie_gomemlimit: "{{ magpie_gomemlimit | default('384MiB') }}"
 
+# Respire Runtime Sidecar (container:magpie network namespace)
+docker_apps_respire_enabled: false
+docker_apps_respire_container_name: "respire"
+docker_apps_respire_cli_version: "{{ respire_cli_version | default('1.0.19') }}"
+docker_apps_respire_image: "{{ respire_image | default('respire:' ~ (respire_cli_version | default('1.0.19'))) }}"
+docker_apps_respire_build: true
+docker_apps_respire_memory: "{{ respire_memory | default('512m') }}"
+docker_apps_respire_memory_reservation: "{{ respire_memory_reservation | default('128m') }}"
+docker_apps_respire_cpus: "{{ respire_cpus | default('1.0') }}"
+docker_apps_respire_data_dir: "{{ backup_source_docker_dir | default('/opt/dockers') }}/respire/data"
+docker_apps_respire_internal_port: "{{ app_port_respire_internal | default(15169) }}"
+docker_apps_respire_hook_enabled: false
+docker_apps_respire_archive_enabled: false
+
 # ai-memory shared primary (WireGuard-only). Image contract read from pinned image.
 docker_apps_ai_memory_enabled: false
 docker_apps_ai_memory_pull: false
