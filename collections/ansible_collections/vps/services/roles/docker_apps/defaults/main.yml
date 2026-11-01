@@ -357,3 +357,13 @@ docker_apps_shellcrash_config_source: >-
 docker_apps_opcotoai_toolkit_repo_url: >-
   {{ opcotoai_toolkit_repo_url | default('https://github.com/lhq1363511234/opctoai-toolkit.git') }}
 docker_apps_opcotoai_toolkit_version: "{{ opcotoai_toolkit_version | default('main') }}"
+
+# Peach (Adult Media Library)
+docker_apps_peach_image: "{{ peach_image | default('longmeidao/peach:0.52.0') }}"
+docker_apps_peach_bind_host: "{{ peach_bind_host | default('0.0.0.0') }}"
+docker_apps_peach_port: "{{ app_port_peach | default(8900) }}"
+docker_apps_peach_data_dir: "{{ peach_data_dir | default('/vol1/docker/peach/data') }}"
+docker_apps_peach_media_dir: "{{ peach_media_dir | default('/vol1/1000/medias') }}"
+docker_apps_peach_memory: "{{ peach_memory | default('2g') }}"
+docker_apps_peach_pull: "{{ peach_pull | default(false) }}"
+docker_apps_peach_rust_log: "{{ peach_rust_log | default('info') }}"

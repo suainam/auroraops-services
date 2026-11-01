@@ -1,0 +1,27 @@
+---
+# Peach (Adult Media Library) - 使用 container_deployer Meta 角色部署
+- name: Ensure Peach persistent data directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ docker_apps_peach_data_dir }}"
+    state: directory
+    mode: "0755"
+  tags: [deploy, services, docker_apps, peach, phase5]
+
+- name: Deploy Peach
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+  vars:
+    cdp_name: "peach"
+    cdp_image: "{{ docker_apps_peach_image }}"
+    cdp_pull: "{{ docker_apps_peach_pull | bool }}"
+    cdp_ports:
+      - "{{ docker_apps_peach_bind_host }}:{{ docker_apps_peach_port }}:8900"
+    cdp_volumes:
+      - "{{ docker_apps_peach_data_dir }}:/data:rw"
+      - "{{ docker_apps_peach_media_dir }}:/media:ro,rslave"
+    cdp_env:
+      RUST_LOG: "{{ docker_apps_peach_rust_log | default('info') }}"
+    cdp_memory: "{{ docker_apps_peach_memory | default('2g') }}"
+    cdp_restart_policy: "unless-stopped"
+  tags: [deploy, services, docker_apps, peach, phase5]
