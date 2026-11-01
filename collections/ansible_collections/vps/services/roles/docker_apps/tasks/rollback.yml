@@ -511,6 +511,7 @@
     - workbuddy2api
     - magpie
     - ai_memory
+    - peach
     - phase5
 
 - name: Stop and disable Hy-Memory systemd unit

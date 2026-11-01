@@ -41,7 +41,7 @@ proxies: []
 proxy-groups:
   - name: "🚀 默认代理"
     type: select
-    proxies: ["⚡ 千兆极速", "💰 低倍率走廊", DIRECT]
+    proxies: ["⚡ 千兆极速", "💰 低倍率走廊", "🤖 AI 服务", "🖥️ VPS", "🧭 NAT", DIRECT]
   - name: "⚡ 千兆极速"
     type: select
     proxies: ["⚡ 自动优选", "🇭🇰 HK · 极速", "🇹🇼 TW · 极速", "🇯🇵 JP · 极速", "🇸🇬 SG · 极速", "🇺🇸 US · 极速", DIRECT]
@@ -51,10 +51,6 @@ proxy-groups:
   - name: "🏦 金融与交易所"
     type: select
     proxies: ["🇹🇼 TW · 金融", "🇭🇰 HK · 金融", "🇺🇸 US · 金融", "🇯🇵 JP · 金融", "🇸🇬 SG · 金融", "🌐 紧急专线逃生通道"]
-  - name: "🍎 Apple 低价区"
-    type: select
-    proxies: ["DIRECT", "🇹🇷 TR", "🇳🇬 NG", "🇦🇷 AR", "🇮🇳 IN", "🇷🇺 RU", "🇯🇵 JP · 极速", "🌸 SK"]
-
   # 5 大实体池
   - name: "🖥️ VPS"
     type: select
@@ -72,11 +68,6 @@ proxy-groups:
     type: select
     use: {{ general_airport_src.items | to_json }}
     filter: "(?i)\\[BP\\]"
-  - name: "🌸 SK"
-    type: select
-    use: {{ all_airport_src.items | to_json }}
-    filter: "(?i)^(?!.*(?:剩余流量|套餐到期)).*\\[SK\\]"
-
   - name: "💰 低倍率走廊"
     type: select
     use: {{ general_airport_src.items | to_json }}
@@ -115,7 +106,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 千兆"
     type: fallback
     use: {{ (vps_src.items + nat_src.items + general_airport_src.items) | to_json }}
-    filter: "(?i)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*千兆"
+    filter: "(?i)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*(千兆|1000M|光速|超高速)"
     url: {{ test_url }}
     interval: 180
     lazy: true
@@ -150,7 +141,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 机场AI"
     type: fallback
     use: {{ general_airport_src.items | to_json }}
-    filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*AI"
+    filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*(?<![a-zA-Z])(AI|GPT|Gemini|OpenAI|Claude)"
     url: {{ ai_url }}
     interval: 180
     timeout: 5000
@@ -173,20 +164,6 @@ proxy-groups:
     lazy: true
     hidden: true
 
-  # Apple 特种低价区 (纯中文地名+专属Emoji匹配，负向断言防 Gemini/Trojan 误伤)
-{% for c, f, kw in [
-  ('TR','🇹🇷','土耳其|🇹🇷'),
-  ('NG','🇳🇬','尼日利亚|🇳🇬'),
-  ('AR','🇦🇷','阿根廷|🇦🇷'),
-  ('IN','🇮🇳','(?<![a-zA-Z])印度(?!尼西亚)|🇮🇳'),
-  ('RU','🇷🇺','俄罗斯|莫斯科|🇷🇺')
-] %}
-  - name: "{{ f }} {{ c }}"
-    type: select
-    use: {{ all_airport_src.items | to_json }}
-    filter: "(?i)^(?!.*(?:去油管广告|剩余流量|套餐到期)).*({{ kw }})"
-    hidden: true
-{% endfor %}
   - name: "🇭🇰 港澳"
     type: url-test
     use: {{ general_airport_src.items | to_json }}

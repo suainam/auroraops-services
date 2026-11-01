@@ -57,6 +57,7 @@
       workbuddy2api: workbuddy2api
       magpie: magpie
       ai_memory: ai-memory
+      peach: peach
       # hy_memory 是 systemd 服务，没有同名容器；docker_apps_containers 里的条目只作开关。
   tags:
     - verify
@@ -183,6 +184,7 @@
       workbuddy2api: true
       magpie: true
       ai_memory: true
+      peach: true
   tags:
     - verify
     - services
@@ -192,6 +194,7 @@
     - phase5
     - vertex
     - ai_memory
+    - peach
 
 - name: Verify gcli2api is bound to loopback
   ansible.builtin.assert:
@@ -470,6 +473,43 @@
     return_content: false
   when: verify_docker_app_name | default('') == 'ai_memory'
   tags: [verify, services, docker_apps, ai_memory, phase5]
+
+- name: Verify Peach container health endpoint
+  ansible.builtin.uri:
+    url: "http://{{ '127.0.0.1' if docker_apps_peach_bind_host in ['0.0.0.0', ''] else docker_apps_peach_bind_host }}:{{ docker_apps_peach_port }}/healthz?ready=1"
+    method: GET
+    status_code: 200
+  register: docker_apps_peach_health_check
+  retries: 5
+  delay: 3
+  until: docker_apps_peach_health_check.status == 200
+  when: verify_docker_app_name | default('') == 'peach'
+  tags: [verify, services, docker_apps, peach, phase5]
+
+- name: Validate Peach health status response
+  ansible.builtin.assert:
+    that:
+      - (docker_apps_peach_health_check.json | default({})).ready | default(false) | bool
+    fail_msg: "Peach /healthz did not report ready=true"
+  when: verify_docker_app_name | default('') == 'peach'
+  tags: [verify, services, docker_apps, peach, phase5]
+
+- name: Verify Peach data directory exists
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_apps_peach_data_dir }}"
+  register: docker_apps_peach_data_stat
+  when: verify_docker_app_name | default('') == 'peach'
+  tags: [verify, services, docker_apps, peach, phase5]
+
+- name: Validate Peach data directory exists as a directory
+  ansible.builtin.assert:
+    that:
+      - docker_apps_peach_data_stat.stat.exists
+      - docker_apps_peach_data_stat.stat.isdir
+    fail_msg: "Peach data directory {{ docker_apps_peach_data_dir }} must exist as a directory"
+  when: verify_docker_app_name | default('') == 'peach'
+  tags: [verify, services, docker_apps, peach, phase5]
 
 - name: Verify vaultwarden is bound to loopback
   ansible.builtin.assert:
@@ -1155,7 +1195,6 @@
             '⚡ 千兆极速',
             '⚡ 国际流媒体',
             '🏦 金融与交易所',
-            '🍎 Apple 低价区'
           ]
           | difference(
               docker_apps_sub_store_capability_profile_payload['proxy-groups']

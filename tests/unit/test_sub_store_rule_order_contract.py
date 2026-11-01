@@ -332,7 +332,6 @@ def test_capability_profile_renders_offline_rules_and_group_contract():
         "⚡ 千兆极速",
         "🤖 AI 服务",
         "🏦 金融与交易所",
-        "🍎 Apple 低价区",
         "⚡ 快速节点",
         "🇭🇰 港澳",
         "⚡ 国际流媒体",
