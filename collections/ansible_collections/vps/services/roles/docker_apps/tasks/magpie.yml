@@ -276,6 +276,9 @@
       when: not ansible_check_mode
 
     - name: Deploy and bind respire container to newly deployed magpie
+      when:
+        - docker_apps_respire_enabled | default(false) | bool
+      tags: [deploy, services, docker_apps, magpie, respire, phase5]
       block:
         - name: Include respire sidecar deployment task
           ansible.builtin.include_tasks: respire.yml
@@ -283,9 +286,6 @@
         - name: Warn on respire sidecar deployment failure without degrading magpie
           ansible.builtin.debug:
             msg: "Respire sidecar deployment failed; Magpie primary gateway remains active"
-      when:
-        - docker_apps_respire_enabled | default(false) | bool
-      tags: [deploy, services, docker_apps, magpie, respire, phase5]
   rescue:
     - name: Remove partially deployed magpie container after deploy failure
       community.docker.docker_container:

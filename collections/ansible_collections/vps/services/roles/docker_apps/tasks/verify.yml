@@ -445,16 +445,16 @@
   become: true
   community.docker.docker_container_info:
     name: "{{ docker_apps_container_name | default('magpie') }}"
-  register: _magpie_verify_target_info
+  register: docker_apps_magpie_verify_target_info
   when: verify_docker_app_name | default('') == 'respire'
   tags: [verify, services, docker_apps, respire, phase5]
 
 - name: Assert respire attaches to running magpie container network namespace
   ansible.builtin.assert:
     that:
-      - _magpie_verify_target_info.exists
+      - docker_apps_magpie_verify_target_info.exists
       - docker_apps_container_info.container.HostConfig.NetworkMode in [
-          'container:' ~ _magpie_verify_target_info.container.Id,
+          'container:' ~ docker_apps_magpie_verify_target_info.container.Id,
           'container:' ~ (docker_apps_container_name | default('magpie'))
         ]
     fail_msg: "respire must attach to the network namespace of the active magpie container"
@@ -466,18 +466,20 @@
   ansible.builtin.command:
     cmd: >-
       docker exec {{ docker_apps_respire_container_name | default('respire') }}
-      node -e "fetch('http://127.0.0.1:{{ docker_apps_respire_internal_port }}/api/health').then(async r => { if (!r.ok) process.exit(1); const d = await r.json(); console.log(JSON.stringify(d)); })"
-  register: _respire_health_verify
+      node -e "fetch('http://127.0.0.1:{{ docker_apps_respire_internal_port }}/api/health').then(async r => {
+      if (!r.ok) process.exit(1); const d = await r.json(); console.log(JSON.stringify(d)); })"
+  register: docker_apps_respire_health_verify
   changed_when: false
   when:
     - verify_docker_app_name | default('') == 'respire'
     - not ansible_check_mode
   tags: [verify, services, docker_apps, respire, phase5]
+
 - name: Assert respire health response contains server metadata
   ansible.builtin.assert:
     that:
-      - (_respire_health_verify.stdout | from_json).server == 'respire'
-      - (_respire_health_verify.stdout | from_json).v == 1
+      - (docker_apps_respire_health_verify.stdout | from_json).server == 'respire'
+      - (docker_apps_respire_health_verify.stdout | from_json).v == 1
     fail_msg: "respire health endpoint must return server=respire and v=1"
   when:
     - verify_docker_app_name | default('') == 'respire'
