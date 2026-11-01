@@ -22,6 +22,9 @@
       - "{{ docker_apps_peach_media_dir }}:/media:ro,rslave"
     cdp_env:
       RUST_LOG: "{{ docker_apps_peach_rust_log | default('info') }}"
+      HTTP_PROXY: "{{ docker_apps_peach_http_proxy | default('http://172.17.0.1:8118') }}"
+      HTTPS_PROXY: "{{ docker_apps_peach_https_proxy | default('http://172.17.0.1:8118') }}"
+      NO_PROXY: "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8"
     cdp_memory: "{{ docker_apps_peach_memory | default('2g') }}"
     cdp_restart_policy: "unless-stopped"
   tags: [deploy, services, docker_apps, peach, phase5]
