@@ -10,12 +10,14 @@ mihomo_native_enabled: "{{ auroraops_roles['services']['mihomo_native'] | defaul
 mihomo_native_version: "v1.19.31"
 mihomo_native_arch: >-
   {{ 'arm64' if (ansible_facts | default({})).get('architecture', ansible_architecture | default('')) in ['aarch64', 'arm64'] else
+     'x86_64' if (ansible_facts | default({})).get('architecture', ansible_architecture | default('')) in ['x86_64', 'amd64'] else
      (ansible_facts | default({})).get('architecture', ansible_architecture | default('')) }}
 mihomo_native_binary_filename: "mihomo-linux-{{ mihomo_native_arch }}-{{ mihomo_native_version }}.gz"
 mihomo_native_binary_url: >-
   https://github.com/MetaCubeX/mihomo/releases/download/{{ mihomo_native_version }}/{{ mihomo_native_binary_filename }}
 mihomo_native_checksums:
   arm64: "sha256:9e0f11afbf38426b8bd88fdc594678f8161c57eccb4e1b77acb12b493904f1d4"
+  x86_64: "sha256:0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
 mihomo_native_checksum: "{{ mihomo_native_checksums[mihomo_native_arch] | default('') }}"
 mihomo_native_expected_sha256: >-
   {{ mihomo_native_checksum.split(':')[-1] if ':' in mihomo_native_checksum else mihomo_native_checksum }}

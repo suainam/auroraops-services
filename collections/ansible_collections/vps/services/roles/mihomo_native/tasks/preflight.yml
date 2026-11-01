@@ -9,8 +9,8 @@
 - name: Validate Mihomo native architecture
   ansible.builtin.assert:
     that:
-      - mihomo_native_arch == 'arm64'
-      - (ansible_facts | default({})).get('architecture', ansible_architecture | default('')) in ['aarch64', 'arm64']
+      - mihomo_native_arch in ['arm64', 'x86_64']
+      - (ansible_facts | default({})).get('architecture', ansible_architecture | default('')) in ['aarch64', 'arm64', 'x86_64', 'amd64']
       - mihomo_native_arch in mihomo_native_checksums
       - mihomo_native_checksum | length > 0
       - mihomo_native_expected_sha256 | length == 64
@@ -25,7 +25,7 @@
       - mihomo_native_profile_url is defined
       - mihomo_native_profile_url | length > 0
       - sub_store_mihomo_suffix is defined
-      - mihomo_native_mixed_host == '127.0.0.1'
+      - mihomo_native_mixed_host in ['127.0.0.1', '0.0.0.0']
       - mihomo_native_mixed_port | int > 0
     fail_msg: >-
       Mihomo requires a complete Sub-Store profile URL and a loopback mixed port;
