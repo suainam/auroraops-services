@@ -41,7 +41,7 @@ proxies: []
 proxy-groups:
   - name: "🚀 默认代理"
     type: select
-    proxies: ["⚡ 千兆极速", "💰 低倍率走廊", DIRECT]
+    proxies: ["⚡ 千兆极速", "💰 低倍率走廊", "🤖 AI 服务", "🖥️ VPS", "🧭 NAT", DIRECT]
   - name: "⚡ 千兆极速"
     type: select
     proxies: ["⚡ 自动优选", "🇭🇰 HK · 极速", "🇹🇼 TW · 极速", "🇯🇵 JP · 极速", "🇸🇬 SG · 极速", "🇺🇸 US · 极速", DIRECT]
@@ -106,7 +106,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 千兆"
     type: fallback
     use: {{ (vps_src.items + nat_src.items + general_airport_src.items) | to_json }}
-    filter: "(?i)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*千兆"
+    filter: "(?i)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*(千兆|1000M|光速|超高速)"
     url: {{ test_url }}
     interval: 180
     lazy: true
@@ -141,7 +141,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 机场AI"
     type: fallback
     use: {{ general_airport_src.items | to_json }}
-    filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*AI"
+    filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*(?<![a-zA-Z])(AI|GPT|Gemini|OpenAI|Claude)"
     url: {{ ai_url }}
     interval: 180
     timeout: 5000
