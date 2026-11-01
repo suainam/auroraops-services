@@ -139,8 +139,8 @@
       - https://www.cloudflare.com/cdn-cgi/trace
   changed_when: false
   register: mihomo_native_egress_probe
-  retries: 3
-  delay: 5
+  retries: 6
+  delay: 8
   until: mihomo_native_egress_probe.rc == 0
   tags: [verify, services, mihomo_native, mihomo_native_verify, phase3]
 
