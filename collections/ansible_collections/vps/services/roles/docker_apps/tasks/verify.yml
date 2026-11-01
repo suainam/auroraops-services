@@ -74,6 +74,7 @@
     - docker_apps_manifest
     - ds2api
     - phase5
+    - respire
     - vertex
 - name: 验证 Docker 应用程序容器状态 (单个)
   become: true
@@ -109,6 +110,7 @@
     - workbuddy2api
     - magpie
     - ai_memory
+    - respire
 
 - name: Verify Sing-box native service is active and enabled on systemd
   become: true
@@ -196,6 +198,7 @@
     - phase5
     - vertex
     - ai_memory
+    - respire
     - peach
 
 - name: Verify gcli2api is bound to loopback
