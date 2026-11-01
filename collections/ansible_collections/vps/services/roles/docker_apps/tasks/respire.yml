@@ -145,12 +145,12 @@
       changed = False
       for pl in data.get('plugins', []):
           if '@magpie-community/gateway-respire-memory' in pl.get('spec', ''):
-              target_off = {{ 'false' if (docker_apps_respire_hook_enabled | bool) else 'true' }}
+              target_off = {{ 'False' if (docker_apps_respire_hook_enabled | bool) else 'True' }}
               if pl.get('off') != target_off:
                   pl['off'] = target_off
                   changed = True
               opts = pl.setdefault('options', {})
-              target_archive = {{ 'true' if (docker_apps_respire_archive_enabled | bool) else 'false' }}
+              target_archive = {{ 'True' if (docker_apps_respire_archive_enabled | bool) else 'False' }}
               if opts.get('archive') != target_archive:
                   opts['archive'] = target_archive
                   changed = True
