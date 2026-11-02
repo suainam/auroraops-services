@@ -1,5 +1,19 @@
 ---
 # RSSHub (RSS Feed Generator) - 使用 container_deployer Meta 角色部署
+- name: Ensure RSSHub patches directory exists
+  ansible.builtin.file:
+    path: "/opt/dockers/rsshub/patches"
+    state: directory
+    mode: "0755"
+  tags: [deploy, services, docker_apps, rsshub, phase5]
+
+- name: Copy Science route patch to host
+  ansible.builtin.copy:
+    src: "rsshub/science-current-1cpBXq_6.mjs"
+    dest: "/opt/dockers/rsshub/patches/science-current-1cpBXq_6.mjs"
+    mode: "0644"
+  tags: [deploy, services, docker_apps, rsshub, phase5]
+
 - name: Deploy RSSHub container via container_deployer
   ansible.builtin.include_role:
     name: vps.services.container_deployer
