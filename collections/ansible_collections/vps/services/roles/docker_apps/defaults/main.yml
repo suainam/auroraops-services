@@ -97,8 +97,8 @@ docker_apps_rsshub_enabled: false
 docker_apps_rsshub_pull: false
 docker_apps_app_port_rsshub: "{{ app_port_rsshub }}"
 docker_apps_rsshub_image: "{{ rsshub_image | default('diygod/rsshub:2026-11-02@sha256:320e681f01e16563e90b7c0a466e92ae6f676142efe238ab26e1636f5fef284d') }}"
-docker_apps_rsshub_memory: "{{ rsshub_memory | default('256m') }}"
-docker_apps_rsshub_memory_reservation: "{{ rsshub_memory_reservation | default('96m') }}"
+docker_apps_rsshub_memory: "{{ rsshub_memory | default('384m') }}"
+docker_apps_rsshub_memory_reservation: "{{ rsshub_memory_reservation | default('128m') }}"
 docker_apps_rsshub_cpus: "{{ rsshub_cpus | default('0.5') }}"
 docker_apps_rsshub_cache_type: "{{ rsshub_cache_type | default('memory') }}"
 docker_apps_rsshub_cache_expire: "{{ rsshub_cache_expire | default('600') }}"
