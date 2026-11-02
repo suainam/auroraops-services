@@ -15,6 +15,8 @@
     cdp_networks: [{name: "sweb"}]
     cdp_ports:
       - "127.0.0.1:{{ docker_apps_app_port_rsshub }}:1200"
+    cdp_volumes:
+      - "/opt/dockers/rsshub/patches/science-current-1cpBXq_6.mjs:/app/dist/science-current-1cpBXq_6.mjs:ro"
     cdp_memory: "{{ docker_apps_rsshub_memory }}"
     cdp_memory_reservation: "{{ docker_apps_rsshub_memory_reservation }}"
     cdp_cpus: "{{ docker_apps_rsshub_cpus }}"
