@@ -104,6 +104,7 @@ docker_apps_rsshub_cache_type: "{{ rsshub_cache_type | default('memory') }}"
 docker_apps_rsshub_cache_expire: "{{ rsshub_cache_expire | default('600') }}"
 docker_apps_rsshub_proxy_uri: "{{ rsshub_proxy_uri | default('') }}"
 docker_apps_rsshub_proxy_url_regex: "{{ rsshub_proxy_url_regex | default('.*') }}"
+docker_apps_rsshub_twitter_auth_token: "{{ rsshub_twitter_auth_token | default('') }}"
 
 # Hy-Memory PRO (systemd 服务，非容器；`docker_apps_containers` 中的 hy_memory 仅作开关)
 docker_apps_hy_memory_data_root: >-
