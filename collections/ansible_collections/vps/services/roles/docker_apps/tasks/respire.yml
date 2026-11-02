@@ -96,7 +96,7 @@
     cdp_name: "{{ docker_apps_respire_container_name | default('respire') }}"
     cdp_image: "{{ docker_apps_respire_image }}"
     cdp_pull: false
-    cdp_network_mode: "container:{{ docker_apps_magpie_target_info.container.Id if not ansible_check_mode else 'container:magpie' }}"
+    cdp_network_mode: "container:{{ docker_apps_magpie_target_info.container.Id if not ansible_check_mode else 'magpie' }}"
     cdp_command:
       - "--runtime-internal"
       - "--host"
@@ -106,9 +106,13 @@
       - "--no-open"
     cdp_volumes:
       - "{{ docker_apps_respire_data_dir }}:/data"
-    cdp_env:
-      HOME: /data
-      RSRS_DATA_DIR: /data
+    cdp_env: >-
+      {{
+        {
+          'HOME': '/data',
+          'RSRS_DATA_DIR': '/data'
+        } | combine({'RSRS_PASS': docker_apps_respire_pass} if (docker_apps_respire_pass | default('') | length > 0) else {})
+      }}
     cdp_restart_policy: unless-stopped
     cdp_memory: "{{ docker_apps_respire_memory | default('512m') }}"
     cdp_memory_reservation: "{{ docker_apps_respire_memory_reservation | default('128m') }}"
@@ -131,12 +135,13 @@
     - not ansible_check_mode
   tags: [deploy, services, docker_apps, respire, phase5]
 
-- name: Enforce Magpie respire-memory plugin hook enable/disable state
+- name: Enforce Magpie respire-memory plugin configuration and state
   become: true
-  ansible.builtin.shell:
-    cmd: |
-      python3 -c "
-      import json, os
+  no_log: true
+  ansible.builtin.command:
+    cmd: python3 -
+    stdin: |
+      import json, os, tempfile
       p = '{{ docker_apps_magpie_data_dir }}/config/magpie/plugins.json'
       if not os.path.exists(p):
           exit(0)
@@ -154,11 +159,34 @@
               if opts.get('archive') != target_archive:
                   opts['archive'] = target_archive
                   changed = True
+              target_opts = {
+                  'authorizationEnv': {{ (docker_apps_respire_authorization_env | default('RESPIRE_MAGPIE_AUTHORIZATION')) | to_json }},
+                  'capture': True,
+                  'gatewayTimeoutMs': {{ (docker_apps_respire_gateway_timeout_ms | default(10000)) | int }},
+                  'generationBaseUrl': {{ (docker_apps_respire_generation_base_url | default('http://127.0.0.1:3425/v1')) | to_json }},
+                  'generationModel': {{ (docker_apps_respire_generation_model | default('group/group-daily')) | to_json }},
+                  'project': {{ (docker_apps_respire_project | default('')) | to_json }},
+                  'readOnly': False,
+                  'remember': True,
+                  'requestTimeoutMs': {{ (docker_apps_respire_request_timeout_ms | default(5000)) | int }},
+                  'runtimeUrl': {{ ('http://127.0.0.1:' ~ (docker_apps_respire_internal_port | default(15169) | string)) | to_json }},
+                  'showMemoryStatus': True,
+                  'stateDir': {{ (docker_apps_respire_state_dir | default('/config/magpie/respire-state')) | to_json }},
+              }
+              for k, v in target_opts.items():
+                  if opts.get(k) != v:
+                      opts[k] = v
+                      changed = True
       if changed:
-          with open(p, 'w') as f:
-              json.dump(data, f, indent=2)
+          d = os.path.dirname(p)
+          with tempfile.NamedTemporaryFile('w', dir=d, delete=False) as tf:
+              json.dump(data, tf, indent=2)
+              tmp_name = tf.name
+          st = os.stat(p)
+          os.chown(tmp_name, st.st_uid, st.st_gid)
+          os.chmod(tmp_name, st.st_mode)
+          os.replace(tmp_name, p)
           print('PLUGINS_UPDATED')
-      "
   register: docker_apps_respire_plugin_config_result
   changed_when: "'PLUGINS_UPDATED' in docker_apps_respire_plugin_config_result.stdout"
   when:

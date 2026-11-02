@@ -260,6 +260,7 @@
           MAGPIE_WEB_ADDR: "0.0.0.0:3430"
           MAGPIE_WEB_KEY: "{{ docker_apps_magpie_web_key | default(omit) }}"
           GOMEMLIMIT: "{{ docker_apps_magpie_gomemlimit }}"
+          RESPIRE_MAGPIE_AUTHORIZATION: "{{ docker_apps_respire_magpie_authorization | default(omit) }}"
         cdp_healthcheck:
           test: ["CMD", "/magpie", "healthcheck"]
           interval: 1800s
@@ -275,17 +276,6 @@
         docker_host: "{{ docker_host | default(omit) }}"
       when: not ansible_check_mode
 
-    - name: Deploy and bind respire container to newly deployed magpie
-      when:
-        - docker_apps_respire_enabled | default(false) | bool
-      tags: [deploy, services, docker_apps, magpie, respire, phase5]
-      block:
-        - name: Include respire sidecar deployment task
-          ansible.builtin.include_tasks: respire.yml
-      rescue:
-        - name: Warn on respire sidecar deployment failure without degrading magpie
-          ansible.builtin.debug:
-            msg: "Respire sidecar deployment failed; Magpie primary gateway remains active"
   rescue:
     - name: Remove partially deployed magpie container after deploy failure
       community.docker.docker_container:
@@ -324,3 +314,9 @@
       ansible.builtin.fail:
         msg: "Deploy failed: magpie container deployment failed; baseline container safely restored."
   tags: [deploy, services, docker_apps, magpie, phase5]
+
+- name: Deploy and bind respire container to newly deployed magpie
+  ansible.builtin.include_tasks: respire.yml
+  when:
+    - docker_apps_respire_enabled | default(false) | bool
+  tags: [deploy, services, docker_apps, magpie, respire, phase5]

@@ -93,6 +93,15 @@ docker_apps_respire_data_dir: "{{ backup_source_docker_dir | default('/opt/docke
 docker_apps_respire_internal_port: "{{ app_port_respire_internal | default(15169) }}"
 docker_apps_respire_hook_enabled: false
 docker_apps_respire_archive_enabled: false
+docker_apps_respire_pass: "{{ respire_pass | default(vault_respire_pass | default(omit)) }}"
+docker_apps_respire_magpie_authorization: "{{ respire_magpie_authorization | default(vault_respire_magpie_authorization | default(omit)) }}"
+docker_apps_respire_authorization_env: "RESPIRE_MAGPIE_AUTHORIZATION"
+docker_apps_respire_gateway_timeout_ms: 10000
+docker_apps_respire_request_timeout_ms: 5000
+docker_apps_respire_generation_base_url: "http://127.0.0.1:3425/v1"
+docker_apps_respire_generation_model: "group/group-daily"
+docker_apps_respire_project: ""
+docker_apps_respire_state_dir: "/config/magpie/respire-state"
 
 # ai-memory shared primary (WireGuard-only). Image contract read from pinned image.
 docker_apps_ai_memory_enabled: false
