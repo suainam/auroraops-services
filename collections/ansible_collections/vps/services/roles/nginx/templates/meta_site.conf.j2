@@ -12,11 +12,14 @@ server {
 }
 
 {# HTTPS 配置 #}
+{% set https_ports = config.listen_ports | default([nginx_https_port]) %}
 server {
-    listen {{ nginx_https_port }} ssl;
+    {% for port in https_ports %}
+    listen {{ port }} ssl;
     {% if config.ipv6 | default(false) %}
-    listen [::]:{{ nginx_https_port }} ssl;
+    listen [::]:{{ port }} ssl;
     {% endif %}
+    {% endfor %}
     {% if config.http2 | default(true) %}
     http2 on;
     {% endif %}

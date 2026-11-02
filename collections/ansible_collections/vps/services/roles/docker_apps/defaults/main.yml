@@ -92,6 +92,20 @@ docker_apps_ai_memory_uid: "{{ ai_memory_uid | default(1000) }}"
 docker_apps_ai_memory_gid: "{{ ai_memory_gid | default(999) }}"
 docker_apps_ai_memory_data_dir: "{{ backup_source_docker_dir | default('/opt/dockers') }}/ai-memory"
 
+# RSSHub
+docker_apps_rsshub_enabled: false
+docker_apps_rsshub_pull: false
+docker_apps_app_port_rsshub: "{{ app_port_rsshub }}"
+docker_apps_rsshub_image: "{{ rsshub_image | default('diygod/rsshub:2026-11-02@sha256:320e681f01e16563e90b7c0a466e92ae6f676142efe238ab26e1636f5fef284d') }}"
+docker_apps_rsshub_memory: "{{ rsshub_memory | default('384m') }}"
+docker_apps_rsshub_memory_reservation: "{{ rsshub_memory_reservation | default('128m') }}"
+docker_apps_rsshub_cpus: "{{ rsshub_cpus | default('0.5') }}"
+docker_apps_rsshub_cache_type: "{{ rsshub_cache_type | default('memory') }}"
+docker_apps_rsshub_cache_expire: "{{ rsshub_cache_expire | default('600') }}"
+docker_apps_rsshub_proxy_uri: "{{ rsshub_proxy_uri | default('') }}"
+docker_apps_rsshub_proxy_url_regex: "{{ rsshub_proxy_url_regex | default('.*') }}"
+docker_apps_rsshub_twitter_auth_token: "{{ rsshub_twitter_auth_token | default('') }}"
+
 # Hy-Memory PRO (systemd 服务，非容器；`docker_apps_containers` 中的 hy_memory 仅作开关)
 docker_apps_hy_memory_data_root: >-
   {{ backup_source_docker_dir | default('/opt/dockers') }}/hy_memory
@@ -361,7 +375,7 @@ docker_apps_opcotoai_toolkit_version: "{{ opcotoai_toolkit_version | default('ma
 # Peach (Adult Media Library)
 docker_apps_peach_image: "{{ peach_image | default('longmeidao/peach:0.52.0') }}"
 docker_apps_peach_bind_host: "{{ peach_bind_host | default('0.0.0.0') }}"
-docker_apps_peach_port: "{{ app_port_peach | default(8900) }}"
+docker_apps_peach_port: "{{ app_port_peach }}"
 docker_apps_peach_data_dir: "{{ peach_data_dir | default('/vol1/docker/peach/data') }}"
 docker_apps_peach_media_dir: "{{ peach_media_dir | default('/vol1/1000/medias') }}"
 docker_apps_peach_memory: "{{ peach_memory | default('2g') }}"
