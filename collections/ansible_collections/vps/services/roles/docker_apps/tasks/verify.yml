@@ -410,6 +410,24 @@
     fail_msg: "magpie config directory must exist and be owned by 65532:65532"
   when: verify_docker_app_name | default('') == 'magpie'
   tags: [verify, services, docker_apps, magpie, phase5]
+- name: Verify rsshub port binding and pinned image
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.NetworkSettings.Ports['1200/tcp'][0].HostIp == '127.0.0.1'
+      - docker_apps_container_info.container.NetworkSettings.Ports['1200/tcp'][0].HostPort == (docker_apps_app_port_rsshub | string)
+      - docker_apps_container_info.container.Config.Image == docker_apps_rsshub_image
+    fail_msg: "rsshub must use the pinned image and loopback-only port binding 127.0.0.1:{{ docker_apps_app_port_rsshub }}"
+  when: verify_docker_app_name | default('') == 'rsshub'
+  tags: [verify, services, docker_apps, rsshub, phase5]
+
+- name: Verify rsshub container health status
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.State.Health.Status is defined
+      - docker_apps_container_info.container.State.Health.Status in ['healthy', 'starting']
+    fail_msg: "rsshub container healthcheck must report healthy or starting"
+  when: verify_docker_app_name | default('') == 'rsshub'
+  tags: [verify, services, docker_apps, rsshub, phase5]
 
 - name: Verify ai-memory publish binding and digest-pinned image
   ansible.builtin.assert:

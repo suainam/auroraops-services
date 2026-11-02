@@ -1,0 +1,35 @@
+---
+# RSSHub (RSS Feed Generator) - 使用 container_deployer Meta 角色部署
+- name: Deploy RSSHub container via container_deployer
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+    apply:
+      tags:
+        - rsshub
+        - phase5
+  vars:
+    cdp_name: "rsshub"
+    cdp_image: "{{ docker_apps_rsshub_image }}"
+    cdp_pull: "{{ docker_apps_rsshub_pull | default(false) | bool }}"
+    container_deployer_cdp_pull: "{{ docker_apps_rsshub_pull | default(false) | bool }}"
+    cdp_networks: [{name: "sweb"}]
+    cdp_ports:
+      - "127.0.0.1:{{ docker_apps_app_port_rsshub }}:1200"
+    cdp_memory: "{{ docker_apps_rsshub_memory }}"
+    cdp_memory_reservation: "{{ docker_apps_rsshub_memory_reservation }}"
+    cdp_cpus: "{{ docker_apps_rsshub_cpus }}"
+    cdp_restart_policy: "unless-stopped"
+    cdp_env:
+      NODE_ENV: "production"
+      CACHE_TYPE: "{{ docker_apps_rsshub_cache_type }}"
+      CACHE_EXPIRE: "{{ docker_apps_rsshub_cache_expire }}"
+      NODE_OPTIONS: "--max-old-space-size=192"
+      PROXY_URI: "{{ docker_apps_rsshub_proxy_uri | default(omit) }}"
+      PROXY_URL_REGEX: "{{ docker_apps_rsshub_proxy_url_regex if (docker_apps_rsshub_proxy_uri | default('') | length > 0) else omit }}"
+    cdp_healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:1200/ || exit 1"]
+      interval: 1800s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+  tags: [deploy, services, docker_apps, rsshub, phase5]
