@@ -42,6 +42,8 @@
         ],
         "action": "reject"
       },
+      {# 放行学术及部分国际期刊（防止被 geosite-cn 误杀回源）#}
+      { "domain_suffix": ["nature.com", "springer.com", "springernature.com"], "outbound": "direct-out" },
       {% if not (docker_apps_singbox_zero_rules | default(false) | bool) %}
       { "rule_set": ["geosite-category-ads-all", "geoip-cn", "geosite-cn"], "action": "reject" },
       {% endif %}
