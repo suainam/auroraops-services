@@ -27,7 +27,7 @@
       PROXY_URI: "{{ docker_apps_rsshub_proxy_uri | default(omit) }}"
       PROXY_URL_REGEX: "{{ docker_apps_rsshub_proxy_url_regex if (docker_apps_rsshub_proxy_uri | default('') | length > 0) else omit }}"
     cdp_healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:1200/ || exit 1"]
+      test: ["CMD-SHELL", "curl -f -s http://127.0.0.1:1200/ || exit 1"]
       interval: 1800s
       timeout: 10s
       retries: 3
