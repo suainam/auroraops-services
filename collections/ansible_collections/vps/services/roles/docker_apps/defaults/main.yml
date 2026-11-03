@@ -411,8 +411,8 @@ docker_apps_openviking_enabled: false
 docker_apps_openviking_pull: false
 docker_apps_app_port_openviking: "{{ app_port_openviking | default(1933) }}"
 docker_apps_openviking_image: "{{ openviking_image | default('ghcr.io/volcengine/openviking:v0.3.17') }}"
-docker_apps_openviking_memory: "{{ openviking_memory | default('4GiB') }}"
-docker_apps_openviking_memory_reservation: "{{ openviking_memory_reservation | default('1GiB') }}"
+docker_apps_openviking_memory: "{{ openviking_memory | default('4g') }}"
+docker_apps_openviking_memory_reservation: "{{ openviking_memory_reservation | default('1g') }}"
 docker_apps_openviking_cpus: "{{ openviking_cpus | default('2.0') }}"
 docker_apps_openviking_data_dir: "{{ backup_source_docker_dir | default('/opt/dockers') }}/openviking"
 docker_apps_openviking_bind_address: "{{ openviking_bind_address | default('127.0.0.1') }}"

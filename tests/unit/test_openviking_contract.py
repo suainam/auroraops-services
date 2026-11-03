@@ -15,8 +15,8 @@ def test_openviking_defaults_registered():
     defaults = yaml.safe_load((ROLE / "defaults/main.yml").read_text(encoding="utf-8"))
     assert defaults["docker_apps_openviking_enabled"] is False
     assert defaults["docker_apps_openviking_pull"] is False
-    assert defaults["docker_apps_openviking_memory"] == "{{ openviking_memory | default('4GiB') }}"
-    assert defaults["docker_apps_openviking_memory_reservation"] == "{{ openviking_memory_reservation | default('1GiB') }}"
+    assert defaults["docker_apps_openviking_memory"] == "{{ openviking_memory | default('4g') }}"
+    assert defaults["docker_apps_openviking_memory_reservation"] == "{{ openviking_memory_reservation | default('1g') }}"
     assert defaults["docker_apps_openviking_cpus"] == "{{ openviking_cpus | default('2.0') }}"
     assert "openviking" in defaults["docker_apps_openviking_data_dir"]
 
