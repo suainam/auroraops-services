@@ -230,3 +230,19 @@
     timeout: 20
   when: rollback_docker_app_name | default('') == 'hy_memory'
   tags: [rollback_verify, services, docker_apps, docker_apps_manifest, hy_memory, phase5]
+
+- name: Verify openviking container is absent after rollback
+  become: true
+  community.docker.docker_container_info:
+    name: openviking
+  register: docker_apps_rollback_openviking_info
+  changed_when: false
+  failed_when: docker_apps_rollback_openviking_info.exists
+  when: rollback_docker_app_name | default('') == 'openviking'
+  no_log: true
+  tags:
+    - rollback_verify
+    - services
+    - docker_apps
+    - openviking
+    - phase5

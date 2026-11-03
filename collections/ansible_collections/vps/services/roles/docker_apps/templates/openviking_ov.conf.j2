@@ -1,0 +1,33 @@
+{
+  "service_name": "openviking-server",
+  "storage": {
+    "workspace": "/app/.openviking/workspace",
+    "vectordb": {
+      "name": "context",
+      "backend": "local"
+    },
+    "agfs": {
+      "backend": "local"
+    }
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 1933{% if docker_apps_openviking_root_api_key is defined and docker_apps_openviking_root_api_key | length > 0 %},
+    "root_api_key": {{ docker_apps_openviking_root_api_key | to_json }}{% endif %}
+  },
+  "embedding": {
+    "dense": {
+      "provider": {{ docker_apps_openviking_embedding_provider | to_json }},
+      "api_base": {{ docker_apps_openviking_embedding_api_base | to_json }}{% if docker_apps_openviking_embedding_api_key is defined and docker_apps_openviking_embedding_api_key | length > 0 %},
+      "api_key": {{ docker_apps_openviking_embedding_api_key | to_json }}{% endif %},
+      "model": {{ docker_apps_openviking_embedding_model | to_json }},
+      "dimension": {{ docker_apps_openviking_embedding_dimension | int }}
+    }
+  },
+  "vlm": {
+    "provider": {{ docker_apps_openviking_vlm_provider | to_json }},
+    "api_base": {{ docker_apps_openviking_vlm_api_base | to_json }}{% if docker_apps_openviking_vlm_api_key is defined and docker_apps_openviking_vlm_api_key | length > 0 %},
+    "api_key": {{ docker_apps_openviking_vlm_api_key | to_json }}{% endif %},
+    "model": {{ docker_apps_openviking_vlm_model | to_json }}
+  }
+}

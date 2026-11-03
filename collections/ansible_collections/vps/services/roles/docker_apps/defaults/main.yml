@@ -405,3 +405,24 @@ docker_apps_peach_media_dir: "{{ peach_media_dir | default('/vol1/1000/medias') 
 docker_apps_peach_memory: "{{ peach_memory | default('2g') }}"
 docker_apps_peach_pull: "{{ peach_pull | default(false) }}"
 docker_apps_peach_rust_log: "{{ peach_rust_log | default('info') }}"
+
+# OpenViking (Context Database & Memory)
+docker_apps_openviking_enabled: false
+docker_apps_openviking_pull: false
+docker_apps_app_port_openviking: "{{ app_port_openviking | default(1933) }}"
+docker_apps_openviking_image: "{{ openviking_image | default('ghcr.io/volcengine/openviking:v0.3.17') }}"
+docker_apps_openviking_memory: "{{ openviking_memory | default('4GiB') }}"
+docker_apps_openviking_memory_reservation: "{{ openviking_memory_reservation | default('1GiB') }}"
+docker_apps_openviking_cpus: "{{ openviking_cpus | default('2.0') }}"
+docker_apps_openviking_data_dir: "{{ backup_source_docker_dir | default('/opt/dockers') }}/openviking"
+docker_apps_openviking_bind_address: "{{ openviking_bind_address | default('127.0.0.1') }}"
+docker_apps_openviking_root_api_key: "{{ vault_openviking_root_api_key | default(omit) }}"
+docker_apps_openviking_embedding_provider: "{{ openviking_embedding_provider | default('openai') }}"
+docker_apps_openviking_embedding_api_base: "{{ openviking_embedding_api_base | default('https://api.openai.com/v1') }}"
+docker_apps_openviking_embedding_api_key: "{{ vault_openviking_embedding_api_key | default(omit) }}"
+docker_apps_openviking_embedding_model: "{{ openviking_embedding_model | default('text-embedding-3-small') }}"
+docker_apps_openviking_embedding_dimension: "{{ openviking_embedding_dimension | default(1536) }}"
+docker_apps_openviking_vlm_provider: "{{ openviking_vlm_provider | default('openai') }}"
+docker_apps_openviking_vlm_api_base: "{{ openviking_vlm_api_base | default('https://api.openai.com/v1') }}"
+docker_apps_openviking_vlm_api_key: "{{ vault_openviking_vlm_api_key | default(omit) }}"
+docker_apps_openviking_vlm_model: "{{ openviking_vlm_model | default('gpt-5.4') }}"

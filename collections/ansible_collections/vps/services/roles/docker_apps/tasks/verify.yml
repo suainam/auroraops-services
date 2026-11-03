@@ -59,6 +59,7 @@
       ai_memory: ai-memory
       peach: peach
       respire: respire
+      openviking: openviking
       # hy_memory 是 systemd 服务，没有同名容器；docker_apps_containers 里的条目只作开关。
   tags:
     - verify
@@ -189,6 +190,7 @@
       ai_memory: true
       peach: true
       respire: true
+      openviking: true
   tags:
     - verify
     - services
@@ -433,6 +435,34 @@
     fail_msg: "rsshub container healthcheck must report healthy or starting"
   when: verify_docker_app_name | default('') == 'rsshub'
   tags: [verify, services, docker_apps, rsshub, phase5]
+
+- name: Verify openviking port binding and pinned image
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.NetworkSettings.Ports['1933/tcp'][0].HostIp == docker_apps_openviking_bind_address
+      - docker_apps_container_info.container.NetworkSettings.Ports['1933/tcp'][0].HostPort == (docker_apps_app_port_openviking | string)
+      - docker_apps_container_info.container.Config.Image == docker_apps_openviking_image
+    fail_msg: "openviking must use pinned image and configured port binding {{ docker_apps_openviking_bind_address }}:{{ docker_apps_app_port_openviking }}"
+  when: verify_docker_app_name | default('') == 'openviking'
+  tags: [verify, services, docker_apps, openviking, phase5]
+
+- name: Verify openviking container health status
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.State.Health.Status is defined
+      - docker_apps_container_info.container.State.Health.Status in ['healthy', 'starting']
+    fail_msg: "openviking container healthcheck must report healthy or starting"
+  when: verify_docker_app_name | default('') == 'openviking'
+  tags: [verify, services, docker_apps, openviking, phase5]
+
+- name: Verify openviking local health endpoint
+  ansible.builtin.uri:
+    url: "http://{{ docker_apps_openviking_bind_address }}:{{ docker_apps_app_port_openviking }}/health"
+    method: GET
+    status_code: [200]
+    return_content: false
+  when: verify_docker_app_name | default('') == 'openviking'
+  tags: [verify, services, docker_apps, openviking, phase5]
 
 - name: Verify respire uses pinned image, container network mode, and no exposed host ports
   ansible.builtin.assert:

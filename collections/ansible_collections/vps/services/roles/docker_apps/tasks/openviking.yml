@@ -1,0 +1,201 @@
+---
+# OpenViking (Context Database & Memory) - 使用 container_deployer Meta 角色部署与基线检查点固化
+- name: Ensure openviking host directories exist
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ docker_apps_docker_user_uid | default('1000') }}"
+    group: "{{ docker_apps_docker_user_uid | default('1000') }}"
+    mode: "0750"
+  loop:
+    - "{{ docker_apps_openviking_data_dir }}"
+    - "{{ docker_apps_openviking_data_dir }}/config"
+    - "{{ docker_apps_openviking_data_dir }}/workspace"
+  tags: [deploy, services, docker_apps, openviking, phase5]
+
+- name: Render openviking ov.conf configuration
+  become: true
+  ansible.builtin.template:
+    src: openviking_ov.conf.j2
+    dest: "{{ docker_apps_openviking_data_dir }}/config/ov.conf"
+    owner: "{{ docker_apps_docker_user_uid | default('1000') }}"
+    group: "{{ docker_apps_docker_user_uid | default('1000') }}"
+    mode: "0640"
+  tags: [deploy, services, docker_apps, openviking, phase5]
+
+- name: Clean up historical dangling baseline openviking containers
+  become: true
+  ansible.builtin.shell:
+    cmd: "docker rm -f $(docker ps -a -q -f name='^openviking_baseline_') 2>/dev/null || true"
+  changed_when: false
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, openviking, phase5]
+
+- name: Probe existing openviking container for pre-deploy baseline
+  become: true
+  community.docker.docker_container_info:
+    name: openviking
+  register: _openviking_pre_deploy_info
+  tags: [deploy, services, docker_apps, openviking, phase5]
+
+- name: Determine upgrade checkpoint identifier for openviking
+  ansible.builtin.set_fact:
+    _openviking_checkpoint_id: "{{ upgrade_run_id | default(upgrade_checkpoint_id | default('upgrade_' ~ ((docker_apps_openviking_image | string) | regex_replace('[^a-zA-Z0-9_.-]', '_')))) }}"
+  tags: [deploy, services, docker_apps, openviking, phase5]
+
+- name: Check if openviking checkpoint already exists from earlier attempt
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_apps_openviking_data_dir }}/lifecycle/checkpoints/{{ _openviking_checkpoint_id }}/checkpoint.json"
+  register: _openviking_existing_cp_stat
+  tags: [deploy, services, docker_apps, openviking, phase5]
+
+- name: Pre-pull the target openviking image before the container is stopped
+  become: true
+  community.docker.docker_image:
+    name: "{{ docker_apps_openviking_image }}"
+    source: pull
+  when:
+    - not ansible_check_mode
+    - docker_apps_openviking_pull | default(false) | bool
+  tags: [deploy, services, docker_apps, openviking, phase5]
+
+- name: Solidify immutable versioned baseline for existing openviking
+  become: true
+  block:
+    - name: Ensure openviking checkpoint directory exists
+      ansible.builtin.file:
+        path: "{{ docker_apps_openviking_data_dir }}/lifecycle/checkpoints/{{ _openviking_checkpoint_id }}"
+        state: directory
+        owner: "{{ docker_apps_docker_user_uid | default('1000') }}"
+        group: "{{ docker_apps_docker_user_uid | default('1000') }}"
+        mode: "0750"
+
+    - name: Write versioned checkpoint record for openviking
+      ansible.builtin.copy:
+        dest: "{{ docker_apps_openviking_data_dir }}/lifecycle/checkpoints/{{ _openviking_checkpoint_id }}/checkpoint.json"
+        content: >-
+          {{
+            {
+              "service": "openviking",
+              "checkpoint_id": _openviking_checkpoint_id,
+              "mode": "existing_service",
+              "baseline_container_name": "openviking_baseline_" ~ _openviking_checkpoint_id,
+              "baseline_image": _openviking_pre_deploy_info.container.Config.Image,
+              "baseline_image_id": _openviking_pre_deploy_info.container.Image,
+              "timestamp": ansible_date_time.iso8601 | default('unknown')
+            } | to_nice_json
+          }}
+        mode: "0400"
+        owner: "{{ docker_apps_docker_user_uid | default('1000') }}"
+        group: "{{ docker_apps_docker_user_uid | default('1000') }}"
+
+    - name: Update latest checkpoint pointer for openviking
+      ansible.builtin.copy:
+        dest: "{{ docker_apps_openviking_data_dir }}/lifecycle/latest_checkpoint.txt"
+        content: "{{ _openviking_checkpoint_id }}\n"
+        mode: "0640"
+        owner: "{{ docker_apps_docker_user_uid | default('1000') }}"
+        group: "{{ docker_apps_docker_user_uid | default('1000') }}"
+  when:
+    - not ansible_check_mode
+    - _openviking_pre_deploy_info.exists | default(false)
+    - not (_openviking_existing_cp_stat.stat.exists | default(false))
+  tags: [deploy, services, docker_apps, openviking, phase5]
+
+- name: Quiesce live openviking container before it is renamed to baseline
+  community.docker.docker_container:
+    name: "openviking"
+    docker_host: "{{ docker_host | default(omit) }}"
+    state: stopped
+  when:
+    - not ansible_check_mode
+    - _openviking_pre_deploy_info.exists | default(false)
+    - _openviking_pre_deploy_info.container.State.Running | default(false)
+  tags: [deploy, services, docker_apps, openviking, phase5]
+
+- name: Rename baseline openviking container to preserve runtime contract before deploy
+  ansible.builtin.command:
+    argv:
+      - docker
+      - rename
+      - "openviking"
+      - "{{ 'openviking_baseline_' ~ _openviking_checkpoint_id }}"
+  when:
+    - not ansible_check_mode
+    - _openviking_pre_deploy_info.exists | default(false)
+  tags: [deploy, services, docker_apps, openviking, phase5]
+
+- name: Deploy openviking container with failure recovery
+  block:
+    - name: Deploy openviking container via container_deployer
+      ansible.builtin.include_role:
+        name: vps.services.container_deployer
+        apply:
+          tags:
+            - openviking
+            - phase5
+      vars:
+        cdp_name: "openviking"
+        cdp_image: "{{ docker_apps_openviking_image }}"
+        cdp_pull: "{{ docker_apps_openviking_pull | default(false) | bool }}"
+        container_deployer_cdp_pull: "{{ docker_apps_openviking_pull | default(false) | bool }}"
+        cdp_networks: [{name: "sweb"}]
+        cdp_ports:
+          - "{{ docker_apps_openviking_bind_address }}:{{ docker_apps_app_port_openviking }}:1933"
+        cdp_volumes:
+          - "{{ docker_apps_openviking_data_dir }}/config/ov.conf:/app/.openviking/ov.conf:ro"
+          - "{{ docker_apps_openviking_data_dir }}/workspace:/app/.openviking/workspace:rw"
+        cdp_memory: "{{ docker_apps_openviking_memory }}"
+        cdp_memory_reservation: "{{ docker_apps_openviking_memory_reservation }}"
+        cdp_cpus: "{{ docker_apps_openviking_cpus }}"
+        cdp_restart_policy: "unless-stopped"
+        cdp_healthcheck:
+          test: ["CMD-SHELL", "curl -f -s http://127.0.0.1:1933/health || exit 1"]
+          interval: 30s
+          timeout: 5s
+          retries: 3
+          start_period: 20s
+
+    - name: Automatically remove baseline openviking container after successful deployment
+      become: true
+      community.docker.docker_container:
+        name: "{{ 'openviking_baseline_' ~ _openviking_checkpoint_id }}"
+        state: absent
+        docker_host: "{{ docker_host | default(omit) }}"
+      when:
+        - not ansible_check_mode
+        - _openviking_pre_deploy_info.exists | default(false)
+
+  rescue:
+    - name: Remove partially deployed openviking container after deploy failure
+      community.docker.docker_container:
+        name: "openviking"
+        state: absent
+        docker_host: "{{ docker_host | default(omit) }}"
+    - name: Check if preserved baseline openviking container exists before restore
+      community.docker.docker_container_info:
+        name: "{{ 'openviking_baseline_' ~ _openviking_checkpoint_id }}"
+        docker_host: "{{ docker_host | default(omit) }}"
+      register: _openviking_deploy_rescue_baseline_info
+    - name: Restore baseline openviking container after deploy failure
+      ansible.builtin.command:
+        argv:
+          - docker
+          - rename
+          - "{{ 'openviking_baseline_' ~ _openviking_checkpoint_id }}"
+          - "openviking"
+      when: _openviking_deploy_rescue_baseline_info.exists | default(false)
+    - name: Restart restored baseline openviking container
+      community.docker.docker_container:
+        name: "openviking"
+        state: started
+        docker_host: "{{ docker_host | default(omit) }}"
+      when:
+        - _openviking_deploy_rescue_baseline_info.exists | default(false)
+        - _openviking_pre_deploy_info.container.State.Running | default(false)
+    - name: Fail closed after restoring baseline container
+      ansible.builtin.fail:
+        msg: "Deploy failed: openviking container deployment failed; baseline container safely restored."
+  tags: [deploy, services, docker_apps, openviking, phase5]
