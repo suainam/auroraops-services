@@ -459,6 +459,12 @@
   ansible.builtin.uri:
     url: "http://{{ docker_apps_openviking_bind_address }}:{{ docker_apps_app_port_openviking }}/health"
     method: GET
+    headers: >-
+      {{
+        {'Authorization': 'Bearer ' ~ docker_apps_openviking_root_api_key}
+        if (docker_apps_openviking_root_api_key is defined and docker_apps_openviking_root_api_key | length > 0)
+        else {}
+      }}
     status_code: [200]
     return_content: false
   when: verify_docker_app_name | default('') == 'openviking'

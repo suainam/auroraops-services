@@ -42,7 +42,7 @@ def test_openviking_template_renders_valid_json():
     rendered = template.render(context)
     data = json.loads(rendered)
 
-    assert data["service_name"] == "openviking-server"
+    assert data["server"]["auth_mode"] == "api_key"
     assert data["server"]["port"] == 1933
     assert data["server"]["root_api_key"] == "test-key-123"
     assert data["storage"]["workspace"] == "/app/.openviking/workspace"
