@@ -94,6 +94,7 @@ docker_apps_respire_internal_port: "{{ app_port_respire_internal | default(15169
 docker_apps_respire_hook_enabled: false
 docker_apps_respire_archive_enabled: false
 docker_apps_respire_pass: "{{ respire_pass | default(vault_respire_pass | default(omit)) }}"
+docker_apps_respire_super: "{{ respire_super | default(vault_respire_super | default(omit)) }}"
 docker_apps_respire_magpie_authorization: "{{ respire_magpie_authorization | default(vault_respire_magpie_authorization | default(omit)) }}"
 docker_apps_respire_authorization_env: "RESPIRE_MAGPIE_AUTHORIZATION"
 docker_apps_respire_gateway_timeout_ms: 10000

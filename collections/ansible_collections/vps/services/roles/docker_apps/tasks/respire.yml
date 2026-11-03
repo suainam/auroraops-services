@@ -111,7 +111,9 @@
         {
           'HOME': '/data',
           'RSRS_DATA_DIR': '/data'
-        } | combine({'RSRS_PASS': docker_apps_respire_pass} if (docker_apps_respire_pass | default('') | length > 0) else {})
+        }
+        | combine({'RSRS_PASS': docker_apps_respire_pass} if (docker_apps_respire_pass | default('') | length > 0) else {})
+        | combine({'RSRS_SUPER': docker_apps_respire_super} if (docker_apps_respire_super | default('') | length > 0) else {})
       }}
     cdp_restart_policy: unless-stopped
     cdp_memory: "{{ docker_apps_respire_memory | default('512m') }}"
