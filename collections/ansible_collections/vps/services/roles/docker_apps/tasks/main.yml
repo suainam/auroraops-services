@@ -35,6 +35,7 @@
         - ai_memory
         - peach
         - rsshub
+        - respire
         - phase5
 
     - name: 加载 Docker Apps 公共准备任务
@@ -60,6 +61,7 @@
         - magpie
         - ai_memory
         - peach
+        - respire
         - phase5
         - rsshub
 
@@ -159,6 +161,11 @@
       ansible.builtin.import_tasks: hysteria2_client.yml
       when: docker_apps_hysteria2_client_enabled | default(false) | bool
       tags: [deploy, services, docker_apps, hysteria2_client, phase5]
+
+    - name: 加载 Respire Runtime 部署任务
+      ansible.builtin.import_tasks: respire.yml
+      when: "'respire' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'respire')"
+      tags: [deploy, services, docker_apps, respire, phase5]
 
 - name: Docker Apps 清理 (禁用时)
   when: not (auroraops_roles['services']['docker_apps'] | default(true) | bool)

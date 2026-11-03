@@ -168,6 +168,16 @@
     - not ansible_check_mode
   tags: [deploy, services, docker_apps, magpie, phase5]
 
+- name: Remove respire container before magpie lifecycle transition
+  become: true
+  community.docker.docker_container:
+    name: "{{ docker_apps_respire_container_name | default('respire') }}"
+    state: absent
+  when:
+    - not ansible_check_mode
+    - docker_apps_respire_enabled | default(false) | bool
+  tags: [deploy, services, docker_apps, magpie, respire, phase5]
+
 - name: Quiesce live magpie container before it is renamed to the baseline
   # The snapshot block above stops the container only when no checkpoint exists
   # yet. A retry finds the checkpoint already written, skips that block, and
@@ -250,6 +260,7 @@
           MAGPIE_WEB_ADDR: "0.0.0.0:3430"
           MAGPIE_WEB_KEY: "{{ docker_apps_magpie_web_key | default(omit) }}"
           GOMEMLIMIT: "{{ docker_apps_magpie_gomemlimit }}"
+          RESPIRE_MAGPIE_AUTHORIZATION: "{{ docker_apps_respire_magpie_authorization | default(omit) }}"
         cdp_healthcheck:
           test: ["CMD", "/magpie", "healthcheck"]
           interval: 1800s
@@ -264,6 +275,7 @@
         state: absent
         docker_host: "{{ docker_host | default(omit) }}"
       when: not ansible_check_mode
+
   rescue:
     - name: Remove partially deployed magpie container after deploy failure
       community.docker.docker_container:
@@ -291,7 +303,20 @@
       when:
         - _magpie_deploy_rescue_baseline_info.exists | default(false)
         - _magpie_pre_deploy_info.container.State.Running | default(false)
+    - name: Reattach respire container to restored magpie on deploy failure
+      ansible.builtin.include_tasks: respire.yml
+      when:
+        - not ansible_check_mode
+        - docker_apps_respire_enabled | default(false) | bool
+        - _magpie_deploy_rescue_baseline_info.exists | default(false)
+      tags: [deploy, services, docker_apps, magpie, respire, phase5]
     - name: Fail closed after restoring baseline container
       ansible.builtin.fail:
         msg: "Deploy failed: magpie container deployment failed; baseline container safely restored."
   tags: [deploy, services, docker_apps, magpie, phase5]
+
+- name: Deploy and bind respire container to newly deployed magpie
+  ansible.builtin.include_tasks: respire.yml
+  when:
+    - docker_apps_respire_enabled | default(false) | bool
+  tags: [deploy, services, docker_apps, magpie, respire, phase5]

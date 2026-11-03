@@ -18,6 +18,7 @@
 - ✅ **DS2API**: DeepSeek Web API 兼容服务（固定 Release 镜像）
 - ✅ **Vertex AI Proxy**: OpenAI-compatible Gemini proxy（本地构建镜像，SSE 入口）
 - ✅ **WorkBuddy2API-Hub**: 个人企业微信/WorkBuddy API 网关（单容器模式，SSE 流式转发）— **已从 cc15 退役（2026-10-25）**：上游收紧非官方客户端识别，cc15 已移除容器并置 `docker_apps_workbuddy2api_enabled=false`；数据目录保留，nginx 站点 `wb.msuai.top` 配置暂留。
+- ✅ **Respire Runtime**: 附属于 Magpie 容器网络命名空间的记忆 Sidecar 容器（`network_mode: container:magpie`），通过 127.0.0.1:15169 向 Magpie 内置 respire-memory 插件提供本地 Runtime RPC 接口；端口不对外暴露，数据持久化挂载至 `/opt/dockers/respire/data`。
 
 Sub-Store 的 `aurora-singbox` 是幂等 upsert：如果旧版本已经创建了同名
 `local` 订阅，后续部署也必须将它 PATCH 为当前 `sub_store_source_url` 的

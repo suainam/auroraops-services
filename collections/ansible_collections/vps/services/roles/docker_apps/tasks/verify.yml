@@ -58,6 +58,7 @@
       magpie: magpie
       ai_memory: ai-memory
       peach: peach
+      respire: respire
       # hy_memory 是 systemd 服务，没有同名容器；docker_apps_containers 里的条目只作开关。
   tags:
     - verify
@@ -73,6 +74,7 @@
     - docker_apps_manifest
     - ds2api
     - phase5
+    - respire
     - vertex
 - name: 验证 Docker 应用程序容器状态 (单个)
   become: true
@@ -108,6 +110,7 @@
     - workbuddy2api
     - magpie
     - ai_memory
+    - respire
 
 - name: Verify Sing-box native service is active and enabled on systemd
   become: true
@@ -185,6 +188,7 @@
       magpie: true
       ai_memory: true
       peach: true
+      respire: true
   tags:
     - verify
     - services
@@ -194,6 +198,7 @@
     - phase5
     - vertex
     - ai_memory
+    - respire
     - peach
 
 - name: Verify gcli2api is bound to loopback
@@ -428,6 +433,61 @@
     fail_msg: "rsshub container healthcheck must report healthy or starting"
   when: verify_docker_app_name | default('') == 'rsshub'
   tags: [verify, services, docker_apps, rsshub, phase5]
+
+- name: Verify respire uses pinned image, container network mode, and no exposed host ports
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.container.Config.Image == docker_apps_respire_image
+      - docker_apps_container_info.container.HostConfig.NetworkMode is match('^container:')
+      - (docker_apps_container_info.container.NetworkSettings.Ports | default({}) | length) == 0
+    fail_msg: "respire must use pinned image, attach via container network mode, and have no exposed host ports"
+  when: verify_docker_app_name | default('') == 'respire'
+  tags: [verify, services, docker_apps, respire, phase5]
+
+- name: Probe active magpie container ID for respire network attachment verification
+  become: true
+  community.docker.docker_container_info:
+    name: "{{ docker_apps_container_name | default('magpie') }}"
+  register: docker_apps_magpie_verify_target_info
+  when: verify_docker_app_name | default('') == 'respire'
+  tags: [verify, services, docker_apps, respire, phase5]
+
+- name: Assert respire attaches to running magpie container network namespace
+  ansible.builtin.assert:
+    that:
+      - docker_apps_magpie_verify_target_info.exists
+      - docker_apps_container_info.container.HostConfig.NetworkMode in [
+          'container:' ~ docker_apps_magpie_verify_target_info.container.Id,
+          'container:' ~ (docker_apps_container_name | default('magpie'))
+        ]
+    fail_msg: "respire must attach to the network namespace of the active magpie container"
+  when: verify_docker_app_name | default('') == 'respire'
+  tags: [verify, services, docker_apps, respire, phase5]
+
+- name: Verify respire Runtime RPC loopback endpoint via container namespace
+  become: true
+  ansible.builtin.command:
+    cmd: >-
+      docker exec {{ docker_apps_respire_container_name | default('respire') }}
+      node -e "fetch('http://127.0.0.1:{{ docker_apps_respire_internal_port }}/api/health').then(async r => {
+      if (!r.ok) process.exit(1); const d = await r.json(); console.log(JSON.stringify(d)); })"
+  register: docker_apps_respire_health_verify
+  changed_when: false
+  when:
+    - verify_docker_app_name | default('') == 'respire'
+    - not ansible_check_mode
+  tags: [verify, services, docker_apps, respire, phase5]
+
+- name: Assert respire health response contains server metadata
+  ansible.builtin.assert:
+    that:
+      - (docker_apps_respire_health_verify.stdout | from_json).server == 'respire'
+      - (docker_apps_respire_health_verify.stdout | from_json).v == 1
+    fail_msg: "respire health endpoint must return server=respire and v=1"
+  when:
+    - verify_docker_app_name | default('') == 'respire'
+    - not ansible_check_mode
+  tags: [verify, services, docker_apps, respire, phase5]
 
 - name: Verify ai-memory publish binding and digest-pinned image
   ansible.builtin.assert:
