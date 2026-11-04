@@ -79,6 +79,7 @@ docker_apps_magpie_cpus: "{{ magpie_cpus | default('1.0') }}"
 docker_apps_magpie_web_key: "{{ vault_magpie_web_key | default(omit) }}"
 docker_apps_magpie_data_dir: "{{ backup_source_docker_dir | default('/opt/dockers') }}/magpie"
 docker_apps_magpie_gomemlimit: "{{ magpie_gomemlimit | default('384MiB') }}"
+docker_apps_magpie_openviking_identity: {}
 
 # Respire Runtime Sidecar (container:magpie network namespace)
 docker_apps_respire_enabled: false

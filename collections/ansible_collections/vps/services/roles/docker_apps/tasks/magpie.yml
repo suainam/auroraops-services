@@ -22,6 +22,61 @@
     - "{{ docker_apps_magpie_data_dir }}/config"
   tags: [deploy, services, docker_apps, magpie, phase5]
 
+- name: Manage OpenViking identity in existing ovcli configuration
+  become: true
+  when:
+    - docker_apps_magpie_openviking_identity | default({}) | length > 0
+  tags: [deploy, check, services, docker_apps, magpie, phase5]
+  block:
+    - name: Validate OpenViking identity specification
+      ansible.builtin.assert:
+        that:
+          - docker_apps_magpie_openviking_identity is mapping
+          - docker_apps_magpie_openviking_identity.keys() | reject('in', ['account', 'user']) | list | length == 0
+          - docker_apps_magpie_openviking_identity.account is defined
+          - docker_apps_magpie_openviking_identity.account is string
+          - docker_apps_magpie_openviking_identity.account | trim | length > 0
+          - docker_apps_magpie_openviking_identity.user is defined
+          - docker_apps_magpie_openviking_identity.user is string
+          - docker_apps_magpie_openviking_identity.user | trim | length > 0
+        fail_msg: >-
+          docker_apps_magpie_openviking_identity must be a dictionary with non-empty 'account' and 'user' strings only.
+      no_log: true
+
+    - name: Stat existing ovcli.conf
+      ansible.builtin.stat:
+        path: "{{ docker_apps_magpie_data_dir }}/config/home/.openviking/ovcli.conf"
+      register: _ovcli_conf_stat
+      no_log: true
+
+    - name: Fail if ovcli.conf does not exist
+      ansible.builtin.fail:
+        msg: >-
+          ovcli.conf not found at {{ docker_apps_magpie_data_dir }}/config/home/.openviking/ovcli.conf.
+          Failing closed to prevent writing uninitialized config.
+      when: not (_ovcli_conf_stat.stat.exists | default(false))
+      no_log: true
+
+    - name: Read existing ovcli.conf content
+      ansible.builtin.slurp:
+        path: "{{ docker_apps_magpie_data_dir }}/config/home/.openviking/ovcli.conf"
+      register: _ovcli_conf_b64
+      no_log: true
+
+    - name: Merge OpenViking identity into existing ovcli.conf
+      vars:
+        _existing_ovcli: "{{ _ovcli_conf_b64.content | b64decode | from_json }}"
+        _merged_ovcli: "{{ _existing_ovcli | combine(docker_apps_magpie_openviking_identity) }}"
+      ansible.builtin.copy:
+        dest: "{{ docker_apps_magpie_data_dir }}/config/home/.openviking/ovcli.conf"
+        content: "{{ _merged_ovcli | to_nice_json(indent=2) }}\n"
+        owner: "65532"
+        group: "65532"
+        mode: "0600"
+        backup: true
+      diff: false
+      no_log: true
+
 - name: Clean up historical dangling baseline magpie containers
   become: true
   ansible.builtin.shell:
