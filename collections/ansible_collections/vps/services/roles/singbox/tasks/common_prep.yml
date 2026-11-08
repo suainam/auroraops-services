@@ -205,6 +205,17 @@
     - (singbox_wireguard_private_key | default('')) | length == 0
   tags: [deploy, services, singbox, phase5]
 
+- name: Sing-box - Ensure host-local WireGuard private key parent directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ singbox_wireguard_private_key_file | dirname }}"
+    state: directory
+    mode: "0755"
+  when:
+    - singbox_wireguard_enabled | default(false) | bool
+    - (singbox_wireguard_private_key | default('')) | length == 0
+    - not ansible_check_mode
+  tags: [deploy, services, singbox, phase5]
 - name: Sing-box - Generate host-local WireGuard private key
   become: true
   ansible.builtin.command:
