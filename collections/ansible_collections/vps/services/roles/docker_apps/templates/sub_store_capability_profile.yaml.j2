@@ -151,8 +151,17 @@ proxy-groups:
 {% for r in regions %}
   - name: "{{ r.f }} {{ r.c }} · 金融"
     type: fallback
+    proxies: ["{{ r.f }} {{ r.c }} · 金融自建", "{{ r.f }} {{ r.c }} · 金融择优"]
+    hidden: true
+  - name: "{{ r.f }} {{ r.c }} · 金融自建"
+    type: fallback
     use: {{ (vps_src.items + nat_src.items) | to_json }}
-    filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*(家宽|原生|静态)"
+    filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }})"
+    hidden: true
+  - name: "{{ r.f }} {{ r.c }} · 金融择优"
+    type: fallback
+    use: {{ general_airport_src.items | to_json }}
+    filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*(千兆|1000M|光速|超高速|0\\.1|0\\.01|低倍)"
     hidden: true
 {% endfor %}
   - name: "🌐 紧急专线逃生通道"
