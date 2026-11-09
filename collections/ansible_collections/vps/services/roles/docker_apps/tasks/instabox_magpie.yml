@@ -22,6 +22,7 @@
     - "{{ instabox_magpie_data_dir }}/config/home/.local/bin"
     - "{{ instabox_magpie_data_dir }}/config/bin"
     - "{{ instabox_magpie_data_dir }}/manifests"
+    - "{{ instabox_magpie_data_dir }}/secrets"
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
 - name: Generate distinct local web and gateway secrets once (atomic)
