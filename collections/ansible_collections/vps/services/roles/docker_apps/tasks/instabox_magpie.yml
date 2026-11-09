@@ -21,7 +21,7 @@
     - "{{ instabox_magpie_data_dir }}/config"
     - "{{ instabox_magpie_data_dir }}/config/home/.local/bin"
     - "{{ instabox_magpie_data_dir }}/config/bin"
-    - "{{ instabox_magpie_data_dir }}/secrets"
+    - "{{ instabox_magpie_data_dir }}/manifests"
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
 - name: Generate distinct local web and gateway secrets once (atomic)
@@ -61,11 +61,27 @@
   when: not ansible_check_mode
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
-- name: Read official agy manifest
-  ansible.builtin.uri:
+- name: Download official agy manifest
+  become: true
+  ansible.builtin.get_url:
     url: https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/linux_amd64.json
-    return_content: true
-  register: _instabox_agy_manifest
+    dest: "{{ instabox_magpie_data_dir }}/manifests/linux_amd64.json"
+    mode: '0600'
+  register: _instabox_agy_manifest_dl
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Read downloaded agy manifest
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ instabox_magpie_data_dir }}/manifests/linux_amd64.json"
+  register: _instabox_agy_manifest_raw
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Parse agy manifest
+  ansible.builtin.set_fact:
+    _instabox_agy_manifest: "{{ _instabox_agy_manifest_raw.content | b64decode | from_json }}"
   when: not ansible_check_mode
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
