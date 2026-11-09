@@ -89,8 +89,8 @@
 - name: Check agy manifest sha512 against pinned release
   ansible.builtin.assert:
     that:
-      - _instabox_agy_manifest.json.sha512 == 'e363e1b17daaac2589f18e6973429c039fd5a5e5c15e9c0852fa349836f3992b10fe84732bc8d8c8208e149f0304f15aba9dec696d12efeed03917492c0580eb'
-      - _instabox_agy_manifest.json.url is match('^https://storage.googleapis.com/')
+      - _instabox_agy_manifest.sha512 == 'e363e1b17daaac2589f18e6973429c039fd5a5e5c15e9c0852fa349836f3992b10fe84732bc8d8c8208e149f0304f15aba9dec696d12efeed03917492c0580eb'
+      - _instabox_agy_manifest.url is match('^https://storage.googleapis.com/')
     fail_msg: "agy manifest sha512 drifted from pinned release; refusing unverified download"
   when: not ansible_check_mode
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
@@ -98,7 +98,7 @@
 - name: Download verified agy archive
   become: true
   ansible.builtin.get_url:
-    url: "{{ _instabox_agy_manifest.json.url }}"
+    url: "{{ _instabox_agy_manifest.url }}"
     dest: "{{ instabox_magpie_data_dir }}/agy-1.5.3.tar.gz"
     checksum: "sha512:e363e1b17daaac2589f18e6973429c039fd5a5e5c15e9c0852fa349836f3992b10fe84732bc8d8c8208e149f0304f15aba9dec696d12efeed03917492c0580eb"
     mode: '0600'
