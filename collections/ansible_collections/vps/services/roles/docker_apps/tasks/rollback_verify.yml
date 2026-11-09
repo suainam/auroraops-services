@@ -1,4 +1,13 @@
 ---
+- name: Verify isolated Magpie container is absent after rollback
+  become: true
+  community.docker.docker_container_info:
+    name: instabox-magpie
+  register: _instabox_rollback_info
+  failed_when: _instabox_rollback_info.exists
+  when: rollback_docker_app_name | default('') == 'instabox_magpie'
+  tags: [rollback_verify, services, docker_apps, instabox_magpie, phase5]
+
 - name: Verify selected Docker app is absent after rollback
   become: true
   community.docker.docker_container_info:

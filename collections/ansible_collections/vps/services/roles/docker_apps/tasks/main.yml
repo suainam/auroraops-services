@@ -89,6 +89,11 @@
       ansible.builtin.import_tasks: magpie.yml
       when: "'magpie' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'magpie')"
       tags: [deploy, services, docker_apps, magpie, phase5]
+
+    - name: Load isolated InstaBox Magpie deployment
+      ansible.builtin.import_tasks: instabox_magpie.yml
+      when: "'instabox_magpie' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'instabox_magpie')"
+      tags: [deploy, services, docker_apps, instabox_magpie, phase5]
     - name: 加载 ai-memory 部署任务
       ansible.builtin.import_tasks: ai_memory.yml
       when: "'ai_memory' in docker_apps_containers and (docker_apps_target is not defined or docker_apps_target == 'ai_memory')"
