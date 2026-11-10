@@ -1,0 +1,294 @@
+---
+- name: Validate isolated Magpie deployment inputs
+  ansible.builtin.assert:
+    that:
+      - instabox_magpie_bind_address | default('') | length > 0
+      - instabox_magpie_bind_address not in ['0.0.0.0', '127.0.0.1', '::', '::1']
+      - instabox_magpie_data_dir | default('') is match('^/')
+      - instabox_magpie_image | default('') | length > 0
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+- name: Validate shared gateway key
+  ansible.builtin.assert:
+    that:
+      - instabox_magpie_gateway_key | default('') | length >= 32
+  no_log: true
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+
+- name: Create isolated Magpie storage
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: '65532'
+    group: '65532'
+    mode: '0700'
+  loop:
+    - "{{ instabox_magpie_data_dir }}"
+    - "{{ instabox_magpie_data_dir }}/config"
+    - "{{ instabox_magpie_data_dir }}/config/home/.local/bin"
+    - "{{ instabox_magpie_data_dir }}/config/bin"
+    - "{{ instabox_magpie_data_dir }}/manifests"
+    - "{{ instabox_magpie_data_dir }}/secrets"
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Generate local web secret once (atomic)
+  become: true
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - |
+        import os, secrets, sys
+        dest = sys.argv[1]
+        if os.path.exists(dest):
+            with open(dest) as f:
+                if len(f.read().strip()) >= 32:
+                    sys.exit(0)
+            sys.exit("existing secret file is empty or truncated: " + dest)
+        tmp = dest + ".tmp." + str(os.getpid())
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, (secrets.token_urlsafe(48) + "\n").encode())
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(tmp, dest)
+        print('created')
+      - "{{ instabox_magpie_data_dir }}/secrets/web_key"
+  register: _instabox_magpie_web_key_creation
+  changed_when: _instabox_magpie_web_key_creation.stdout == 'created'
+  no_log: true
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Install shared gateway key
+  become: true
+  ansible.builtin.copy:
+    content: "{{ instabox_magpie_gateway_key }}"
+    dest: "{{ instabox_magpie_data_dir }}/secrets/gateway_key"
+    owner: '65532'
+    group: '65532'
+    mode: '0600'
+  no_log: true
+  diff: false
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Read the isolated web key
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ instabox_magpie_data_dir }}/secrets/web_key"
+  register: _instabox_magpie_web_key
+  no_log: true
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Download official agy manifest
+  become: true
+  ansible.builtin.get_url:
+    url: https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/linux_amd64.json
+    dest: "{{ instabox_magpie_data_dir }}/manifests/linux_amd64.json"
+    mode: '0600'
+  register: _instabox_agy_manifest_dl
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Read downloaded agy manifest
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ instabox_magpie_data_dir }}/manifests/linux_amd64.json"
+  register: _instabox_agy_manifest_raw
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Parse agy manifest
+  ansible.builtin.set_fact:
+    _instabox_agy_manifest: "{{ _instabox_agy_manifest_raw.content | b64decode | from_json }}"
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Check agy manifest sha512 against pinned release
+  ansible.builtin.assert:
+    that:
+      - _instabox_agy_manifest.sha512 == 'e363e1b17daaac2589f18e6973429c039fd5a5e5c15e9c0852fa349836f3992b10fe84732bc8d8c8208e149f0304f15aba9dec696d12efeed03917492c0580eb'
+      - _instabox_agy_manifest.url is match('^https://storage.googleapis.com/')
+    fail_msg: "agy manifest sha512 drifted from pinned release; refusing unverified download"
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Download verified agy archive
+  become: true
+  ansible.builtin.get_url:
+    url: "{{ _instabox_agy_manifest.url }}"
+    dest: "{{ instabox_magpie_data_dir }}/agy-1.5.3.tar.gz"
+    checksum: "sha512:e363e1b17daaac2589f18e6973429c039fd5a5e5c15e9c0852fa349836f3992b10fe84732bc8d8c8208e149f0304f15aba9dec696d12efeed03917492c0580eb"
+    mode: '0600'
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Extract pinned agy executable
+  become: true
+  ansible.builtin.unarchive:
+    src: "{{ instabox_magpie_data_dir }}/agy-1.5.3.tar.gz"
+    dest: "{{ instabox_magpie_data_dir }}/config/bin"
+    remote_src: true
+    owner: '65532'
+    group: '65532'
+    creates: "{{ instabox_magpie_data_dir }}/config/bin/antigravity"
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Install agy into the persistent home directory
+  become: true
+  ansible.builtin.copy:
+    src: "{{ instabox_magpie_data_dir }}/config/bin/antigravity"
+    dest: "{{ instabox_magpie_data_dir }}/config/home/.local/bin/agy"
+    remote_src: true
+    owner: '65532'
+    group: '65532'
+    mode: '0755'
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Download pinned plugin source archive
+  become: true
+  ansible.builtin.get_url:
+    url: https://codeload.github.com/magpie-community/plugins/tar.gz/ff9d3a6446a2b6213d2759a6119ffa8a97656db9
+    dest: "{{ instabox_magpie_data_dir }}/plugin-ff9d3a.tar.gz"
+    checksum: sha256:4efe0c6b4a5d76419b5450d3e48edf33962fa1661cf23e4ed3653966a99f5828
+    mode: '0600'
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Extract pinned plugin source
+  become: true
+  ansible.builtin.unarchive:
+    src: "{{ instabox_magpie_data_dir }}/plugin-ff9d3a.tar.gz"
+    dest: "{{ instabox_magpie_data_dir }}/config"
+    remote_src: true
+    owner: '65532'
+    group: '65532'
+    creates: "{{ instabox_magpie_data_dir }}/config/plugins-ff9d3a6446a2b6213d2759a6119ffa8a97656db9/packages/agy-cli/package.json"
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Check if target Magpie image is present locally
+  become: true
+  community.docker.docker_image_info:
+    name: "{{ instabox_magpie_image }}"
+  register: _instabox_magpie_local_image
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Pre-pull target Magpie image on first install
+  # First install has no local image; container_deployer runs with pull=false by
+  # default (unlike stock magpie.yml), so the deploy would fail on a fresh node.
+  # Pull only when the image is missing locally, keeping routine idempotent
+  # deploys from hitting the registry every run.
+  become: true
+  community.docker.docker_image:
+    name: "{{ instabox_magpie_image }}"
+    source: pull
+  when:
+    - not ansible_check_mode
+    - _instabox_magpie_local_image.images | default([]) | length == 0
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Start isolated Magpie
+  ansible.builtin.include_role:
+    name: vps.services.container_deployer
+  vars:
+    cdp_name: instabox-magpie
+    cdp_image: "{{ instabox_magpie_image }}"
+    cdp_pull: "{{ instabox_magpie_pull | default(false) | bool }}"
+    container_deployer_cdp_pull: "{{ instabox_magpie_pull | default(false) | bool }}"
+    cdp_ports:
+      - "{{ instabox_magpie_bind_address }}:{{ instabox_magpie_api_port }}:3425"
+      - "127.0.0.1:{{ instabox_magpie_web_port }}:3430"
+    cdp_volumes:
+      - "{{ instabox_magpie_data_dir }}/config:/config"
+    cdp_command: [web, --addr, '0.0.0.0:3430', --no-open]
+    cdp_restart_policy: unless-stopped
+    cdp_env:
+      MAGPIE_ADDR: '0.0.0.0:3425'
+      MAGPIE_WEB_ADDR: '0.0.0.0:3430'
+      MAGPIE_WEB_KEY: "{{ _instabox_magpie_web_key.content | b64decode | trim }}"
+      AGY_PATH: /config/home/.local/bin/agy
+      AGY_CLI_DISABLE_AUTO_UPDATE: 'true'
+    cdp_healthcheck:
+      test: [CMD, /magpie, healthcheck]
+      interval: 1800s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+  no_log: true
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Check if agy-cli plugin is already registered
+  become: true
+  community.docker.docker_container_exec:
+    container: instabox-magpie
+    command: /magpie plugin list
+  register: _instabox_plugin_list
+  changed_when: false
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Register pinned local plugin if absent
+  become: true
+  ansible.builtin.command:
+    argv: [docker, exec, instabox-magpie, /magpie, plugin, add, /config/plugins-ff9d3a6446a2b6213d2759a6119ffa8a97656db9/packages/agy-cli]
+  register: _instabox_plugin_install
+  when:
+    - not ansible_check_mode
+    - _instabox_plugin_list.stdout is not search('agy-cli')
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Probe shared gateway key
+  ansible.builtin.uri:
+    url: "http://{{ instabox_magpie_bind_address }}:{{ instabox_magpie_api_port }}/v1/models"
+    headers:
+      Authorization: "Bearer {{ instabox_magpie_gateway_key }}"
+    status_code: [200, 401]
+    use_proxy: false
+  register: _instabox_gateway_probe
+  no_log: true
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: List existing gateway keys when replacement is needed
+  become: true
+  community.docker.docker_container_exec:
+    container: instabox-magpie
+    command: /magpie gateway-key list
+  register: _instabox_gateway_key_list
+  changed_when: false
+  no_log: true
+  when:
+    - not ansible_check_mode
+    - _instabox_gateway_probe.status == 401
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Remove old gateway key
+  become: true
+  ansible.builtin.command:
+    argv: [docker, exec, instabox-magpie, /magpie, gateway-key, remove, "{{ (_instabox_gateway_key_list.stdout | regex_findall('(?m)^\\s*(\\S+)\\s+instabox-aggregator\\s')) | first }}"]
+  no_log: true
+  when:
+    - not ansible_check_mode
+    - _instabox_gateway_probe.status == 401
+    - _instabox_gateway_key_list.stdout is search('instabox-aggregator')
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Register shared gateway key
+  become: true
+  ansible.builtin.command:
+    argv: [docker, exec, -i, instabox-magpie, /magpie, gateway-key, add, instabox-aggregator, --key, '-']
+    stdin: "{{ instabox_magpie_gateway_key }}"
+  no_log: true
+  when:
+    - not ansible_check_mode
+    - _instabox_gateway_probe.status == 401
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+

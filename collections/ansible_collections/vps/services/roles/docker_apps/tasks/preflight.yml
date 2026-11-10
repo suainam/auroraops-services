@@ -46,3 +46,31 @@
       - docker_apps_preflight_compose.rc == 0
     fail_msg: "Docker Compose plugin is unavailable to the preflight execution context."
   tags: [preflight, services, docker_apps]
+
+- name: Check isolated Magpie WireGuard address and port availability
+  become: true
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - |
+        import json, socket, subprocess, sys
+        address, api, web = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+        links = json.loads(subprocess.check_output(['ip', '-j', 'address']))
+        if not any(a.get('local') == address and link.get('ifname', '').startswith('wg') for link in links for a in link.get('addr_info', [])):
+            sys.exit('configured WireGuard address is not present on a WireGuard interface')
+        result = subprocess.run(['docker', 'inspect', 'instabox-magpie'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        if result.returncode == 0:
+            ports = json.loads(result.stdout)[0]['NetworkSettings']['Ports']
+            if ports.get('3425/tcp') != [{'HostIp': address, 'HostPort': str(api)}] or ports.get('3430/tcp') != [{'HostIp': '127.0.0.1', 'HostPort': str(web)}]:
+                sys.exit('existing isolated container bindings do not match')
+        else:
+            for host, port in ((address, api), ('127.0.0.1', web)):
+                with socket.socket() as sock:
+                    sock.bind((host, port))
+      - "{{ instabox_magpie_bind_address }}"
+      - "{{ instabox_magpie_api_port | string }}"
+      - "{{ instabox_magpie_web_port | string }}"
+  changed_when: false
+  when: docker_apps_target | default('') == 'instabox_magpie'
+  tags: [preflight, services, docker_apps, instabox_magpie]

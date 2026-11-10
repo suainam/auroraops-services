@@ -508,6 +508,7 @@
     docker_app_rollback_name_map:
       vertex: vertex-proxy
       ai_memory: ai-memory
+      instabox_magpie: instabox-magpie
     rollback_container_name: "{{ docker_app_rollback_name_map[rollback_docker_app_name] | default(rollback_docker_app_name) }}"
   when:
     - rollback_docker_app_name is defined

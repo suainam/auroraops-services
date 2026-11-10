@@ -56,6 +56,7 @@
       vertex: vertex-proxy
       workbuddy2api: workbuddy2api
       magpie: magpie
+      instabox_magpie: instabox-magpie
       ai_memory: ai-memory
       peach: peach
       respire: respire
@@ -78,7 +79,7 @@
     - respire
     - vertex
 - name: 验证 Docker 应用程序容器状态 (单个)
-  become: true
+  no_log: true
   community.docker.docker_container_info:
     name: "{{ docker_apps_container_names[verify_docker_app_name] | default(verify_docker_app_name) }}"
   register: docker_apps_container_info
@@ -190,6 +191,7 @@
       ai_memory: true
       peach: true
       respire: true
+      instabox_magpie: true
       openviking: true
   tags:
     - verify
@@ -417,6 +419,53 @@
     fail_msg: "magpie config directory must exist and be owned by 65532:65532"
   when: verify_docker_app_name | default('') == 'magpie'
   tags: [verify, services, docker_apps, magpie, phase5]
+
+- name: Verify isolated Magpie network, image and storage
+  ansible.builtin.assert:
+    that:
+      - docker_apps_container_info.exists
+      - docker_apps_container_info.container.State.Running
+      - docker_apps_container_info.container.Config.Image == instabox_magpie_image
+      - docker_apps_container_info.container.NetworkSettings.Ports['3425/tcp'] | length == 1
+      - docker_apps_container_info.container.NetworkSettings.Ports['3425/tcp'][0].HostIp == instabox_magpie_bind_address
+      - docker_apps_container_info.container.NetworkSettings.Ports['3425/tcp'][0].HostPort == (instabox_magpie_api_port | string)
+      - docker_apps_container_info.container.NetworkSettings.Ports['3430/tcp'] | length == 1
+      - docker_apps_container_info.container.NetworkSettings.Ports['3430/tcp'][0].HostIp == '127.0.0.1'
+      - docker_apps_container_info.container.NetworkSettings.Ports['3430/tcp'][0].HostPort == (instabox_magpie_web_port | string)
+      - docker_apps_container_info.container.Mounts | selectattr('Destination', 'equalto', '/config') | selectattr('Source', 'equalto', instabox_magpie_data_dir ~ '/config') | list | length == 1
+    fail_msg: "Isolated Magpie runtime contract failed"
+  no_log: true
+  when: verify_docker_app_name | default('') == 'instabox_magpie'
+  tags: [verify, services, docker_apps, instabox_magpie, phase5]
+
+- name: Verify pinned agy executable
+  become: true
+  ansible.builtin.command:
+    argv: [docker, exec, instabox-magpie, /config/home/.local/bin/agy, --version]
+  register: _instabox_agy_version
+  changed_when: false
+  failed_when: "'1.5.3' not in _instabox_agy_version.stdout"
+  when: verify_docker_app_name | default('') == 'instabox_magpie'
+  tags: [verify, services, docker_apps, instabox_magpie, phase5]
+
+- name: Verify pinned local plugin registration
+  become: true
+  ansible.builtin.command:
+    argv: [docker, exec, instabox-magpie, /magpie, plugin, list, --json]
+  register: _instabox_plugins
+  changed_when: false
+  failed_when: "'agy-cli' not in _instabox_plugins.stdout"
+  no_log: true
+  when: verify_docker_app_name | default('') == 'instabox_magpie'
+  tags: [verify, services, docker_apps, instabox_magpie, phase5]
+
+- name: Verify isolated Magpie web responds locally
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ instabox_magpie_web_port }}/"
+    status_code: [200, 302, 401]
+    return_content: false
+  when: verify_docker_app_name | default('') == 'instabox_magpie'
+  tags: [verify, services, docker_apps, instabox_magpie, phase5]
 - name: Verify rsshub port binding and pinned image
   ansible.builtin.assert:
     that:
@@ -1619,8 +1668,8 @@
     not docker_apps_container_info.exists
     or docker_apps_container_info.container.State.Running
        != (docker_apps_container_expected_running[item] | bool)
-  loop: "{{ docker_apps_containers | reject('equalto', 'hy_memory') | list }}"
-  when: verify_docker_app_name is not defined
+  loop: "{{ docker_apps_containers | reject('equalto', 'hy_memory') | select('in', docker_apps_container_expected_running) | list }}"
+  no_log: true
   tags:
     - verify
     - services
