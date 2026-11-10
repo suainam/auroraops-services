@@ -453,7 +453,7 @@
     argv: [docker, exec, instabox-magpie, /magpie, plugin, list, --json]
   register: _instabox_plugins
   changed_when: false
-  failed_when: "'opencode-agy-cli-auth' not in _instabox_plugins.stdout"
+  failed_when: "'agy-cli' not in _instabox_plugins.stdout"
   no_log: true
   when: verify_docker_app_name | default('') == 'instabox_magpie'
   tags: [verify, services, docker_apps, instabox_magpie, phase5]
