@@ -7,6 +7,13 @@
       - instabox_magpie_data_dir | default('') is match('^/')
       - instabox_magpie_image | default('') | length > 0
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+- name: Validate shared gateway key
+  ansible.builtin.assert:
+    that:
+      - instabox_magpie_gateway_key | default('') | length >= 32
+  no_log: true
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
 
 - name: Create isolated Magpie storage
   become: true
@@ -25,7 +32,7 @@
     - "{{ instabox_magpie_data_dir }}/secrets"
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
-- name: Generate distinct local web and gateway secrets once (atomic)
+- name: Generate local web secret once (atomic)
   become: true
   ansible.builtin.command:
     argv:
@@ -47,10 +54,24 @@
         finally:
             os.close(fd)
         os.replace(tmp, dest)
-      - "{{ instabox_magpie_data_dir }}/secrets/{{ item }}"
-  loop: [web_key, gateway_key]
+        print('created')
+      - "{{ instabox_magpie_data_dir }}/secrets/web_key"
+  register: _instabox_magpie_web_key_creation
+  changed_when: _instabox_magpie_web_key_creation.stdout == 'created'
   no_log: true
   when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Install shared gateway key
+  become: true
+  ansible.builtin.copy:
+    content: "{{ instabox_magpie_gateway_key }}"
+    dest: "{{ instabox_magpie_data_dir }}/secrets/gateway_key"
+    owner: '65532'
+    group: '65532'
+    mode: '0600'
+  no_log: true
+  diff: false
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
 - name: Read the isolated web key
@@ -224,34 +245,50 @@
     - _instabox_plugin_list.stdout is not search('agy-cli')
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
-- name: Read isolated gateway key
-  become: true
-  ansible.builtin.slurp:
-    src: "{{ instabox_magpie_data_dir }}/secrets/gateway_key"
-  register: _instabox_magpie_gateway_key
+- name: Probe shared gateway key
+  ansible.builtin.uri:
+    url: "http://{{ instabox_magpie_bind_address }}:{{ instabox_magpie_api_port }}/v1/models"
+    headers:
+      Authorization: "Bearer {{ instabox_magpie_gateway_key }}"
+    status_code: [200, 401]
+    use_proxy: false
+  register: _instabox_gateway_probe
   no_log: true
   when: not ansible_check_mode
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
-- name: Check if isolated gateway key is already present
+- name: List existing gateway keys when replacement is needed
   become: true
   community.docker.docker_container_exec:
     container: instabox-magpie
     command: /magpie gateway-key list
   register: _instabox_gateway_key_list
   changed_when: false
-  when: not ansible_check_mode
-  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
-
-- name: Register isolated gateway key if absent
-  become: true
-  ansible.builtin.command:
-    argv: [docker, exec, -i, instabox-magpie, /magpie, gateway-key, add, instabox-aggregator, --key, '-']
-    stdin: "{{ _instabox_magpie_gateway_key.content | b64decode | trim }}"
-  register: _instabox_key_install
   no_log: true
   when:
     - not ansible_check_mode
-    - _instabox_gateway_key_list.stdout is not search('instabox-aggregator')
+    - _instabox_gateway_probe.status == 401
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Remove old gateway key
+  become: true
+  ansible.builtin.command:
+    argv: [docker, exec, instabox-magpie, /magpie, gateway-key, remove, instabox-aggregator]
+  no_log: true
+  when:
+    - not ansible_check_mode
+    - _instabox_gateway_probe.status == 401
+    - _instabox_gateway_key_list.stdout is search('instabox-aggregator')
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Register shared gateway key
+  become: true
+  ansible.builtin.command:
+    argv: [docker, exec, -i, instabox-magpie, /magpie, gateway-key, add, instabox-aggregator, --key, '-']
+    stdin: "{{ instabox_magpie_gateway_key }}"
+  no_log: true
+  when:
+    - not ansible_check_mode
+    - _instabox_gateway_probe.status == 401
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
