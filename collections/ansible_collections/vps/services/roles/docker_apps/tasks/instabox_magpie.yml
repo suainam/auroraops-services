@@ -273,7 +273,7 @@
 - name: Remove old gateway key
   become: true
   ansible.builtin.command:
-    argv: [docker, exec, instabox-magpie, /magpie, gateway-key, remove, instabox-aggregator]
+    argv: [docker, exec, instabox-magpie, /magpie, gateway-key, remove, "{{ (_instabox_gateway_key_list.stdout | regex_findall('(?m)^\\s*(\\S+)\\s+instabox-aggregator\\s')) | first }}"]
   no_log: true
   when:
     - not ansible_check_mode
