@@ -192,6 +192,7 @@
       peach: true
       respire: true
       instabox_magpie: true
+      openviking: true
   tags:
     - verify
     - services
@@ -1667,7 +1668,7 @@
     not docker_apps_container_info.exists
     or docker_apps_container_info.container.State.Running
        != (docker_apps_container_expected_running[item] | bool)
-  loop: "{{ docker_apps_containers | reject('equalto', 'hy_memory') | list }}"
+  loop: "{{ docker_apps_containers | reject('equalto', 'hy_memory') | select('in', docker_apps_container_expected_running) | list }}"
   no_log: true
   tags:
     - verify
