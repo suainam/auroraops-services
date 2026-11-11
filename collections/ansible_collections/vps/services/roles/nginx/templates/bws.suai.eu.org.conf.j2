@@ -1,13 +1,33 @@
+{# =============================================================================
+# bws Vaultwarden 站点反向代理 (gz58)
+#
+# 链路: 公网 -> Cloudflare (standard 443 -> 8443 规则) -> gz58 Nginx
+#  - Cloudflare 侧通过 Rule/Transform 将 HTTPS 443 改写为 8443 转发，
+#    源站因此同时监听 443 与 8443 (IPv4+IPv6)，保证直连与 CF 回源均可达。
+#  - 安全回环: 由连接云的 CF 隧道 (cloudflared) 直接转发到 127.0.0.1:{{ app_port_vaultwarden_http }}，
+#    不依赖本 Nginx 站点，本 server 块服务公开入口。
+#
+# 四个 location 语义:
+#  - /connector  (正则 ~* -connector\.html$): 隐藏 X-Frame-Options/CSP，便于
+#    桌面/浏览器 connector 展示。
+#  - /                    : 主 Web UI，带 WebSocket + CSP。
+#  - /notifications/hub   : WebSocket 长连接，禁用缓冲/缓存，100s 超时。
+#  - /notifications/hub/negotiate: 信号协商，带 CSP。
+#
+# 共用片段: common_ssl/headers/performance.conf 由 nginx 角色 config.yml 生成。
+# 不设 allow/deny (cloudflare_only: false)，访问由防火墙/CF 层面控制。
+# =============================================================================
 server {
-    listen 80;
-    listen [::]:80;
+    listen {{ nginx_http_port }};
     server_name bws.suai.eu.org;
     return 301 https://$host$request_uri;
 }
 
 server {
-    listen {{ nginx_https_port | default(443) }} ssl;
-    listen [::]:{{ nginx_https_port | default(443) }} ssl;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    listen 8443 ssl;
+    listen [::]:8443 ssl;
     http2 on;
     server_name bws.suai.eu.org;
 
@@ -18,25 +38,8 @@ server {
     include /etc/nginx/conf.d/common_headers.conf;
     include /etc/nginx/conf.d/common_performance.conf;
 
-    client_max_body_size 128M;
-
     location ~* -connector\.html$ {
-        proxy_pass http://127.0.0.1:{{ app_port_vaultwarden_http | default(30007) }};
-        proxy_hide_header X-Frame-Options;
-        proxy_hide_header Content-Security-Policy;
-        add_header X-Frame-Options "" always;
-    }
-
-    location / {
-        proxy_pass http://127.0.0.1:{{ app_port_vaultwarden_http | default(30007) }};
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /notifications/hub {
-        proxy_pass http://127.0.0.1:{{ app_port_vaultwarden_http | default(30007) }};
+        proxy_pass http://127.0.0.1:{{ app_port_vaultwarden_http }};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -44,11 +47,50 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_hide_header X-Frame-Options;
+        proxy_hide_header Content-Security-Policy;
+        add_header X-Frame-Options "" always;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:{{ app_port_vaultwarden_http }};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline' 'wasm-unsafe-eval'" always;
+    }
+
+    location /notifications/hub {
+        proxy_pass http://127.0.0.1:{{ app_port_vaultwarden_http }};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 100s;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline' 'wasm-unsafe-eval'" always;
     }
 
     location /notifications/hub/negotiate {
-        proxy_pass http://127.0.0.1:{{ app_port_vaultwarden_http | default(30007) }};
+        proxy_pass http://127.0.0.1:{{ app_port_vaultwarden_http }};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+        add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline' 'wasm-unsafe-eval'" always;
     }
 }
