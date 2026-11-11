@@ -47,7 +47,14 @@ proxy-groups:
     proxies: ["⚡ 自动优选", "🇭🇰 HK · 极速", "🇹🇼 TW · 极速", "🇯🇵 JP · 极速", "🇸🇬 SG · 极速", "🇺🇸 US · 极速", DIRECT]
   - name: "🤖 AI 服务"
     type: select
-    proxies: ["🇺🇸 US · AI", "🇯🇵 JP · AI", "🇸🇬 SG · AI", "🇹🇼 TW · AI"]
+    proxies: ["USAI静态", "🇺🇸 US · AI", "🇯🇵 JP · AI", "🇸🇬 SG · AI", "🇹🇼 TW · AI"]
+  - name: "USAI静态"
+    type: select
+    proxies: [REJECT]
+{% if 'source-cc15' in vps_src.items %}
+    use: ["source-cc15"]
+{% endif %}
+    filter: "(?i)\\[VPS\\] CC15-[^-]+-[^-]+-静态(?:$|-)"
   - name: "🏦 金融与交易所"
     type: select
     proxies: ["🇹🇼 TW · 金融", "🇭🇰 HK · 金融", "🇺🇸 US · 金融", "🇯🇵 JP · 金融", "🇸🇬 SG · 金融", "🌐 紧急专线逃生通道"]
