@@ -50,10 +50,8 @@ proxy-groups:
     proxies: ["USAI静态", "🇺🇸 US · AI", "🇯🇵 JP · AI", "🇸🇬 SG · AI", "🇹🇼 TW · AI"]
   - name: "USAI静态"
     type: select
-    proxies: [REJECT]
-{% if 'source-cc15' in vps_src.items %}
     use: ["source-cc15"]
-{% endif %}
+    empty-fallback: REJECT
     filter: "(?i)\\[VPS\\] CC15-[^-]+-[^-]+-静态(?:$|-)"
   - name: "🏦 金融与交易所"
     type: select
