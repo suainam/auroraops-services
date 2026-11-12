@@ -281,11 +281,17 @@
   ansible.builtin.assert:
     that:
       - docker_apps_sub_store_capability_providers | length > 0
+      - >-
+        (docker_apps_sub_store_capability_providers
+         | selectattr('enabled', 'equalto', true)
+         | selectattr('provider-id', 'defined')
+         | selectattr('provider-id', 'equalto', 'cc15') | list | length > 0)
+        or (docker_apps_sub_store_capability_providers
+            | selectattr('enabled', 'equalto', true)
+            | selectattr('provider-id', 'undefined')
+            | selectattr('name', 'equalto', 'cc15') | list | length > 0)
     fail_msg: >-
-      The resolved capability provider list is empty, so the distributed
-      profile would be rendered with no proxy-providers at all. This has
-      happened before: the template defaults the list to empty and the previous
-      cc15 profile kept serving a provider that no longer exists.
+      The resolved capability provider list must include the enabled cc15 provider.
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
 - name: Render Sub-Store capability Mihomo profile
