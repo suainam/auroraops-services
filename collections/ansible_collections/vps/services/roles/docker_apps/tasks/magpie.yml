@@ -316,6 +316,10 @@
           MAGPIE_WEB_KEY: "{{ docker_apps_magpie_web_key | default(omit) }}"
           GOMEMLIMIT: "{{ docker_apps_magpie_gomemlimit }}"
           RESPIRE_MAGPIE_AUTHORIZATION: "{{ docker_apps_respire_magpie_authorization | default(omit) }}"
+          # agy-cli 插件通过 AGY_PATH 定位 agy 二进制（agyCandidates 首个候选）。
+          # 升级镜像重建容器后二进制落在 /config/bin/agy；不设则插件报"找不到 agy"。
+          AGY_PATH: /config/bin/agy
+          AGY_CLI_DISABLE_AUTO_UPDATE: 'true'
         cdp_healthcheck:
           test: ["CMD", "/magpie", "healthcheck"]
           interval: 1800s
