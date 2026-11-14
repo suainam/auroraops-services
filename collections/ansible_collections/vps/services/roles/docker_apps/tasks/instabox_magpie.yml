@@ -107,12 +107,13 @@
   when: not ansible_check_mode
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
-- name: Check agy manifest sha512 against pinned release
+- name: Check agy manifest against pinned release
   ansible.builtin.assert:
     that:
-      - _instabox_agy_manifest.sha512 == 'e363e1b17daaac2589f18e6973429c039fd5a5e5c15e9c0852fa349836f3992b10fe84732bc8d8c8208e149f0304f15aba9dec696d12efeed03917492c0580eb'
+      - _instabox_agy_manifest.version == '1.5.8'
+      - _instabox_agy_manifest.sha512 == 'f08faaee588327dba8722bdc60f26a14f6915a8f2d756ed7959cde0a706d4e62fd9f831ab1a077dace5f947caaa6e851457df5023180bb8d3f54386804a3787f'
       - _instabox_agy_manifest.url is match('^https://storage.googleapis.com/')
-    fail_msg: "agy manifest sha512 drifted from pinned release; refusing unverified download"
+    fail_msg: "agy manifest drifted from pinned 1.5.8 release; refusing unverified download"
   when: not ansible_check_mode
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
@@ -120,28 +121,39 @@
   become: true
   ansible.builtin.get_url:
     url: "{{ _instabox_agy_manifest.url }}"
-    dest: "{{ instabox_magpie_data_dir }}/agy-1.5.3.tar.gz"
-    checksum: "sha512:e363e1b17daaac2589f18e6973429c039fd5a5e5c15e9c0852fa349836f3992b10fe84732bc8d8c8208e149f0304f15aba9dec696d12efeed03917492c0580eb"
+    dest: "{{ instabox_magpie_data_dir }}/agy-1.5.8.tar.gz"
+    checksum: "sha512:f08faaee588327dba8722bdc60f26a14f6915a8f2d756ed7959cde0a706d4e62fd9f831ab1a077dace5f947caaa6e851457df5023180bb8d3f54386804a3787f"
     mode: '0600'
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Create versioned agy extraction directory
+  become: true
+  ansible.builtin.file:
+    path: "{{ instabox_magpie_data_dir }}/config/bin/agy-1.5.8"
+    state: directory
+    owner: '65532'
+    group: '65532'
+    mode: '0700'
   when: not ansible_check_mode
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
 - name: Extract pinned agy executable
   become: true
   ansible.builtin.unarchive:
-    src: "{{ instabox_magpie_data_dir }}/agy-1.5.3.tar.gz"
-    dest: "{{ instabox_magpie_data_dir }}/config/bin"
+    src: "{{ instabox_magpie_data_dir }}/agy-1.5.8.tar.gz"
+    dest: "{{ instabox_magpie_data_dir }}/config/bin/agy-1.5.8"
     remote_src: true
     owner: '65532'
     group: '65532'
-    creates: "{{ instabox_magpie_data_dir }}/config/bin/antigravity"
+    creates: "{{ instabox_magpie_data_dir }}/config/bin/agy-1.5.8/antigravity"
   when: not ansible_check_mode
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
 - name: Install agy into the persistent home directory
   become: true
   ansible.builtin.copy:
-    src: "{{ instabox_magpie_data_dir }}/config/bin/antigravity"
+    src: "{{ instabox_magpie_data_dir }}/config/bin/agy-1.5.8/antigravity"
     dest: "{{ instabox_magpie_data_dir }}/config/home/.local/bin/agy"
     remote_src: true
     owner: '65532'
@@ -153,9 +165,9 @@
 - name: Download pinned plugin source archive
   become: true
   ansible.builtin.get_url:
-    url: https://codeload.github.com/magpie-community/plugins/tar.gz/ff9d3a6446a2b6213d2759a6119ffa8a97656db9
-    dest: "{{ instabox_magpie_data_dir }}/plugin-ff9d3a.tar.gz"
-    checksum: sha256:4efe0c6b4a5d76419b5450d3e48edf33962fa1661cf23e4ed3653966a99f5828
+    url: https://codeload.github.com/magpie-community/plugins/tar.gz/001a1f9fbfb1db4922ea3624539afaff0e1b2a15
+    dest: "{{ instabox_magpie_data_dir }}/plugin-001a1f9.tar.gz"
+    checksum: sha256:f57bbcea96b7375c19177ab0fdb7937b1a508630136081860d3441f31c9843ba
     mode: '0600'
   when: not ansible_check_mode
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
@@ -163,12 +175,12 @@
 - name: Extract pinned plugin source
   become: true
   ansible.builtin.unarchive:
-    src: "{{ instabox_magpie_data_dir }}/plugin-ff9d3a.tar.gz"
+    src: "{{ instabox_magpie_data_dir }}/plugin-001a1f9.tar.gz"
     dest: "{{ instabox_magpie_data_dir }}/config"
     remote_src: true
     owner: '65532'
     group: '65532'
-    creates: "{{ instabox_magpie_data_dir }}/config/plugins-ff9d3a6446a2b6213d2759a6119ffa8a97656db9/packages/agy-cli/package.json"
+    creates: "{{ instabox_magpie_data_dir }}/config/plugins-001a1f9fbfb1db4922ea3624539afaff0e1b2a15/packages/agy-cli/package.json"
   when: not ansible_check_mode
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
@@ -225,7 +237,35 @@
   when: not ansible_check_mode
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
-- name: Check if agy-cli plugin is already registered
+- name: Ensure backup directory exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ instabox_magpie_data_dir }}/backups"
+    state: directory
+    owner: '65532'
+    group: '65532'
+    mode: '0700'
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Snapshot Magpie plugin state before upgrade
+  # Existing rollback removes the container only, so keep a root-only copy of the
+  # plugin registration state. agy credentials live in its own home and are never
+  # rewritten by these tasks, so they are deliberately excluded from the snapshot.
+  become: true
+  ansible.builtin.command:
+    argv:
+      - tar
+      - -czf
+      - "{{ instabox_magpie_data_dir }}/backups/pre-{{ magpie_version }}-agy-1.5.8.tar.gz"
+      - -C
+      - "{{ instabox_magpie_data_dir }}"
+      - config/magpie
+    creates: "{{ instabox_magpie_data_dir }}/backups/pre-{{ magpie_version }}-agy-1.5.8.tar.gz"
+  when: not ansible_check_mode
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: List registered Magpie plugins
   become: true
   community.docker.docker_container_exec:
     container: instabox-magpie
@@ -235,14 +275,37 @@
   when: not ansible_check_mode
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
-- name: Register pinned local plugin if absent
+- name: Remove superseded pinned plugin registration
   become: true
   ansible.builtin.command:
-    argv: [docker, exec, instabox-magpie, /magpie, plugin, add, /config/plugins-ff9d3a6446a2b6213d2759a6119ffa8a97656db9/packages/agy-cli]
+    argv:
+      - docker
+      - exec
+      - instabox-magpie
+      - /magpie
+      - plugin
+      - rm
+      - /config/plugins-ff9d3a6446a2b6213d2759a6119ffa8a97656db9/packages/agy-cli
+  when:
+    - not ansible_check_mode
+    - _instabox_plugin_list.stdout is search('plugins-ff9d3a6446a2b6213d2759a6119ffa8a97656db9')
+  tags: [deploy, services, docker_apps, instabox_magpie, phase5]
+
+- name: Register pinned local plugin
+  become: true
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - instabox-magpie
+      - /magpie
+      - plugin
+      - add
+      - /config/plugins-001a1f9fbfb1db4922ea3624539afaff0e1b2a15/packages/agy-cli
   register: _instabox_plugin_install
   when:
     - not ansible_check_mode
-    - _instabox_plugin_list.stdout is not search('agy-cli')
+    - _instabox_plugin_list.stdout is not search('plugins-001a1f9fbfb1db4922ea3624539afaff0e1b2a15')
   tags: [deploy, services, docker_apps, instabox_magpie, phase5]
 
 - name: Probe shared gateway key

@@ -444,7 +444,7 @@
     argv: [docker, exec, instabox-magpie, /config/home/.local/bin/agy, --version]
   register: _instabox_agy_version
   changed_when: false
-  failed_when: "'1.5.3' not in _instabox_agy_version.stdout"
+  failed_when: "'1.5.8' not in _instabox_agy_version.stdout"
   when: verify_docker_app_name | default('') == 'instabox_magpie'
   tags: [verify, services, docker_apps, instabox_magpie, phase5]
 
@@ -454,7 +454,7 @@
     argv: [docker, exec, instabox-magpie, /magpie, plugin, list, --json]
   register: _instabox_plugins
   changed_when: false
-  failed_when: "'agy-cli' not in _instabox_plugins.stdout"
+  failed_when: "'plugins-001a1f9fbfb1db4922ea3624539afaff0e1b2a15' not in _instabox_plugins.stdout or 'plugins-ff9d3a6446a2b6213d2759a6119ffa8a97656db9' in _instabox_plugins.stdout"
   no_log: true
   when: verify_docker_app_name | default('') == 'instabox_magpie'
   tags: [verify, services, docker_apps, instabox_magpie, phase5]
