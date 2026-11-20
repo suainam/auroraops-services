@@ -146,7 +146,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 机场AI"
     type: fallback
     use: {{ general_airport_src.items | to_json }}
-    filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*(?<![a-zA-Z])(AI|GPT|Gemini|OpenAI|Claude)"
+    filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*((?<![a-zA-Z])(AI|GPT|Gemini|OpenAI|Claude)|(高速|超高速|专线|千兆|1000M|Trojan|Hysteria|HY[0-9]|原生|家宽))"
     url: {{ ai_url }}
     interval: 180
     timeout: 5000
