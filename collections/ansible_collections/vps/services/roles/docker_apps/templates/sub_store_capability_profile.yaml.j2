@@ -95,9 +95,13 @@ proxy-groups:
     use: {{ general_airport_src.items | to_json }}
     filter: "(?i)\\[BP\\]"
   - name: "💰 低倍率走廊"
-    type: select
+    type: fallback
     use: {{ general_airport_src.items | to_json }}
     filter: "(?i)0\\.1|0\\.01|低倍"
+    url: {{ test_url }}
+    interval: 180
+    timeout: 5000
+    lazy: true
     hidden: true
   - name: "⚡ 自动优选"
     type: fallback
