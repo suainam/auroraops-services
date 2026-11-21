@@ -21,6 +21,14 @@
       "password": {{ outbound.password | to_json }}
     }
 {% endfor %}
+{% for outbound in singbox_localhost_http_outbounds | default([]) %},
+    {
+      "type": "http",
+      "tag": {{ outbound.tag | to_json }},
+      "server": "127.0.0.1",
+      "server_port": {{ outbound.port | int }}
+    }
+{% endfor %}
 {% if singbox_relay_upstreams | default([]) | length > 0 %},
     {
       "type": "urltest",
