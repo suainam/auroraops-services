@@ -963,6 +963,67 @@
     - sub_store
     - phase5
 
+- name: Validate public Sub-Store Mihomo USAI静态 AI selector contract
+  vars:
+    docker_apps_sub_store_public_mihomo_groups: >-
+      {{ docker_apps_sub_store_public_mihomo_payload.get('proxy-groups', []) | default([], true) }}
+    docker_apps_sub_store_public_mihomo_providers: >-
+      {{ docker_apps_sub_store_public_mihomo_payload.get('proxy-providers', {}) | default({}, true) }}
+    docker_apps_sub_store_ai_service_groups: >-
+      {{
+        docker_apps_sub_store_public_mihomo_groups
+        | selectattr('name', 'defined')
+        | selectattr('name', 'equalto', '🤖 AI 服务')
+        | list
+      }}
+    docker_apps_sub_store_usai_static_groups: >-
+      {{
+        docker_apps_sub_store_public_mihomo_groups
+        | selectattr('name', 'defined')
+        | selectattr('name', 'equalto', 'USAI静态')
+        | list
+      }}
+  ansible.builtin.assert:
+    that:
+      - docker_apps_sub_store_ai_service_groups | length == 1
+      - (docker_apps_sub_store_ai_service_groups[0].get('proxies') | type_debug) == 'list'
+      - docker_apps_sub_store_ai_service_groups[0]['proxies'] | length >= 1
+      - docker_apps_sub_store_ai_service_groups[0]['proxies'][0] == 'USAI静态'
+      - docker_apps_sub_store_usai_static_groups | length == 1
+      - docker_apps_sub_store_usai_static_groups[0].get('type') == 'select'
+      - docker_apps_sub_store_usai_static_groups[0].get('use') == ['source-cc15']
+      - docker_apps_sub_store_usai_static_groups[0].get('proxies', []) == []
+      - docker_apps_sub_store_usai_static_groups[0].get('empty-fallback') == 'REJECT'
+      - docker_apps_sub_store_usai_static_groups[0].get('filter') is string
+      - >-
+        '[VPS] CC15-千兆-Vless-静态'
+        is search(docker_apps_sub_store_usai_static_groups[0]['filter'])
+      - >-
+        '[VPS] CC15-千兆-Vless-CF'
+        is not search(docker_apps_sub_store_usai_static_groups[0]['filter'])
+      - >-
+        '[VPS] CC15-千兆-Vless-中继-US'
+        is not search(docker_apps_sub_store_usai_static_groups[0]['filter'])
+      - >-
+        '[VPS] QQG1299-千兆-Vless-静态'
+        is not search(docker_apps_sub_store_usai_static_groups[0]['filter'])
+      - docker_apps_sub_store_public_mihomo_providers is mapping
+      - docker_apps_sub_store_public_mihomo_providers.get('source-cc15') is mapping
+      - docker_apps_sub_store_public_mihomo_providers['source-cc15'].get('type') == 'http'
+      - docker_apps_sub_store_public_mihomo_providers['source-cc15'].get('url') is string
+      - docker_apps_sub_store_public_mihomo_providers['source-cc15']['url'] is match('^https?://[^/]+')
+    fail_msg: >-
+      Public Sub-Store Mihomo profile must expose USAI静态 first under 🤖 AI 服务
+      as a select group backed only by source-cc15 with empty-fallback REJECT
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
+
 - name: Validate public Sub-Store Mihomo rule precedence
   vars:
     docker_apps_sub_store_public_mihomo_rules: "{{ docker_apps_sub_store_public_mihomo_payload['rules'] }}"
