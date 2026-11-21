@@ -374,6 +374,7 @@ docker_apps_singbox_block_ads: "{{ singbox_block_ads | default(true) }}"
 docker_apps_singbox_block_cn_domains: >-
   {{ singbox_block_cn_domains | default(true) }}
 docker_apps_singbox_warp_enabled: "{{ singbox_warp_enabled | default(false) }}"
+docker_apps_singbox_warp_global_rules: "{{ singbox_warp_global_rules | default(true) }}"
 docker_apps_singbox_warp_port: "{{ app_port_singbox_warp | default(40000) }}"
 docker_apps_warp_pull: "{{ warp_pull | default('missing') }}"
 docker_apps_warp_image: "{{ warp_image | default('caomingjun/warp:2026.6.880.0-2.12.0') }}"

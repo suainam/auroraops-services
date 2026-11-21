@@ -17,6 +17,21 @@
   when: singbox_effective_mode == 'docker'
   tags: [rollback, services, singbox, phase5]
 
+- name: Stop singbox WARP docker container
+  become: true
+  community.docker.docker_container:
+    name: singbox-warp
+    state: stopped
+  failed_when: >-
+    singbox_rollback_warp_stop is failed
+    and 'No such container' not in (singbox_rollback_warp_stop.msg | default(''))
+  register: singbox_rollback_warp_stop
+  when:
+    - singbox_effective_mode == 'docker'
+    - singbox_manage_warp | default(false) | bool
+    - docker_apps_singbox_warp_enabled | default(singbox_warp_enabled | default(false)) | bool
+  tags: [rollback, services, singbox, warp, phase5]
+
 - name: Stop singbox native service
   become: true
   ansible.builtin.service:

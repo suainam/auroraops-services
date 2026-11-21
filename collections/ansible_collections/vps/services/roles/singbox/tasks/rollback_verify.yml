@@ -12,6 +12,18 @@
   when: singbox_effective_mode == 'docker'
   tags: [rollback_verify, services, singbox, phase5]
 
+- name: Verify singbox WARP container stopped
+  become: true
+  community.docker.docker_container_info:
+    name: singbox-warp
+  register: singbox_rollback_warp_info
+  failed_when: singbox_rollback_warp_info.exists and singbox_rollback_warp_info.container.State.Running
+  when:
+    - singbox_effective_mode == 'docker'
+    - singbox_manage_warp | default(false) | bool
+    - docker_apps_singbox_warp_enabled | default(singbox_warp_enabled | default(false)) | bool
+  tags: [rollback_verify, services, singbox, warp, phase5]
+
 - name: Probe singbox native OpenRC unit without changing state
   become: true
   ansible.builtin.stat:

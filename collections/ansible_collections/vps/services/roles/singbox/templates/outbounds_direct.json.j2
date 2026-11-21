@@ -1,12 +1,12 @@
 {
   "outbounds": [
     { "type": "direct", "tag": "direct-out" },
-    {%- if docker_apps_singbox_warp_enabled | default(false) | bool %}
+    {%- if docker_apps_singbox_warp_enabled | default(singbox_warp_enabled | default(false)) | bool %}
     {
       "type": "socks",
       "tag": "warp-out",
       "server": "127.0.0.1",
-      "server_port": {{ docker_apps_singbox_warp_port | default(app_port_singbox_warp | default(40000)) }}
+      "server_port": {{ docker_apps_singbox_warp_port | default(singbox_warp_port | default(app_port_singbox_warp | default(40000))) }}
     },
     {%- endif %}
     { "type": "block", "tag": "block" }
