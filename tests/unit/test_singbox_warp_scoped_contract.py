@@ -196,6 +196,12 @@ def test_singbox_role_wires_warp_service_lifecycle_and_removes_orphaned_copy() -
     assert "singbox_manage_warp | default(false) | bool" in main_tasks[warp_idx]["when"]
     assert "singbox_effective_mode == 'docker'" in main_tasks[warp_idx]["when"]
 
+    flush_idx = next(i for i, t in enumerate(main_tasks) if t.get("ansible.builtin.meta") == "flush_handlers")
+    docker_idx = next(i for i, t in enumerate(main_tasks) if t.get("ansible.builtin.include_tasks") == "docker.yml")
+    verify_idx = next(i for i, t in enumerate(main_tasks) if t.get("ansible.builtin.include_tasks") == "verify_docker.yml")
+    assert docker_idx < flush_idx < verify_idx
+    assert "singbox_effective_mode == 'docker'" in main_tasks[flush_idx]["when"]
+
     warp_text = (SINGBOX_ROLE / "tasks/warp.yml").read_text(encoding="utf-8")
     assert "name: singbox-warp" in warp_text
     assert "127.0.0.1:{{ singbox_warp_effective_port }}:{{ singbox_warp_effective_port }}" in warp_text
