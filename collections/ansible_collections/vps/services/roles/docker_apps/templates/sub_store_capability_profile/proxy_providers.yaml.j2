@@ -14,6 +14,7 @@ proxy-providers:
 {% set flat_prefix = (raw_prefix if raw_prefix is string else (raw_prefix | first)) | string | trim %}
 {% set prefix = flat_prefix if flat_prefix.startswith('[') else '[' ~ flat_prefix ~ ']' %}
 {% set provider_id = provider['provider-id'] | default(provider.name) %}
+{% set cloady_ha = provider_id in ['cloady-use1', 'cloady-usw1', 'cloady-eu1'] and (provider['display-group'] | default('AIRPORT') | upper) == 'NAT' %}
   source-{{ provider_id }}:
     type: http
     url: "https://{{ singbox_domain }}/{{ sub_store_capability_source_provider_suffix }}-{{ provider_id | urlencode }}.yaml"
@@ -29,9 +30,9 @@ proxy-providers:
     health-check:
       enable: true
       url: https://www.gstatic.com/generate_204
-      interval: 300
+      interval: {{ 60 if cloady_ha else 300 }}
       timeout: 5000
-      lazy: true
+      lazy: {{ 'false' if cloady_ha else 'true' }}
       expected-status: 204
 {% endif %}
 {% endif %}

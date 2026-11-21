@@ -150,3 +150,17 @@ singbox_mesh_socks_listen: "127.0.0.1"
 # authority's decision (ports.yml), and an empty value should fail loudly
 # instead of quietly binding something already in use.
 singbox_mesh_socks_port: ""
+
+# Cloudflare WARP local SOCKS5 egress proxy (opt-in).
+# singbox_warp_global_rules defaults to true to preserve legacy callers that
+# expect enabling WARP to capture global AI/Google geosite traffic. Set it to
+# false when exposing WARP only through explicit per-inbound relay_outbound
+# nodes so direct/other relay nodes stay unchanged.
+singbox_warp_enabled: false
+singbox_warp_global_rules: true
+singbox_warp_port: "{{ app_port_singbox_warp | default(40000) }}"
+singbox_warp_image: "{{ warp_image | default('caomingjun/warp:2026.6.880.0-2.12.0') }}"
+singbox_warp_pull: "{{ warp_pull | default('missing') }}"
+singbox_warp_memory: "{{ warp_memory | default('192m') }}"
+singbox_warp_memory_reservation: "{{ warp_memory_reservation | default('96m') }}"
+singbox_warp_cpus: "{{ warp_cpus | default('0.25') }}"

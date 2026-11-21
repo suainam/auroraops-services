@@ -35,6 +35,11 @@ proxies: []
   {% endif %}
 {% endfor %}
 {% set test_url = 'https://www.gstatic.com/generate_204' %}
+{% set cloady_groups = namespace(items=[]) %}
+{% set nat_japan_sources = ['source-jp18-resi', 'source-jp3-resi'] | select('in', nat_src.items) | list %}
+{% for region in ['use1', 'usw1', 'eu1'] if ('source-cloady-' ~ region) in nat_src.items %}
+  {% set cloady_groups.items = cloady_groups.items + [('source-cloady-' ~ region, '[NAT] Cloady ' ~ (region | upper) ~ ' 高可用')] %}
+{% endfor %}
 {% set ai_url   = 'https://www.cloudflare.com/cdn-cgi/trace' %}
 {% set regions = [{'c': 'HK', 'f': '🇭🇰'}, {'c': 'TW', 'f': '🇹🇼'}, {'c': 'JP', 'f': '🇯🇵'}, {'c': 'SG', 'f': '🇸🇬'}, {'c': 'US', 'f': '🇺🇸'}] %}
 
@@ -63,8 +68,24 @@ proxy-groups:
     filter: "(?i)\\[VPS\\]"
   - name: "🧭 NAT"
     type: select
-    use: {{ nat_src.items | to_json }}
-    filter: "(?i)\\[NAT\\]"
+{% if cloady_groups.items %}
+    proxies: {{ cloady_groups.items | map(attribute=1) | list | to_json }}
+{% elif not nat_japan_sources %}
+    proxies: [REJECT]
+{% endif %}
+    use: {{ nat_japan_sources | to_json }}
+    filter: {{ '(?i)\\[NAT\\] (?:JP(?:18|3)-[^-]+-Vless-[^-]+-JP|Cloady (?:USE1|USW1|EU1) 高可用)$' | to_json }}
+{% for source, group in cloady_groups.items %}
+  - name: {{ group | to_json }}
+    type: fallback
+    hidden: true
+    use: [{{ source | to_json }}]
+    url: {{ test_url }}
+    interval: 60
+    timeout: 5000
+    lazy: false
+    empty-fallback: REJECT
+{% endfor %}
   - name: "⚡ YF"
     type: select
     use: {{ general_airport_src.items | to_json }}
@@ -74,9 +95,13 @@ proxy-groups:
     use: {{ general_airport_src.items | to_json }}
     filter: "(?i)\\[BP\\]"
   - name: "💰 低倍率走廊"
-    type: select
+    type: fallback
     use: {{ general_airport_src.items | to_json }}
     filter: "(?i)0\\.1|0\\.01|低倍"
+    url: {{ test_url }}
+    interval: 180
+    timeout: 5000
+    lazy: true
     hidden: true
   - name: "⚡ 自动优选"
     type: fallback

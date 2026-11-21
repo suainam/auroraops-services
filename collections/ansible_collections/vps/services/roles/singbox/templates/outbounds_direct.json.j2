@@ -1,12 +1,12 @@
 {
   "outbounds": [
     { "type": "direct", "tag": "direct-out" },
-    {%- if docker_apps_singbox_warp_enabled | default(false) | bool %}
+    {%- if docker_apps_singbox_warp_enabled | default(singbox_warp_enabled | default(false)) | bool %}
     {
       "type": "socks",
       "tag": "warp-out",
       "server": "127.0.0.1",
-      "server_port": {{ docker_apps_singbox_warp_port | default(app_port_singbox_warp | default(40000)) }}
+      "server_port": {{ docker_apps_singbox_warp_port | default(singbox_warp_port | default(app_port_singbox_warp | default(40000))) }}
     },
     {%- endif %}
     { "type": "block", "tag": "block" }
@@ -19,6 +19,14 @@
       "version": "5",
       "username": {{ outbound.username | to_json }},
       "password": {{ outbound.password | to_json }}
+    }
+{% endfor %}
+{% for outbound in singbox_localhost_http_outbounds | default([]) %},
+    {
+      "type": "http",
+      "tag": {{ outbound.tag | to_json }},
+      "server": "127.0.0.1",
+      "server_port": {{ outbound.port | int }}
     }
 {% endfor %}
 {% if singbox_relay_upstreams | default([]) | length > 0 %},

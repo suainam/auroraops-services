@@ -1,0 +1,123 @@
+---
+# Cloudflare WARP Local Proxy Management
+# Runs Cloudflare WARP in Proxy/MASQUE mode on 127.0.0.1:40000 without touching Linux default route.
+
+- name: Sing-box WARP - Resolve effective runtime variables
+  ansible.builtin.set_fact:
+    singbox_warp_effective_enabled: >-
+      {{ docker_apps_singbox_warp_enabled | default(singbox_warp_enabled | default(false)) | bool }}
+    singbox_warp_effective_port: >-
+      {{ docker_apps_singbox_warp_port | default(singbox_warp_port | default(app_port_singbox_warp | default(40000))) | int }}
+    singbox_warp_effective_image: >-
+      {{ docker_apps_warp_image | default(singbox_warp_image | default('caomingjun/warp:2026.6.880.0-2.12.0')) }}
+    singbox_warp_effective_pull: >-
+      {{ docker_apps_warp_pull | default(singbox_warp_pull | default('missing')) }}
+    singbox_warp_effective_memory: >-
+      {{ docker_apps_warp_memory | default(singbox_warp_memory | default('192m')) }}
+    singbox_warp_effective_memory_reservation: >-
+      {{ docker_apps_warp_memory_reservation | default(singbox_warp_memory_reservation | default('96m')) }}
+    singbox_warp_effective_cpus: >-
+      {{ docker_apps_warp_cpus | default(singbox_warp_cpus | default('0.25')) }}
+  tags: [deploy, services, singbox, warp, phase5]
+
+- name: Ensure WARP state directory exists
+  become: true
+  ansible.builtin.file:
+    path: /opt/dockers/singbox-warp/data
+    state: directory
+    mode: "0755"
+    owner: "{{ docker_apps_docker_user_uid | default('1000') }}"
+    group: "{{ docker_apps_docker_user_gid | default('1000') }}"
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - singbox_warp_effective_enabled | bool
+  tags: [deploy, services, singbox, warp, phase5]
+
+- name: Sing-box WARP - Deploy Local Proxy Container
+  become: true
+  community.docker.docker_container:
+    name: singbox-warp
+    image: "{{ singbox_warp_effective_image }}"
+    pull: "{{ singbox_warp_effective_pull }}"
+    restart_policy: unless-stopped
+    state: started
+    security_opts:
+      - "no-new-privileges:false"
+    capabilities:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "1"
+      net.ipv4.conf.all.src_valid_mark: "1"
+    published_ports:
+      - "127.0.0.1:{{ singbox_warp_effective_port }}:{{ singbox_warp_effective_port }}"
+    volumes:
+      - "/opt/dockers/singbox-warp/data:/var/lib/cloudflare-warp"
+    env:
+      WARP_SLEEP: "2"
+      GOST_ARGS: "-L :{{ singbox_warp_effective_port }}"
+    memory: "{{ singbox_warp_effective_memory }}"
+    memory_reservation: "{{ singbox_warp_effective_memory_reservation }}"
+    cpus: "{{ singbox_warp_effective_cpus }}"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl -fsS --proxy socks5h://127.0.0.1:{{ singbox_warp_effective_port }}
+          https://www.cloudflare.com/cdn-cgi/trace | grep -q -E 'warp=(on|plus)' || exit 1
+      interval: 1800s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - not ansible_check_mode
+    - singbox_warp_effective_enabled | bool
+  tags: [deploy, services, singbox, warp, phase5]
+
+- name: Sing-box WARP - Wait for SOCKS5 Listener Readiness
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ singbox_warp_effective_port | int }}"
+    timeout: 20
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - not ansible_check_mode
+    - singbox_warp_effective_enabled | bool
+  tags: [deploy, services, singbox, warp, phase5]
+
+- name: Sing-box WARP - Probe Active Cloudflare Egress
+  ansible.builtin.command:
+    argv:
+      - curl
+      - -fsS
+      - --max-time
+      - "10"
+      - --proxy
+      - "socks5h://127.0.0.1:{{ singbox_warp_effective_port }}"
+      - https://www.cloudflare.com/cdn-cgi/trace
+  register: singbox_warp_probe
+  until:
+    - singbox_warp_probe.rc == 0
+    - "'warp=on' in singbox_warp_probe.stdout or 'warp=plus' in singbox_warp_probe.stdout"
+  retries: 10
+  delay: 3
+  changed_when: false
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - not ansible_check_mode
+    - singbox_warp_effective_enabled | bool
+  tags: [deploy, services, singbox, warp, phase5]
+
+- name: Sing-box WARP - Remove container when disabled
+  become: true
+  community.docker.docker_container:
+    name: singbox-warp
+    state: absent
+  when:
+    - not (docker_apps_skip_singbox | default(false))
+    - not ansible_check_mode
+    - not (singbox_warp_effective_enabled | bool)
+    - (singbox_effective_mode | default('docker')) == 'docker'
+  tags: [deploy, services, singbox, warp, phase5]

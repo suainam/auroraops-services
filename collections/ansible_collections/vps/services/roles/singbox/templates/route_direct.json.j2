@@ -1,3 +1,7 @@
+{%- set _warp_enabled = docker_apps_singbox_warp_enabled | default(singbox_warp_enabled | default(false)) | bool -%}
+{%- set _warp_global_rules = _warp_enabled and (docker_apps_singbox_warp_global_rules | default(singbox_warp_global_rules | default(true)) | bool) -%}
+{%- set _extra_nodes = singbox_extra_nodes | default([]) -%}
+{%- set _warp_nodes = _extra_nodes | selectattr('relay_outbound', 'defined') | selectattr('relay_outbound', 'equalto', 'warp-out') | list -%}
 {
   "route": {
     "rule_set": [
@@ -5,8 +9,8 @@
       {# raw.githubusercontent 在部分节点出口不可达，改用 jsDelivr 镜像同一仓库 #}
       { "tag": "geoip-cn", "type": "remote", "format": "binary", "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs" },
       { "tag": "geosite-cn", "type": "remote", "format": "binary", "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs" },
-      { "tag": "geosite-category-ads-all", "type": "remote", "format": "binary", "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ads-all.srs" }{%- if docker_apps_singbox_warp_enabled | default(false) | bool %},{% endif %}
-      {%- if docker_apps_singbox_warp_enabled | default(false) | bool %}
+      { "tag": "geosite-category-ads-all", "type": "remote", "format": "binary", "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ads-all.srs" }{%- if _warp_global_rules %},{% endif %}
+      {%- if _warp_global_rules %}
       { "tag": "geosite-openai", "type": "remote", "format": "binary", "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/openai.srs" },
       { "tag": "geosite-anthropic", "type": "remote", "format": "binary", "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/anthropic.srs" },
       { "tag": "geosite-google", "type": "remote", "format": "binary", "url": "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/google.srs" }
@@ -25,6 +29,9 @@
          Guarded on singbox_wireguard_enabled so a host without the endpoint is
          not left pointing at an outbound that does not exist. #}
       {% if singbox_wireguard_enabled | default(false) | bool %}
+      {% for node in _warp_nodes %}
+      { "inbound": [{{ ('in-' ~ (node.name | regex_replace('[^a-zA-Z0-9-]', '') | lower)) | to_json }}], "ip_cidr": {{ singbox_wireguard_allowed_ips | default(['10.144.10.0/24']) | to_json }}, "action": "reject" },
+      {% endfor %}
       { "ip_cidr": {{ singbox_wireguard_allowed_ips | default(['10.144.10.0/24']) | to_json }}, "outbound": "wg-{{ singbox_wireguard_peer_tag | default('hub') }}" },
       {% endif %}
       {
@@ -42,6 +49,10 @@
         ],
         "action": "reject"
       },
+      {% for node in _warp_nodes %}
+      {%- set node_tag = 'in-' ~ (node.name | regex_replace('[^a-zA-Z0-9-]', '') | lower) %}
+      { "inbound": [{{ node_tag | to_json }}], {% if _warp_enabled %}"outbound": "warp-out"{% else %}"action": "reject"{% endif %} },
+      {% endfor %}
       {# 放行学术及部分国际期刊（防止被 geosite-cn 误杀回源）#}
       { "domain_suffix": ["nature.com", "springer.com", "springernature.com"], "outbound": "direct-out" },
       {% if not (docker_apps_singbox_zero_rules | default(false) | bool) %}
@@ -49,18 +60,18 @@
       {% endif %}
       {# Domain-routed relay rules: nodes with relay_outbound + relay_ai_domains forward AI/YouTube to relay_outbound; rest direct. #}
       {%- set all_in_nodes = (docker_apps_singbox_processed_nodes | default(singbox_nodes | default([]))) + (singbox_extra_nodes | default([])) -%}
-      {% for node in all_in_nodes if node.relay_outbound is defined and (node.relay_ai_domains | default(false) | bool) %}
+      {% for node in all_in_nodes if node.relay_outbound is defined and node.relay_outbound != 'warp-out' and (node.relay_ai_domains | default(false) | bool) %}
       {%- set node_tag = 'in-' ~ (node.name | regex_replace('[^a-zA-Z0-9-]', '') | lower) %}
       { "inbound": [{{ node_tag | to_json }}], "domain_suffix": ["openai.com", "chatgpt.com", "sora.com", "oaistatic.com", "oaiusercontent.com", "claude.ai", "anthropic.com", "gemini.google.com", "generativelanguage.googleapis.com", "aistudio.google.com", "cloudcode-pa.googleapis.com", "youtube.com", "youtube-nocookie.com", "googlevideo.com", "ytimg.com", "ggpht.com"], "outbound": {{ node.relay_outbound | to_json }} },
       { "inbound": [{{ node_tag | to_json }}], "outbound": "direct-out" },
       {% endfor %}
-      {% if docker_apps_singbox_warp_enabled | default(false) | bool %}
+      {% if _warp_global_rules %}
       { "domain_suffix": ["daily-cloudcode-pa.googleapis.com"], "outbound": "direct-out" },
       {% if not (docker_apps_singbox_zero_rules | default(false) | bool) %}
       { "rule_set": ["geosite-openai", "geosite-anthropic", "geosite-google"], "outbound": "warp-out" },
       {% endif %}
       {% endif %}
-{% for node in singbox_extra_nodes | default([]) if node.relay_outbound is defined and not (node.relay_ai_domains | default(false) | bool) %}
+{% for node in _extra_nodes if node.relay_outbound is defined and node.relay_outbound != 'warp-out' and not (node.relay_ai_domains | default(false) | bool) %}
       {% if node.shared_inbound is defined %}
       { "auth_user": [{{ node.name | to_json }}], "outbound": {{ node.relay_outbound | to_json }} },
       {% else %}

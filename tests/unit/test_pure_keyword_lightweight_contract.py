@@ -263,8 +263,15 @@ def test_real_world_node_classification_avoids_false_positives_and_negatives():
     assert jp_giga_filter.search("🇯🇵日本超高速1")
     assert jp_giga_filter.search("🇯🇵日本超高速3")
 
-    # 5. Low-rate corridor filter matches all 0.1 and 0.01 nodes
-    low_rate_filter = re.compile(groups["💰 低倍率走廊"]["filter"])
+    # 5. Low-rate corridor must be a hidden fallback with health checks and match 0.1/0.01 nodes
+    low_rate_group = groups["💰 低倍率走廊"]
+    assert low_rate_group["type"] == "fallback"
+    assert low_rate_group["hidden"] is True
+    assert low_rate_group["url"] == "https://www.gstatic.com/generate_204"
+    assert low_rate_group["interval"] == 180
+    assert low_rate_group["timeout"] == 5000
+    assert low_rate_group["lazy"] is True
+    low_rate_filter = re.compile(low_rate_group["filter"])
     assert low_rate_filter.search("🇯🇵日本专线-0.1倍率")
     assert low_rate_filter.search("🇺🇸美国纽约-0.01倍率")
     assert not low_rate_filter.search("🇸🇬新加坡专线")
@@ -276,3 +283,45 @@ def test_real_world_node_classification_avoids_false_positives_and_negatives():
     assert not normal_filter.search("白嫖机场.com-官网")
     assert not normal_filter.search("若无法使用请更新客户端")
     assert normal_filter.search("🇺🇸美国A1-小火箭")
+
+
+def test_low_rate_corridor_hidden_fallback_contract():
+    """Verify 💰 低倍率走廊 is a hidden fallback with health-check settings and does not regress to select."""
+    top_template = (
+        SERVICES_ROOT
+        / "collections/ansible_collections/vps/services/roles/docker_apps/templates/sub_store_capability_profile.yaml.j2"
+    ).read_text(encoding="utf-8")
+    loader = jinja2.DictLoader(
+        {
+            "sub_store_capability_profile/proxy_providers.yaml.j2": (
+                TEMPLATES_DIR / "proxy_providers.yaml.j2"
+            ).read_text(encoding="utf-8"),
+            "sub_store_capability_profile/rules.yaml.j2": (TEMPLATES_DIR / "rules.yaml.j2").read_text(encoding="utf-8"),
+            "sub_store_capability_profile/dns.yaml.j2": (TEMPLATES_DIR / "dns.yaml.j2").read_text(encoding="utf-8"),
+            "sub_store_capability_profile/private_rules.yaml.j2": "",
+            "sub_store_capability_profile/rules.yaml": (TEMPLATES_DIR / "rules.yaml").read_text(encoding="utf-8"),
+        }
+    )
+    tpl = make_jinja_env(loader=loader).from_string(top_template)
+    rendered = tpl.render(
+        docker_apps_sub_store_capability_providers=[
+            {"name": "yfjc", "provider-id": "yfjc", "enabled": True, "display-group": "AIRPORT"},
+            {"name": "baipiao", "provider-id": "baipiao", "enabled": True, "display-group": "BP"},
+        ],
+        singbox_domain="uk.suai.eu.org",
+        sub_store_capability_source_provider_suffix="cap-prov",
+    )
+    payload = yaml.safe_load(rendered)
+    groups = {g["name"]: g for g in payload.get("proxy-groups", [])}
+    low_rate_group = groups["💰 低倍率走廊"]
+    assert low_rate_group["type"] == "fallback"
+    assert low_rate_group["hidden"] is True
+    assert low_rate_group["use"] == ["source-yfjc", "source-baipiao"]
+    assert low_rate_group["url"] == "https://www.gstatic.com/generate_204"
+    assert low_rate_group["interval"] == 180
+    assert low_rate_group["timeout"] == 5000
+    assert low_rate_group["lazy"] is True
+    low_rate_filter = re.compile(low_rate_group["filter"])
+    assert low_rate_filter.search("🇯🇵日本专线-0.1倍率")
+    assert low_rate_filter.search("🇺🇸美国纽约-0.01倍率")
+    assert not low_rate_filter.search("🇸🇬新加坡专线")

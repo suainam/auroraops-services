@@ -35,3 +35,25 @@
   loop: "{{ singbox_verify_expected_tcp_ports | default([]) }}"
   when: (singbox_verify_expected_tcp_ports | default([]) | length) > 0
   tags: [verify, services, singbox, phase5]
+
+- name: Verify Sing-box WARP container is running
+  become: true
+  community.docker.docker_container_info:
+    name: singbox-warp
+  register: singbox_warp_docker_info
+  failed_when: not singbox_warp_docker_info.exists or not singbox_warp_docker_info.container.State.Running
+  when:
+    - singbox_manage_warp | default(false) | bool
+    - docker_apps_singbox_warp_enabled | default(singbox_warp_enabled | default(false)) | bool
+  tags: [verify, services, singbox, warp, phase5]
+
+- name: Verify Sing-box WARP SOCKS5 port is listening
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ docker_apps_singbox_warp_port | default(singbox_warp_port | default(app_port_singbox_warp | default(40000))) | int }}"
+    state: started
+    timeout: 5
+  when:
+    - singbox_manage_warp | default(false) | bool
+    - docker_apps_singbox_warp_enabled | default(singbox_warp_enabled | default(false)) | bool
+  tags: [verify, services, singbox, warp, phase5]

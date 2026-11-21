@@ -1,3 +1,5 @@
+{%- set _warp_enabled = docker_apps_singbox_warp_enabled | default(singbox_warp_enabled | default(false)) | bool -%}
+{%- set _warp_global_rules = _warp_enabled and (docker_apps_singbox_warp_global_rules | default(singbox_warp_global_rules | default(true)) | bool) -%}
 {
   "dns": {
     "servers": [
@@ -23,7 +25,7 @@
           "www.cloudflare.com"
         ],
         "server": "google-dns-udp"
-      }{%- if docker_apps_singbox_warp_enabled | default(false) | bool and not (docker_apps_singbox_zero_rules | default(false) | bool) %},
+      }{%- if _warp_global_rules and not (docker_apps_singbox_zero_rules | default(false) | bool) %},
       {
         "rule_set": [
           "geosite-openai",
