@@ -36,6 +36,7 @@ proxies: []
 {% endfor %}
 {% set test_url = 'https://www.gstatic.com/generate_204' %}
 {% set cloady_groups = namespace(items=[]) %}
+{% set nat_japan_sources = ['source-jp18-resi', 'source-jp3-resi'] | select('in', nat_src.items) | list %}
 {% for region in ['use1', 'usw1', 'eu1'] if ('source-cloady-' ~ region) in nat_src.items %}
   {% set cloady_groups.items = cloady_groups.items + [('source-cloady-' ~ region, '[NAT] Cloady ' ~ (region | upper) ~ ' 高可用')] %}
 {% endfor %}
@@ -69,12 +70,15 @@ proxy-groups:
     type: select
 {% if cloady_groups.items %}
     proxies: {{ cloady_groups.items | map(attribute=1) | list | to_json }}
+{% elif not nat_japan_sources %}
+    proxies: [REJECT]
 {% endif %}
-    use: {{ nat_src.items | to_json }}
-    filter: "(?i)\\[NAT\\]"
+    use: {{ nat_japan_sources | to_json }}
+    filter: {{ '(?i)\\[NAT\\] (?:JP(?:18|3)-[^-]+-Vless-[^-]+-JP|Cloady (?:USE1|USW1|EU1) 高可用)$' | to_json }}
 {% for source, group in cloady_groups.items %}
   - name: {{ group | to_json }}
     type: fallback
+    hidden: true
     use: [{{ source | to_json }}]
     url: {{ test_url }}
     interval: 60
