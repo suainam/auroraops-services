@@ -35,6 +35,10 @@ proxies: []
   {% endif %}
 {% endfor %}
 {% set test_url = 'https://www.gstatic.com/generate_204' %}
+{% set cloady_groups = namespace(items=[]) %}
+{% for region in ['use1', 'usw1', 'eu1'] if ('source-cloady-' ~ region) in nat_src.items %}
+  {% set cloady_groups.items = cloady_groups.items + [('source-cloady-' ~ region, '[NAT] Cloady ' ~ (region | upper) ~ ' 高可用')] %}
+{% endfor %}
 {% set ai_url   = 'https://www.cloudflare.com/cdn-cgi/trace' %}
 {% set regions = [{'c': 'HK', 'f': '🇭🇰'}, {'c': 'TW', 'f': '🇹🇼'}, {'c': 'JP', 'f': '🇯🇵'}, {'c': 'SG', 'f': '🇸🇬'}, {'c': 'US', 'f': '🇺🇸'}] %}
 
@@ -63,8 +67,21 @@ proxy-groups:
     filter: "(?i)\\[VPS\\]"
   - name: "🧭 NAT"
     type: select
+{% if cloady_groups.items %}
+    proxies: {{ cloady_groups.items | map(attribute=1) | list | to_json }}
+{% endif %}
     use: {{ nat_src.items | to_json }}
     filter: "(?i)\\[NAT\\]"
+{% for source, group in cloady_groups.items %}
+  - name: {{ group | to_json }}
+    type: fallback
+    use: [{{ source | to_json }}]
+    url: {{ test_url }}
+    interval: 60
+    timeout: 5000
+    lazy: false
+    empty-fallback: REJECT
+{% endfor %}
   - name: "⚡ YF"
     type: select
     use: {{ general_airport_src.items | to_json }}
