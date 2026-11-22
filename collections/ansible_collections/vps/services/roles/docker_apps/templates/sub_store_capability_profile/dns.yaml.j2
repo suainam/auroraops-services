@@ -2,17 +2,15 @@ dns:
   enable: true
   ipv6: true
   enhanced-mode: fake-ip
-  fake-ip-range: "{{ sub_store_capability_fake_ip_range }}"
+  fake-ip-range: "{{ sub_store_capability_fake_ip_range | default('198.19.0.0/16') }}"
   fake-ip-filter-mode: blacklist
   respect-rules: true
   default-nameserver:
     - 223.5.5.5
     - 119.29.29.29
   nameserver:
-    - 223.5.5.5
-    - 119.29.29.29
-    - https://dns.alidns.com/dns-query
-    - https://doh.pub/dns-query
+    - https://1.1.1.1/dns-query
+    - https://8.8.8.8/dns-query
   direct-nameserver:
     - 223.5.5.5
     - 119.29.29.29
@@ -20,18 +18,18 @@ dns:
     - 223.5.5.5
     - 119.29.29.29
   nameserver-policy:
-    "geosite:geolocation-!cn":
-      - "https://1.1.1.1/dns-query#🚀 默认代理"
-      - "https://8.8.8.8/dns-query#🚀 默认代理"
-    "+.stun.*":
+    "+.suai.eu.org":
+      - 223.5.5.5
+      - 119.29.29.29
+    "+.argotunnel.com,+.cftunnel.com{% if singbox_domain %},{{ singbox_domain }}{% endif %}{% for domain in sub_store_capability_private_fake_ip_filter | default([]) %},{{ domain }}{% endfor %}":
       - 223.5.5.5
       - 119.29.29.29
     "geosite:cn,private":
-      - https://dns.alidns.com/dns-query
-      - https://doh.pub/dns-query
-    "+.argotunnel.com,+.cftunnel.com{% if singbox_domain %},{{ singbox_domain }}{% endif %}{% for domain in sub_store_capability_private_fake_ip_filter | default([]) %},{{ domain }}{% endfor %}":
-      - https://dns.alidns.com/dns-query
-      - https://doh.pub/dns-query
+      - 223.5.5.5
+      - 119.29.29.29
+    "geosite:geolocation-!cn":
+      - "https://1.1.1.1/dns-query#🚀 默认代理"
+      - "https://8.8.8.8/dns-query#🚀 默认代理"
   fake-ip-filter:
     - "geosite:cn"
     - +.argotunnel.com
@@ -39,7 +37,6 @@ dns:
     - +.163.com
     - +.netease.com
     - +.uuremote.com
-    - "+.stun.*"
     - "{{ singbox_domain }}"
 {% for domain in sub_store_capability_user_fake_ip_filter | default([]) %}
     - "{{ domain }}"
