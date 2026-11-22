@@ -20,10 +20,10 @@
   - DOMAIN,localhost,DIRECT
   - DST-PORT,22,DIRECT
   - DST-PORT,6868,DIRECT
-  # WebRTC STUN 探测强制直连并免受 DNS 代理超时影响 (#111)
-  - DST-PORT,3478,DIRECT
-  - DST-PORT,19302,DIRECT
-  - DOMAIN-KEYWORD,stun,DIRECT
+  # WebRTC STUN 探测走代理出口，防止暴露国内真实 IP（不影响游戏与局域网 UDP）
+  - DST-PORT,3478,🚀 默认代理
+  - DST-PORT,19302,🚀 默认代理
+  - DOMAIN-KEYWORD,stun,🚀 默认代理
   - DOMAIN-SUFFIX,aliyuncs.com,DIRECT
   - DOMAIN-SUFFIX,163.com,DIRECT
   - DOMAIN-SUFFIX,netease.com,DIRECT
@@ -73,7 +73,7 @@
   - GEOSITE,google,🤖 AI 服务
 
   # Process rules are application-routing fallbacks; destination rules win first.
-  - PROCESS-NAME-REGEX,(?i)^(claude|chatgpt|gpt|gemini|agy|antigravity|opencode|pi|omp|oh-my-pi|cursor|windsurf)(\.exe)?$,🤖 AI 服务
+  - PROCESS-NAME-REGEX,(?i)^(claude|chatgpt|gpt|gemini|agy|antigravity|opencode|pi|omp|oh-my-pi|cursor|windsurf|muse)(\.exe)?$,🤖 AI 服务
   - PROCESS-NAME-REGEX,(?i)^(Claude|ChatGPT|Cursor|Windsurf|Antigravity)\s+Helper.*$,🤖 AI 服务
   - PROCESS-PATH,/usr/bin/wget,🚀 默认代理
   - PROCESS-PATH-WILDCARD,/usr/*/wget,🚀 默认代理

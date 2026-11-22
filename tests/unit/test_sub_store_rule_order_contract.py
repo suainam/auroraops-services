@@ -116,8 +116,12 @@ def test_served_mihomo_profile_uses_the_ordered_policy_and_defines_its_targets()
     dns = profile["dns"]
     assert "geosite:cn,private" in dns["nameserver-policy"]
     assert dns["nameserver-policy"]["geosite:cn,private"] == [
-        "https://dns.alidns.com/dns-query",
-        "https://doh.pub/dns-query",
+        "223.5.5.5",
+        "119.29.29.29",
+    ]
+    assert dns["nameserver-policy"]["+.suai.eu.org"] == [
+        "223.5.5.5",
+        "119.29.29.29",
     ]
 
 def test_verify_checks_served_profile_rule_precedence_without_logging():

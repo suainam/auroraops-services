@@ -37,7 +37,7 @@ proxies: []
 {% set test_url = 'https://www.gstatic.com/generate_204' %}
 {% set cloady_groups = namespace(items=[]) %}
 {% set nat_japan_sources = ['source-jp3-resi'] | select('in', nat_src.items) | list %}
-{% set nat_us_sources = ['source-us816-resi', 'source-us66-resi'] | select('in', nat_src.items) | list %}
+{% set nat_us_sources = ['source-us66-resi', 'source-us816-resi'] | select('in', nat_src.items) | list %}
 {% set nat_direct_sources = nat_japan_sources + nat_us_sources %}
 {% for region in ['use1', 'usw1', 'eu1'] if ('source-cloady-' ~ region) in nat_src.items %}
   {% set cloady_groups.items = cloady_groups.items + [('source-cloady-' ~ region, '[NAT] Cloady ' ~ (region | upper) ~ ' 高可用')] %}
@@ -54,12 +54,21 @@ proxy-groups:
     proxies: ["⚡ 自动优选", "🇭🇰 HK · 极速", "🇹🇼 TW · 极速", "🇯🇵 JP · 极速", "🇸🇬 SG · 极速", "🇺🇸 US · 极速", DIRECT]
   - name: "🤖 AI 服务"
     type: select
-    proxies: ["USAI静态", "🇺🇸 US · AI", "🇯🇵 JP · AI", "🇸🇬 SG · AI", "🇹🇼 TW · AI"]
+    proxies: ["🇺🇸 US家宽", "USAI静态", "🇺🇸 US · AI", "🇯🇵 JP · AI", "🇸🇬 SG · AI", "🇹🇼 TW · AI"]
+  - name: "🇺🇸 US家宽"
+    type: select
+{% if nat_us_sources %}
+    use: {{ nat_us_sources | to_json }}
+    empty-fallback: REJECT
+    filter: "(?i)\\[NAT\\] US(?:66|816)-"
+{% else %}
+    proxies: [REJECT]
+{% endif %}
   - name: "USAI静态"
     type: select
-    use: {{ (['source-cc15'] + nat_us_sources) | to_json }}
+    use: ["source-cc15"]
     empty-fallback: REJECT
-    filter: "(?i)(?:\\[VPS\\] CC15-(?!.*(?:-CF|中继))|\\[NAT\\] US(?:816|66)-)"
+    filter: "(?i)\\[VPS\\] CC15-(?!.*(?:-CF|中继))"
   - name: "🏦 金融与交易所"
     type: select
     proxies: ["🇹🇼 TW · 金融", "🇭🇰 HK · 金融", "🇺🇸 US · 金融", "🇯🇵 JP · 金融", "🇸🇬 SG · 金融", "🌐 紧急专线逃生通道"]

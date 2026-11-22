@@ -953,6 +953,14 @@
       - docker_apps_sub_store_public_mihomo_payload['tun']['enable'] | bool
       - docker_apps_sub_store_public_mihomo_payload['tun']['stack'] == 'mixed'
       - "'172.16.0.0/12' in docker_apps_sub_store_public_mihomo_payload['tun']['route-exclude-address']"
+      - docker_apps_sub_store_public_mihomo_payload['dns']['enable'] | bool
+      - docker_apps_sub_store_public_mihomo_payload['dns']['enhanced-mode'] == 'fake-ip'
+      - docker_apps_sub_store_public_mihomo_payload['dns']['respect-rules'] | bool
+      - docker_apps_sub_store_public_mihomo_payload['dns']['default-nameserver'] == ['223.5.5.5', '119.29.29.29']
+      - docker_apps_sub_store_public_mihomo_payload['dns']['nameserver'] == ['https://1.1.1.1/dns-query', 'https://8.8.8.8/dns-query']
+      - docker_apps_sub_store_public_mihomo_payload['dns']['proxy-server-nameserver'] == ['223.5.5.5', '119.29.29.29']
+      - docker_apps_sub_store_public_mihomo_payload['dns']['nameserver-policy']['geosite:cn,private'] == ['223.5.5.5', '119.29.29.29']
+      - docker_apps_sub_store_public_mihomo_payload['dns']['nameserver-policy']['+.suai.eu.org'] == ['223.5.5.5', '119.29.29.29']
     fail_msg: "Public Sub-Store Mihomo profile is missing providers, proxy groups, or rules"
   when: verify_docker_app_name | default('') == 'sub_store'
   no_log: true
@@ -988,7 +996,8 @@
       - docker_apps_sub_store_ai_service_groups | length == 1
       - (docker_apps_sub_store_ai_service_groups[0].get('proxies') | type_debug) == 'list'
       - docker_apps_sub_store_ai_service_groups[0]['proxies'] | length >= 1
-      - docker_apps_sub_store_ai_service_groups[0]['proxies'][0] == 'USAI静态'
+      - docker_apps_sub_store_ai_service_groups[0]['proxies'][0] == '🇺🇸 US家宽'
+      - "'USAI静态' in docker_apps_sub_store_ai_service_groups[0]['proxies']"
       - docker_apps_sub_store_usai_static_groups | length == 1
       - docker_apps_sub_store_usai_static_groups[0].get('type') == 'select'
       - docker_apps_sub_store_usai_static_groups[0].get('use') == ['source-cc15']
@@ -1013,8 +1022,8 @@
       - docker_apps_sub_store_public_mihomo_providers['source-cc15'].get('url') is string
       - docker_apps_sub_store_public_mihomo_providers['source-cc15']['url'] is match('^https?://[^/]+')
     fail_msg: >-
-      Public Sub-Store Mihomo profile must expose USAI静态 first under 🤖 AI 服务
-      as a select group backed only by source-cc15 with empty-fallback REJECT
+      Public Sub-Store Mihomo profile must expose 🇺🇸 US家宽 first (with USAI静态
+      backed only by source-cc15 and empty-fallback REJECT) under 🤖 AI 服务
   when: verify_docker_app_name | default('') == 'sub_store'
   no_log: true
   tags:
@@ -1430,8 +1439,11 @@
       - docker_apps_sub_store_capability_profile_payload['enable-process'] | bool
       - docker_apps_sub_store_capability_profile_payload['find-process-mode'] == 'always'
       - docker_apps_sub_store_capability_profile_payload['dns']['respect-rules'] | bool
-      - docker_apps_sub_store_capability_profile_payload['dns']['nameserver'][:2] == ['223.5.5.5', '119.29.29.29']
+      - docker_apps_sub_store_capability_profile_payload['dns']['default-nameserver'] == ['223.5.5.5', '119.29.29.29']
+      - docker_apps_sub_store_capability_profile_payload['dns']['nameserver'] == ['https://1.1.1.1/dns-query', 'https://8.8.8.8/dns-query']
       - docker_apps_sub_store_capability_profile_payload['dns']['proxy-server-nameserver'] == ['223.5.5.5', '119.29.29.29']
+      - docker_apps_sub_store_capability_profile_payload['dns']['nameserver-policy']['geosite:cn,private'] == ['223.5.5.5', '119.29.29.29']
+      - docker_apps_sub_store_capability_profile_payload['dns']['nameserver-policy']['+.suai.eu.org'] == ['223.5.5.5', '119.29.29.29']
       - '"fallback" not in docker_apps_sub_store_capability_profile_payload["dns"]'
       - '"fallback-filter" not in docker_apps_sub_store_capability_profile_payload["dns"]'
       - "'geosite:cn' in docker_apps_sub_store_capability_profile_payload['dns']['fake-ip-filter']"

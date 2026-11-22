@@ -44,11 +44,10 @@ def test_client_capability_profile_renders_dns_contract_without_app_managed_tun(
     dns = profile["dns"]
     assert dns["ipv6"] is True
     assert dns["respect-rules"] is True
+    assert dns["default-nameserver"] == ["223.5.5.5", "119.29.29.29"]
     assert dns["nameserver"] == [
-        "223.5.5.5",
-        "119.29.29.29",
-        "https://dns.alidns.com/dns-query",
-        "https://doh.pub/dns-query",
+        "https://1.1.1.1/dns-query",
+        "https://8.8.8.8/dns-query",
     ]
     assert dns["proxy-server-nameserver"] == ["223.5.5.5", "119.29.29.29"]
     assert "fallback" not in dns
@@ -60,16 +59,17 @@ def test_client_capability_profile_renders_dns_contract_without_app_managed_tun(
         "https://1.1.1.1/dns-query#🚀 默认代理",
         "https://8.8.8.8/dns-query#🚀 默认代理",
     ]
+    assert dns["nameserver-policy"]["+.suai.eu.org"] == ["223.5.5.5", "119.29.29.29"]
     assert "geosite:cn,private" in dns["nameserver-policy"]
     assert dns["nameserver-policy"]["geosite:cn,private"] == [
-        "https://dns.alidns.com/dns-query",
-        "https://doh.pub/dns-query",
+        "223.5.5.5",
+        "119.29.29.29",
     ]
     domestic_domains_key = next((k for k in dns["nameserver-policy"] if "+.argotunnel.com" in k), None)
     assert domestic_domains_key is not None
     assert "+.corp.example.com" in domestic_domains_key
     assert "proxy.example.com" in domestic_domains_key
     assert dns["nameserver-policy"][domestic_domains_key] == [
-        "https://dns.alidns.com/dns-query",
-        "https://doh.pub/dns-query",
+        "223.5.5.5",
+        "119.29.29.29",
     ]
