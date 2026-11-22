@@ -76,6 +76,7 @@ proxy-groups:
   - name: "🖥️ VPS"
     type: select
     use: {{ vps_src.items | to_json }}
+    empty-fallback: REJECT
     filter: "(?i)\\[VPS\\]"
   - name: "🧭 NAT"
     type: select
@@ -85,6 +86,7 @@ proxy-groups:
     proxies: [REJECT]
 {% endif %}
     use: {{ nat_direct_sources | to_json }}
+    empty-fallback: REJECT
     filter: {{ '(?i)\\[NAT\\] (?:JP3-[^-]+-Vless-[^-]+-JP|US(?:816|66)-[^-]+-(?:Vless|Hy2)-[^-]+-US|Cloady (?:USE1|USW1|EU1) 高可用)$' | to_json }}
 {% for source, group in cloady_groups.items %}
   - name: {{ group | to_json }}
@@ -100,14 +102,17 @@ proxy-groups:
   - name: "⚡ YF"
     type: select
     use: {{ general_airport_src.items | to_json }}
+    empty-fallback: REJECT
     filter: "(?i)\\[YF\\]"
   - name: "🌐 BP"
     type: select
     use: {{ general_airport_src.items | to_json }}
+    empty-fallback: REJECT
     filter: "(?i)\\[BP\\]"
   - name: "💰 低倍率走廊"
     type: fallback
     use: {{ general_airport_src.items | to_json }}
+    empty-fallback: REJECT
     filter: "(?i)0\\.1|0\\.01|低倍"
     url: {{ test_url }}
     interval: 180
@@ -144,6 +149,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 专线"
     type: url-test
     use: {{ general_airport_src.items | to_json }}
+    empty-fallback: REJECT
     filter: "(?i)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*专线"
     url: {{ test_url }}
     interval: 120
@@ -154,6 +160,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 千兆"
     type: url-test
     use: {{ (vps_src.items + nat_src.items + general_airport_src.items) | to_json }}
+    empty-fallback: REJECT
     filter: "(?i)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*(千兆|1000M|光速|超高速)"
     url: {{ test_url }}
     interval: 120
@@ -164,6 +171,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 普通"
     type: url-test
     use: {{ general_airport_src.items | to_json }}
+    empty-fallback: REJECT
     filter: "(?i)^(?!.*(?:剩余流量|套餐到期|距离下次|请每月|更-?新.*订阅|官网|更换客户端|Shadowrocket客户端|clash.*客户端|请自行修改|去油管广告|Youtube去广告)).*(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }})"
     url: {{ test_url }}
     interval: 120
@@ -184,6 +192,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 自建AI"
     type: fallback
     use: {{ (vps_src.items + nat_src.items) | to_json }}
+    empty-fallback: REJECT
     filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*(家宽|原生|静态|中继)"
     url: {{ ai_url }}
     interval: 180
@@ -193,6 +202,7 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 机场AI"
     type: fallback
     use: {{ general_airport_src.items | to_json }}
+    empty-fallback: REJECT
     filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*((?<![a-zA-Z])(AI|GPT|Gemini|OpenAI|Claude)|(高速|超高速|专线|千兆|1000M|Trojan|Hysteria|HY[0-9]|原生|家宽))"
     url: {{ ai_url }}
     interval: 180
@@ -204,33 +214,51 @@ proxy-groups:
   - name: "{{ r.f }} {{ r.c }} · 金融"
     type: fallback
     proxies: ["{{ r.f }} {{ r.c }} · 金融自建", "{{ r.f }} {{ r.c }} · 金融择优"]
+    url: {{ test_url }}
+    interval: 180
+    timeout: 5000
+    lazy: true
     hidden: true
   - name: "{{ r.f }} {{ r.c }} · 金融自建"
     type: fallback
     use: {{ (vps_src.items + nat_src.items) | to_json }}
+    empty-fallback: REJECT
     filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }})"
+    url: {{ test_url }}
+    interval: 180
+    timeout: 5000
+    lazy: true
     hidden: true
   - name: "{{ r.f }} {{ r.c }} · 金融择优"
     type: fallback
     use: {{ general_airport_src.items | to_json }}
+    empty-fallback: REJECT
     filter: "(?i)(?!.*送中)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*(千兆|1000M|光速|超高速|0\\.1|0\\.01|低倍)"
+    url: {{ test_url }}
+    interval: 180
+    timeout: 5000
+    lazy: true
     hidden: true
 {% endfor %}
   - name: "🌐 紧急专线逃生通道"
     type: fallback
     use: {{ general_airport_src.items | to_json }}
+    empty-fallback: REJECT
     filter: "(?i)专线|IEPL|IPLC"
     url: {{ test_url }}
     interval: 180
+    timeout: 5000
     lazy: true
     hidden: true
 
   - name: "🇭🇰 港澳"
     type: url-test
     use: {{ general_airport_src.items | to_json }}
+    empty-fallback: REJECT
     filter: "(?i)^(?!.*(?:剩余流量|套餐到期|距离下次|请每月|更-?新.*订阅|官网)).*(\\[(HK|TW)\\]|\\b(HK|TW)\\b|🇭🇰|🇹🇼)"
     url: {{ test_url }}
     interval: 300
+    timeout: 5000
     lazy: true
     hidden: true
   - name: "⚡ 快速节点"
