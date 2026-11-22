@@ -118,47 +118,58 @@ proxy-groups:
     type: fallback
     proxies: ["🇯🇵 JP · 极速", "🇺🇸 US · 极速", "🇸🇬 SG · 极速", "🇭🇰 HK · 极速", "🇹🇼 TW · 极速"]
     url: {{ test_url }}
-    interval: 180
-    lazy: true
+    interval: 120
+    timeout: 2500
+    lazy: false
     hidden: true
   - name: "⚡ 国际流媒体"
-    type: fallback
+    type: url-test
     proxies: ["🇯🇵 JP · 极速", "🇺🇸 US · 极速", "🇸🇬 SG · 极速", "🇹🇼 TW · 极速", "🌐 紧急专线逃生通道"]
     url: {{ test_url }}
-    interval: 180
-    lazy: true
+    interval: 120
+    timeout: 2500
+    tolerance: 80
+    lazy: false
     hidden: true
 {% for r in regions %}
   - name: "{{ r.f }} {{ r.c }} · 极速"
-    type: fallback
+    type: url-test
     proxies: ["{{ r.f }} {{ r.c }} · 专线", "{{ r.f }} {{ r.c }} · 千兆", "{{ r.f }} {{ r.c }} · 普通"]
     url: {{ test_url }}
-    interval: 180
-    lazy: true
+    interval: 120
+    timeout: 2500
+    tolerance: 80
+    lazy: false
     hidden: true
   - name: "{{ r.f }} {{ r.c }} · 专线"
-    type: fallback
+    type: url-test
     use: {{ general_airport_src.items | to_json }}
     filter: "(?i)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*专线"
     url: {{ test_url }}
-    interval: 180
-    lazy: true
+    interval: 120
+    timeout: 2500
+    tolerance: 80
+    lazy: false
     hidden: true
   - name: "{{ r.f }} {{ r.c }} · 千兆"
-    type: fallback
+    type: url-test
     use: {{ (vps_src.items + nat_src.items + general_airport_src.items) | to_json }}
     filter: "(?i)(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }}).*(千兆|1000M|光速|超高速)"
     url: {{ test_url }}
-    interval: 180
-    lazy: true
+    interval: 120
+    timeout: 2500
+    tolerance: 80
+    lazy: false
     hidden: true
   - name: "{{ r.f }} {{ r.c }} · 普通"
-    type: fallback
+    type: url-test
     use: {{ general_airport_src.items | to_json }}
     filter: "(?i)^(?!.*(?:剩余流量|套餐到期|距离下次|请每月|更-?新.*订阅|官网|更换客户端|Shadowrocket客户端|clash.*客户端|请自行修改|去油管广告|Youtube去广告)).*(\\[{{ r.c }}\\]|\\b{{ r.c }}\\b|{{ r.f }})"
     url: {{ test_url }}
-    interval: 180
-    lazy: true
+    interval: 120
+    timeout: 2500
+    tolerance: 80
+    lazy: false
     hidden: true
 {% endfor %}
 {% for r in regions if r.c != 'HK' %}

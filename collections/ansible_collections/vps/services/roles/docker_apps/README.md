@@ -295,9 +295,9 @@ CLIProxyAPI 的 Antigravity 请求同时存在两个相互独立的概念：
         - **ISO 双字母形式化对称**：以 `HK`、`TW`、`JP`、`SG`、`US` 双字母代码驱动循环，各大区在极速、AI、金融组中严格对称生成，彻底消除冗余特例代码，模板极致压缩至 190 行以内。
         - **资产风控与小额流量保护红线**：
           * **源分类解耦**：自建源（`VPS` + `NAT`）独占承载金融组，并作为 AI 组的首选；大流量机场（`YF` + `BP`）作为默认代理、极速、流媒体与 B 站的主力与兜底；敏感受限池（`SK` 仅剩 19G）**绝对排除在默认高耗流量组之外**，仅供 Apple 低价区等特种非默认组。
-          * **极速三级闭环**：`专线 ➔ 千兆 ➔ 普通`，机场未打标常规节点自动落入 `普通` 兜底，专线全灭时普通节点自动接管，绝不熔断。
+          * **极速三级竞速与防熔断**：各大区 `· 极速` 及 `专线` / `千兆` / `普通` 分层统一采用主动 `url-test`（`interval: 120`、`timeout: 2500`、`tolerance: 80`、`lazy: false`）按 RTT 择优切换，机场未打标常规节点自动落入 `普通` 兜底，绝不熔断；`⚡ 自动优选` 保留 `fallback` 顺序回退（`日 ➔ 美 ➔ 新 ➔ 港 ➔ 台`，`interval: 120`、`timeout: 2500`、`lazy: false`）。
           * **AI 与金融严格隔离**：严禁 `DIRECT`；AI 优先调度纯净自建家宽/原生，机场 AI 兜底；金融绝对物理隔离商业机场，仅限自建纯净节点。
-          * **国际流媒体**：专属排除香港落地（`新 ➔ 日 ➔ 美 ➔ 台`）。
+          * **国际流媒体**：专属排除香港落地，采用主动 `url-test`（`interval: 120`、`timeout: 2500`、`tolerance: 80`、`lazy: false`）在 `日 / 美 / 新 / 台` 极速组与 `🌐 紧急专线逃生通道` 间按延迟择优。
         - **Profile 模板职责分离**：客户端 capability profile（`sub_store_capability_profile.yaml.j2`）负责 providers、groups、rules 和 DNS，不输出 Clash Verge 接管的 TUN 字段；服务器 Mihomo profile 在共享客户端配置上追加 `sub_store_capability_profile/tun.yaml.j2`，由它唯一维护服务器 TUN 排除地址。
     *   **New API Suite**:
         -   整合了 New API 和 Neko API Key Tool (查询工具)。
