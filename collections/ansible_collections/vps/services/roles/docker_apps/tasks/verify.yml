@@ -971,7 +971,7 @@
     - sub_store
     - phase5
 
-- name: Validate public Sub-Store Mihomo USAI静态 AI selector contract
+- name: Validate public Sub-Store Mihomo USAI静态 AI fallback contract
   vars:
     docker_apps_sub_store_public_mihomo_groups: >-
       {{ docker_apps_sub_store_public_mihomo_payload.get('proxy-groups', []) | default([], true) }}
@@ -999,7 +999,7 @@
       - docker_apps_sub_store_ai_service_groups[0]['proxies'][0] == '🇺🇸 US家宽'
       - "'USAI静态' in docker_apps_sub_store_ai_service_groups[0]['proxies']"
       - docker_apps_sub_store_usai_static_groups | length == 1
-      - docker_apps_sub_store_usai_static_groups[0].get('type') == 'select'
+      - docker_apps_sub_store_usai_static_groups[0].get('type') == 'fallback'
       - docker_apps_sub_store_usai_static_groups[0].get('use') == ['source-cc15']
       - docker_apps_sub_store_usai_static_groups[0].get('proxies', []) == []
       - docker_apps_sub_store_usai_static_groups[0].get('empty-fallback') == 'REJECT'
@@ -1023,7 +1023,7 @@
       - docker_apps_sub_store_public_mihomo_providers['source-cc15']['url'] is match('^https?://[^/]+')
     fail_msg: >-
       Public Sub-Store Mihomo profile must expose 🇺🇸 US家宽 first (with USAI静态
-      backed only by source-cc15 and empty-fallback REJECT) under 🤖 AI 服务
+      as a fallback backed only by source-cc15 and empty-fallback REJECT) under 🤖 AI 服务
   when: verify_docker_app_name | default('') == 'sub_store'
   no_log: true
   tags:

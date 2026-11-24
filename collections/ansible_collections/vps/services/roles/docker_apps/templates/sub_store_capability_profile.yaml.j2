@@ -70,7 +70,7 @@ proxy-groups:
     type: select
     proxies: ["🇺🇸 US家宽", "USAI静态", "🇺🇸 US · AI", "🇯🇵 JP · AI", "🇸🇬 SG · AI", "🇹🇼 TW · AI"]
   - name: "🇺🇸 US家宽"
-    type: select
+    type: fallback
 {% if nat_us_sources %}
     use: {{ nat_us_sources | to_json }}
     empty-fallback: REJECT
@@ -78,11 +78,19 @@ proxy-groups:
 {% else %}
     proxies: [REJECT]
 {% endif %}
+    url: {{ test_url }}
+    interval: 300
+    timeout: 5000
+    lazy: true
   - name: "USAI静态"
-    type: select
+    type: fallback
     use: ["source-cc15"]
     empty-fallback: REJECT
     filter: "(?i)\\[VPS\\] CC15-(?!.*(?:-CF|中继))"
+    url: {{ test_url }}
+    interval: 300
+    timeout: 5000
+    lazy: true
   - name: "🏦 金融与交易所"
     type: select
     proxies: ["🇹🇼 TW · 金融", "🇭🇰 HK · 金融", "🇺🇸 US · 金融", "🇯🇵 JP · 金融", "🇸🇬 SG · 金融", "🌐 紧急专线逃生通道"]
