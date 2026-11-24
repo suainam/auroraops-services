@@ -14,7 +14,9 @@ proxy-providers:
 {% set flat_prefix = (raw_prefix if raw_prefix is string else (raw_prefix | first)) | string | trim %}
 {% set prefix = flat_prefix if flat_prefix.startswith('[') else '[' ~ flat_prefix ~ ']' %}
 {% set provider_id = provider['provider-id'] | default(provider.name) %}
-{% set fetch_proxy = 'DIRECT' if provider_id in ['us66-resi', 'us816-resi'] else '🇺🇸 US家宽' %}
+{#- bootstrap_sources 走 DIRECT：它们自身是下载出口组的成员，经组下载会循环。-#}
+{% set bootstrap_sources = ['us66-resi', 'us816-resi', 'cc15', 'yfjc'] %}
+{% set fetch_proxy = 'DIRECT' if provider_id in bootstrap_sources else '📦 下载出口' %}
 {% set cloady_ha = provider_id in ['cloady-use1', 'cloady-usw1', 'cloady-eu1'] and (provider['display-group'] | default('AIRPORT') | upper) == 'NAT' %}
   source-{{ provider_id }}:
     type: http

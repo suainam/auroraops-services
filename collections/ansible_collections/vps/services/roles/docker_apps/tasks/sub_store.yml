@@ -294,6 +294,20 @@
       The resolved capability provider list must include the enabled cc15 provider.
   tags: [deploy, services, docker_apps, sub_store, phase5]
 
+
+# Static CC15 Cloudflare Trojan node (provider-download bootstrap). Comes from
+# host_vars singbox_extra_nodes so the server inbound and the Mihomo profile
+# share one definition and one vaulted password.
+- name: Expose the CC15 fallback Trojan node to the capability profile
+  ansible.builtin.set_fact:
+    docker_apps_sub_store_cc15_fallback_node: >-
+      {{ (singbox_extra_nodes | default([]))
+         | selectattr('type', 'equalto', 'trojan')
+         | selectattr('behind_nginx', 'defined')
+         | selectattr('behind_nginx')
+         | first | default(none) }}
+  no_log: true
+  tags: [deploy, services, docker_apps, sub_store, phase5]
 - name: Render Sub-Store capability Mihomo profile
   become: true
   ansible.builtin.template:

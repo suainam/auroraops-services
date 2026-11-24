@@ -16,7 +16,22 @@ geox-url:
   mmdb: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb"
   asn: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/GeoLite2-ASN.mmdb"
 
+{% set cc15_trojan = docker_apps_sub_store_cc15_fallback_node | default(none) %}
+{% if cc15_trojan %}
+proxies:
+  - name: "CC15-CF-Trojan"
+    type: trojan
+    server: {{ cc15_trojan.server | to_json }}
+    port: {{ cc15_trojan.port }}
+    password: {{ cc15_trojan.password | to_json }}
+    network: ws
+    sni: {{ cc15_trojan.sni | to_json }}
+    udp: true
+    ws-opts:
+      path: {{ cc15_trojan.path | to_json }}
+{% else %}
 proxies: []
+{% endif %}
 {% set capability_providers = docker_apps_sub_store_capability_providers | default([]) %}
 {% include 'sub_store_capability_profile/proxy_providers.yaml.j2' %}
 {% set vps_src = namespace(items=[]) %}
@@ -45,7 +60,21 @@ proxies: []
 {% set ai_url   = 'https://www.cloudflare.com/cdn-cgi/trace' %}
 {% set regions = [{'c': 'HK', 'f': '🇭🇰'}, {'c': 'TW', 'f': '🇹🇼'}, {'c': 'JP', 'f': '🇯🇵'}, {'c': 'SG', 'f': '🇸🇬'}, {'c': 'US', 'f': '🇺🇸'}] %}
 
+{# Provider 下载出口：静态 CC15 Cloudflare Trojan 为主，YF AWS日本节点为备。
+   use: 引入的 provider 节点不参与 Mihomo 组健康检查，YF 侧靠 provider 自身
+   health-check 剔除坏节点；组级自动切换只发生在静态节点（proxies）之间。 #}
 proxy-groups:
+  - name: "📦 下载出口"
+    type: fallback
+    hidden: true
+    proxies: {{ ((['CC15-CF-Trojan'] if cc15_trojan else []) + (['⚡ YF'] if 'source-yfjc' in (general_airport_src.items + all_airport_src.items + vps_src.items) else [])) | to_json }}
+    use: {{ (['source-yfjc'] if 'source-yfjc' in (general_airport_src.items + all_airport_src.items + vps_src.items) else []) | to_json }}
+    filter: "(?i)AWS日本\\d+号"
+    url: {{ test_url }}
+    interval: 120
+    timeout: 5000
+    lazy: false
+    empty-fallback: REJECT
   - name: "🚀 默认代理"
     type: select
     proxies: ["⚡ 千兆极速", "💰 低倍率走廊", "🤖 AI 服务", "🖥️ VPS", "🧭 NAT", DIRECT]
