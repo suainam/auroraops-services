@@ -297,7 +297,9 @@
 
 # Static CC15 Cloudflare Trojan node (provider-download bootstrap). Comes from
 # host_vars singbox_extra_nodes so the server inbound and the Mihomo profile
-# share one definition and one vaulted password.
+# share one definition and one vaulted password. The client port (443 vs the
+# raw inbound port) is decided in the profile template, mirroring
+# singbox_client_profile.yaml.j2's behind_nginx handling.
 - name: Expose the CC15 fallback Trojan node to the capability profile
   ansible.builtin.set_fact:
     docker_apps_sub_store_cc15_fallback_node: >-
