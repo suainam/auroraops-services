@@ -39,15 +39,15 @@ proxies: []
 {% set general_airport_src = namespace(items=[]) %}
 {% set all_airport_src = namespace(items=[]) %}
 {% for p in capability_providers if p.enabled | default(true) %}
-  {% set s = 'source-' ~ (p['provider-id'] | default(p.name)) %}
-  {% set dg = (p['display-group'] | default('AIRPORT')) | upper %}
-  {% if dg == 'VPS' %}{% set vps_src.items = vps_src.items + [s] %}
-  {% elif dg == 'NAT' %}{% set nat_src.items = nat_src.items + [s] %}
-  {% elif dg == 'SK' %}{% set all_airport_src.items = all_airport_src.items + [s] %}
-  {% else %}
-    {% set general_airport_src.items = general_airport_src.items + [s] %}
-    {% set all_airport_src.items = all_airport_src.items + [s] %}
-  {% endif %}
+{%- set s = 'source-' ~ (p['provider-id'] | default(p.name)) %}
+{%- set dg = (p['display-group'] | default('AIRPORT')) | upper %}
+{%- if dg == 'VPS' %}{% set vps_src.items = vps_src.items + [s] %}
+{%- elif dg == 'NAT' %}{% set nat_src.items = nat_src.items + [s] %}
+{%- elif dg == 'SK' %}{% set all_airport_src.items = all_airport_src.items + [s] %}
+{%- else %}
+{%- set general_airport_src.items = general_airport_src.items + [s] %}
+{%- set all_airport_src.items = all_airport_src.items + [s] %}
+{%- endif %}
 {% endfor %}
 {% set test_url = 'https://www.gstatic.com/generate_204' %}
 {% set cloady_groups = namespace(items=[]) %}
@@ -55,7 +55,7 @@ proxies: []
 {% set nat_us_sources = ['source-us66-resi', 'source-us816-resi'] | select('in', nat_src.items) | list %}
 {% set nat_direct_sources = nat_japan_sources + nat_us_sources %}
 {% for region in ['use1', 'usw1', 'eu1'] if ('source-cloady-' ~ region) in nat_src.items %}
-  {% set cloady_groups.items = cloady_groups.items + [('source-cloady-' ~ region, '[NAT] Cloady ' ~ (region | upper) ~ ' 高可用')] %}
+{%- set cloady_groups.items = cloady_groups.items + [('source-cloady-' ~ region, '[NAT] Cloady ' ~ (region | upper) ~ ' 高可用')] %}
 {% endfor %}
 {% set ai_url   = 'https://www.cloudflare.com/cdn-cgi/trace' %}
 {% set regions = [{'c': 'HK', 'f': '🇭🇰'}, {'c': 'TW', 'f': '🇹🇼'}, {'c': 'JP', 'f': '🇯🇵'}, {'c': 'SG', 'f': '🇸🇬'}, {'c': 'US', 'f': '🇺🇸'}] %}
