@@ -971,7 +971,7 @@
     - sub_store
     - phase5
 
-- name: Validate public Sub-Store Mihomo USAI静态 AI selector contract
+- name: Validate public Sub-Store Mihomo USAI静态 AI fallback contract
   vars:
     docker_apps_sub_store_public_mihomo_groups: >-
       {{ docker_apps_sub_store_public_mihomo_payload.get('proxy-groups', []) | default([], true) }}
@@ -999,7 +999,7 @@
       - docker_apps_sub_store_ai_service_groups[0]['proxies'][0] == '🇺🇸 US家宽'
       - "'USAI静态' in docker_apps_sub_store_ai_service_groups[0]['proxies']"
       - docker_apps_sub_store_usai_static_groups | length == 1
-      - docker_apps_sub_store_usai_static_groups[0].get('type') == 'select'
+      - docker_apps_sub_store_usai_static_groups[0].get('type') == 'fallback'
       - docker_apps_sub_store_usai_static_groups[0].get('use') == ['source-cc15']
       - docker_apps_sub_store_usai_static_groups[0].get('proxies', []) == []
       - docker_apps_sub_store_usai_static_groups[0].get('empty-fallback') == 'REJECT'
@@ -1023,7 +1023,7 @@
       - docker_apps_sub_store_public_mihomo_providers['source-cc15']['url'] is match('^https?://[^/]+')
     fail_msg: >-
       Public Sub-Store Mihomo profile must expose 🇺🇸 US家宽 first (with USAI静态
-      backed only by source-cc15 and empty-fallback REJECT) under 🤖 AI 服务
+      as a fallback backed only by source-cc15 and empty-fallback REJECT) under 🤖 AI 服务
   when: verify_docker_app_name | default('') == 'sub_store'
   no_log: true
   tags:
@@ -1033,6 +1033,55 @@
     - sub_store
     - phase5
 
+
+# Guard against the provider-download bootstrap regression that produced
+# "http 0" (client could not fetch any provider) and the CC15-CF-Trojan
+# timeout: the static node must dial 443 (behind_nginx), the download group
+# must exist and reference it, and bootstrap providers must stay DIRECT while
+# every other provider routes through the download group. If any of these
+# drift, the published profile cannot bootstrap its own providers -> fail.
+- name: Validate public Sub-Store Mihomo provider-download bootstrap contract
+  vars:
+    _payload: "{{ docker_apps_sub_store_public_mihomo_payload }}"
+    _static: >-
+      {{ (_payload.get('proxies', []) | default([], true))
+         | selectattr('name', 'equalto', 'CC15-CF-Trojan') | list }}
+    _download_groups: >-
+      {{ (_payload.get('proxy-groups', []) | default([], true))
+         | selectattr('name', 'equalto', '📦 下载出口') | list }}
+    _bootstrap_ids: ['source-cc15', 'source-yfjc', 'source-us66-resi', 'source-us816-resi']
+  ansible.builtin.assert:
+    that:
+      - _static | length == 1
+      - _static[0]['port'] | int == 443
+      - _static[0].get('type') == 'trojan'
+      - _static[0].get('network') == 'ws'
+      - _download_groups | length == 1
+      - _download_groups[0].get('type') == 'fallback'
+      - "'CC15-CF-Trojan' in _download_groups[0].get('proxies', [])"
+      - _payload.get('proxy-providers', {}) is mapping
+      - >-
+        (_payload['proxy-providers'].keys() | list | length) > 0
+      - >-
+        _payload['proxy-providers']
+        | dictsort
+        | rejectattr('0', 'in', _bootstrap_ids)
+        | map(attribute='1')
+        | map(attribute='proxy')
+        | unique | list == ['📦 下载出口']
+    fail_msg: >-
+      Provider-download bootstrap broken: static CC15 node must dial 443,
+      📦 下载出口 fallback group must reference it, bootstrap providers (cc15,
+      yfjc, us66-resi, us816-resi) must be DIRECT, and all other providers
+      must fetch through 📦 下载出口. Otherwise clients hit http 0 / timeout.
+  when: verify_docker_app_name | default('') == 'sub_store'
+  no_log: true
+  tags:
+    - verify
+    - services
+    - docker_apps
+    - sub_store
+    - phase5
 - name: Validate public Sub-Store Mihomo rule precedence
   vars:
     docker_apps_sub_store_public_mihomo_rules: "{{ docker_apps_sub_store_public_mihomo_payload['rules'] }}"
