@@ -39,7 +39,7 @@
 
   # 明确 AI 服务
   - GEOSITE,category-ai-!cn,🤖 AI 服务
-  - DOMAIN-SUFFIX,googleapis.com,🤖 AI 服务
+  - DOMAIN,fcmtoken.googleapis.com,🤖 AI 服务
   - DOMAIN-KEYWORD,cloudaicompanion,🤖 AI 服务
   - DOMAIN-KEYWORD,cloudcode,🤖 AI 服务
   - DOMAIN-SUFFIX,chatgpt.com,🤖 AI 服务
