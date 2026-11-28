@@ -1107,7 +1107,7 @@
         docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-KEYWORD,tracker,REJECT')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
-        docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-SUFFIX,googleapis.com,🤖 AI 服务')
+        docker_apps_sub_store_public_mihomo_rules.index('DOMAIN,fcmtoken.googleapis.com,🤖 AI 服务')
         < docker_apps_sub_store_public_mihomo_rules.index('GEOSITE,google,🤖 AI 服务')
       - >-
         docker_apps_sub_store_public_mihomo_rules.index('DOMAIN-KEYWORD,cloudaicompanion,🤖 AI 服务')
